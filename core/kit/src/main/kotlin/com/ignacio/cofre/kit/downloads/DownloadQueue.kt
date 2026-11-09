@@ -79,8 +79,10 @@ class DownloadQueue(
 
     init {
         if (journal.isFile) {
-            // A corrupt journal is an error, not an empty queue that silently loses work.
-            Kit.json.decodeFromString<List<DownloadItem>>(journal.readText()).forEach { item ->
+            // A corrupt journal is set aside as `.corrupt`, not a crash on every start; its files are checked again when queued anew.
+            val saved = runCatching { Kit.json.decodeFromString<List<DownloadItem>>(journal.readText()) }
+                .getOrElse { journal.renameTo(File("${journal.path}.corrupt")); emptyList() }
+            saved.forEach { item ->
                 val state = if (item.state == DownloadItem.State.Running) DownloadItem.State.Paused else item.state
                 items[item.id] = item.copy(state = state, completedBytes = if (state == DownloadItem.State.Finished) item.completedBytes else item.part.length())
             }
@@ -156,7 +158,9 @@ class DownloadQueue(
             if (failed.isNotEmpty()) return Result.Failed(failed)
             val waiting = snapshot.filter { it.state == DownloadItem.State.WaitingForWifi }.map { it.id }
             return if (waiting.isNotEmpty()) Result.NeedsMeteredApproval(waiting) else Result.Completed
-        } finally { synchronized(lock) { if (dirty) save(force = true) }; runLock.unlock() }
+        } finally {
+            try { synchronized(lock) { if (dirty) save(force = true) } } finally { runLock.unlock() }
+        }
     }
     private suspend fun download(id: String) {
         if (item(id).state == DownloadItem.State.Cancelled) return
@@ -208,8 +212,10 @@ class DownloadQueue(
                 try {
                     response.use {
                         if (!continuation.isActive) return
-                        if (it.code == 416 && item.size != null && offset == item.size) {
-                            continuation.resumeWith(kotlin.Result.success(Unit)); return
+                        if (it.code == 416) {
+                            // A part already complete; any other refused range (or an unknown size) starts over.
+                            if (item.size != null && offset == item.size) { continuation.resumeWith(kotlin.Result.success(Unit)); return }
+                            throw DownloadFailure.InvalidRange
                         }
                         if (!it.isSuccessful) throw DownloadFailure.Http(it.code)
                         val append = it.code == 206

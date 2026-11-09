@@ -129,6 +129,19 @@ class DownloadsTest {
         val restored = queue().progress.value.items.single()
         assertEquals(DownloadItem.State.Paused, restored.state); assertEquals(3, restored.completedBytes)
     }
+    @Test fun aCorruptJournalIsSetAsideNotFatal() {
+        File(root, "queue.json").writeText("{not json")
+        assertTrue(queue().progress.value.items.isEmpty()); assertEquals("{not json", File(root, "queue.json.corrupt").readText())
+    }
+    @Test fun aRefusedRangeWithUnknownSizeStartsOver() = runBlocking {
+        MockWebServer().use { server ->
+            server.start(); server.enqueue(MockResponse(code = 416)); server.enqueue(MockResponse(body = "abcdef"))
+            val item = DownloadItem(server.url("/v.json").toString(), File(root, "v.json").path); item.part.writeText("abcdef")
+            val queue = queue(); queue.enqueue(item)
+            assertEquals(DownloadQueue.Result.Completed, withTimeout(10_000) { queue.run() })
+            assertEquals("abcdef", File(item.destination).readText()); assertEquals("bytes=6-", server.takeRequest().headers["Range"])
+        }
+    }
     @Test fun meteredThresholdAndApproval() = runBlocking {
         assertFalse(DownloadQueue.asksOnMetered(DownloadQueue.METERED_ASK_BYTES, true))
         assertTrue(DownloadQueue.asksOnMetered(DownloadQueue.METERED_ASK_BYTES + 1, true))
