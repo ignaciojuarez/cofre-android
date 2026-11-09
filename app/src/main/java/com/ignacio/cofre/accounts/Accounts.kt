@@ -144,7 +144,8 @@ class Accounts(private val graph: AppGraph) {
         val session = try {
             withContext(graph.io) { client.refreshSession(refresh) }
         } catch (e: AccountError.Http) {
-            // Microsoft no longer accepts the refresh token: the account needs signing in again.
+            // Busy or down (429, 5xx, Xbox): this launch fails, the account stays signed in for the next try.
+            if (!refreshRejected(e)) throw IllegalStateException(graph.context.getString(R.string.accounts_refresh_failed), e)
             graph.vault.set(refreshKey(id), null)
             refresh()
             throw IllegalStateException(graph.context.getString(R.string.accounts_signed_out), e)
@@ -162,7 +163,10 @@ class Accounts(private val graph: AppGraph) {
         session.msa.refreshToken?.let { graph.vault.set(refreshKey(id), it) }
     }
 
-    private companion object {
+    internal companion object {
+        /** Microsoft's token endpoint refused the refresh token itself (400/401 `invalid_grant`): sign in again. */
+        fun refreshRejected(e: AccountError.Http): Boolean = e.stage == "Microsoft" && e.status in setOf(400, 401)
+
         const val PENDING_VERIFIER = "signin.verifier"
         const val PENDING_STATE = "signin.state"
         const val DEV_ID = "dev-offline"

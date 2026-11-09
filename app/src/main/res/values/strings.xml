@@ -90,6 +90,7 @@
     <string name="accounts_sign_in">Sign in with Microsoft</string>
     <string name="accounts_sign_in_again">Sign in again</string>
     <string name="accounts_signed_out">Signed out. Sign in again to play.</string>
+    <string name="accounts_refresh_failed">Couldn\'t refresh your sign-in. Check your connection and try again.</string>
     <string name="accounts_microsoft">Microsoft account</string>
     <string name="accounts_offline">Offline · debug builds only</string>
     <string name="accounts_active">Active</string>
