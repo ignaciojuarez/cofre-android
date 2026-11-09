@@ -46,6 +46,8 @@ class GameLaunch(private val context: Context, val files: GameFiles = GameFiles(
         val spec = LaunchArgs.spec(version, files, gameDir, account, javaHome.path, heapMB, exitFile, extraJvmArgs, extraGameArgs)
         prepareGameDir(gameDir, LaunchArgs.isNeoForge(version))
         FileOps.delete(File(gameDir, ".cofre")) // where older builds kept the spec, token included
+        // Native crash reports hold the command line, token included: older builds left them in the instance.
+        listOf(gameDir, runs).flatMap { it.listFiles { f -> f.name.startsWith("hs_err_pid") }.orEmpty().toList() }.forEach { it.delete() }
         val file = File(runs, "${gameDir.name}.json")
         exitFile.delete()
         spec.write(file)
@@ -65,7 +67,8 @@ class GameLaunch(private val context: Context, val files: GameFiles = GameFiles(
         val since = specFile.lastModified()
         val gameDir = File(spec.gameDir)
         val log = File(spec.logFile).takeIf { it.isFile }?.readText() ?: File(gameDir, "logs/latest.log").takeIf { it.isFile }?.readText()
-        val crash = (File(gameDir, "crash-reports").listFiles().orEmpty().toList() + gameDir.listFiles { f -> f.name.startsWith("hs_err_pid") }.orEmpty())
+        // hs_err files sit next to the exit record (GameBridge's -XX:ErrorFile).
+        val crash = (File(gameDir, "crash-reports").listFiles().orEmpty().toList() + File(spec.exitFile).parentFile?.listFiles { f -> f.name.startsWith("hs_err_pid") }.orEmpty())
             .filter { it.isFile && it.lastModified() >= since }.maxByOrNull { it.lastModified() }
         val report = GameExitReport.diagnose(record?.code ?: KILLED, crash?.readText(), log, gameDir.name)
         return GameExit(record, report).also {

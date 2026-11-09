@@ -51,6 +51,7 @@ internal object GameBridge {
     fun start(context: Context, spec: LaunchSpec, nativeDir: File, classpathFirst: List<String> = emptyList(), extraJvmArgs: List<String> = emptyList()) {
         File(spec.gameDir).mkdirs()
         File(spec.logFile).parentFile?.mkdirs()
+        File(spec.exitFile).parentFile?.mkdirs() // HotSpot falls back to the working directory (the instance) if ErrorFile's folder is missing
         val env = mapOf(
             "JAVA_HOME" to spec.javaHome,
             "HOME" to spec.gameDir,
@@ -58,12 +59,23 @@ internal object GameBridge {
             "LD_LIBRARY_PATH" to "${spec.javaHome}/lib/server:${spec.javaHome}/lib:$nativeDir",
         ) + spec.env
         env.forEach { (key, value) -> Os.setenv(key, value, true) }
-        val args = buildList {
+        val args = command(spec, nativeDir, context.cacheDir, classpathFirst, extraJvmArgs)
+        Log.i(TAG, "[Cofre] launching ${spec.mainClass} java.home=${spec.javaHome}")
+        val result = launch(args.toTypedArray(), spec.javaHome, spec.gameDir, spec.logFile, spec.exitFile)
+        check(result == 0) { "JVM thread didn't start ($result)" }
+    }
+
+    /** The full java command line for [spec]: everything [start] passes to the JVM. */
+    fun command(spec: LaunchSpec, nativeDir: File, tmpDir: File, classpathFirst: List<String>, extraJvmArgs: List<String>): List<String> =
+        buildList {
             add("java")
             addAll(spec.jvmArgs)
             addAll(extraJvmArgs)
+            // A native crash report repeats the whole command line, access token included: keep it next to the
+            // exit record (noBackupFilesDir/launch), never in the instance, which is shared and exported.
+            add("-XX:ErrorFile=${File(spec.exitFile).parent}/hs_err_pid%p.log")
             add("-Djava.home=${spec.javaHome}")
-            add("-Djava.io.tmpdir=${context.cacheDir.path}")
+            add("-Djava.io.tmpdir=${tmpDir.path}")
             add("-Duser.home=${spec.gameDir}")
             add("-Djava.library.path=$nativeDir")
             add("-Djna.boot.library.path=$nativeDir")
@@ -84,10 +96,6 @@ internal object GameBridge {
             add(spec.mainClass)
             addAll(spec.gameArgs)
         }
-        Log.i(TAG, "[Cofre] launching ${spec.mainClass} java.home=${spec.javaHome}")
-        val result = launch(args.toTypedArray(), spec.javaHome, spec.gameDir, spec.logFile, spec.exitFile)
-        check(result == 0) { "JVM thread didn't start ($result)" }
-    }
 
     const val EV_KEY = 1
     const val EV_CHAR = 2

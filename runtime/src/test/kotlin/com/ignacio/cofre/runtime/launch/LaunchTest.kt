@@ -5,6 +5,7 @@ import com.ignacio.cofre.kit.logs.ExitReason
 import com.ignacio.cofre.kit.logs.GameExitReport
 import com.ignacio.cofre.kit.versions.InstallProfile
 import com.ignacio.cofre.kit.versions.VersionJson
+import com.ignacio.cofre.runtime.GameBridge
 import com.ignacio.cofre.runtime.LaunchSpec
 import java.io.File
 import java.nio.file.Files
@@ -60,6 +61,13 @@ class LaunchTest {
         assertEquals("vulkan", value("--graphicsBackend"))
         listOf("--demo", "--width", "--quickPlayPath").forEach { assertFalse(it in args, it) }
         assertTrue(args.none { "\${" in it && it != LaunchSpec.TOKEN })
+    }
+
+    @Test fun nativeCrashReportsGoNextToTheExitRecordNotIntoTheInstance() {
+        val spec = LaunchArgs.spec(vanilla, files, File("/g"), account, "/jre", 2048, exit)
+        val command = GameBridge.command(spec, File("/n"), File("/t"), emptyList(), listOf("-XX:ErrorFile=/g/hs_err.log"))
+        // HotSpot takes the last value, so an instance's own ErrorFile can't put the token back into the instance.
+        assertEquals("-XX:ErrorFile=/r/hs_err_pid%p.log", command.last { it.startsWith("-XX:ErrorFile=") })
     }
 
     @Test fun heapInstanceArgsAndQuickPlayGoLast() {
