@@ -1,0 +1,142 @@
+{
+  "schema": 1,
+  "mods": [
+    {
+      "ids": [
+        "iris"
+      ],
+      "slugs": [
+        "iris"
+      ],
+      "fileNamePrefixes": [
+        "iris-"
+      ],
+      "namePatterns": [
+        "Iris"
+      ],
+      "name": "Iris",
+      "scope": "vulkan",
+      "loaders": null,
+      "gameVersions": null,
+      "severity": "broken",
+      "reason": "Iris uses OpenGL. Shader packs cannot run on Vulkan.",
+      "evidence": "expected",
+      "evidenceRef": "Minecraft 26.2 --graphicsBackend vulkan; static OpenGL requirements"
+    },
+    {
+      "ids": [
+        "oculus"
+      ],
+      "slugs": [
+        "oculus"
+      ],
+      "fileNamePrefixes": [
+        "oculus-"
+      ],
+      "namePatterns": [
+        "Oculus"
+      ],
+      "name": "Oculus",
+      "scope": "vulkan",
+      "loaders": null,
+      "gameVersions": null,
+      "severity": "broken",
+      "reason": "Oculus uses OpenGL. Shader packs cannot run on Vulkan.",
+      "evidence": "expected",
+      "evidenceRef": "Minecraft 26.2 --graphicsBackend vulkan; static OpenGL requirements"
+    },
+    {
+      "ids": [
+        "embeddium"
+      ],
+      "slugs": [
+        "embeddium"
+      ],
+      "fileNamePrefixes": [
+        "embeddium-"
+      ],
+      "namePatterns": [
+        "Embeddium"
+      ],
+      "name": "Embeddium",
+      "scope": "anyRenderer",
+      "loaders": null,
+      "gameVersions": [
+        "26.x"
+      ],
+      "severity": "broken",
+      "reason": "Embeddium does not support Minecraft 26.x. Use Sodium for NeoForge 26.2.",
+      "evidence": "expected",
+      "evidenceRef": "Minecraft 26.2 --graphicsBackend vulkan; static OpenGL requirements"
+    },
+    {
+      "ids": [
+        "optifine"
+      ],
+      "slugs": [
+        "optifine"
+      ],
+      "fileNamePrefixes": [
+        "OptiFine_",
+        "preview_OptiFine_"
+      ],
+      "namePatterns": [
+        "OptiFine"
+      ],
+      "name": "OptiFine",
+      "scope": "vulkan",
+      "loaders": null,
+      "gameVersions": null,
+      "severity": "broken",
+      "reason": "OptiFine requires OpenGL and is incompatible with this Vulkan instance.",
+      "evidence": "expected",
+      "evidenceRef": "Minecraft 26.2 --graphicsBackend vulkan; static OpenGL requirements"
+    },
+    {
+      "ids": [
+        "nvidium"
+      ],
+      "slugs": [
+        "nvidium"
+      ],
+      "fileNamePrefixes": [
+        "nvidium-"
+      ],
+      "namePatterns": [
+        "Nvidium"
+      ],
+      "name": "Nvidium",
+      "scope": "vulkan",
+      "loaders": null,
+      "gameVersions": null,
+      "severity": "broken",
+      "reason": "Nvidium directly calls OpenGL and requires NVIDIA desktop extensions.",
+      "evidence": "expected",
+      "evidenceRef": "Minecraft 26.2 --graphicsBackend vulkan; static OpenGL requirements"
+    },
+    {
+      "ids": [
+        "voxy"
+      ],
+      "slugs": [
+        "voxy"
+      ],
+      "fileNamePrefixes": [
+        "voxy-"
+      ],
+      "namePatterns": [
+        "Voxy"
+      ],
+      "name": "Voxy",
+      "scope": "vulkan",
+      "loaders": null,
+      "gameVersions": [
+        "26.2"
+      ],
+      "severity": "broken",
+      "reason": "This OpenGL Voxy build calls OpenGL directly. Check a Vulkan-compatible release before enabling it.",
+      "evidence": "expected",
+      "evidenceRef": "Minecraft 26.2 --graphicsBackend vulkan; static OpenGL requirements"
+    }
+  ]
+}
