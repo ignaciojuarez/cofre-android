@@ -14,7 +14,7 @@ import java.io.FileNotFoundException
 
 /**
  * Shows `filesDir/instances` in the system file picker and file managers, so mods, worlds and resource packs can
- * be dropped in from anywhere. Document IDs are paths relative to that folder ("" is the root).
+ * be dropped in from anywhere. Document IDs are `root`, then `root/<path relative to that folder>`.
  */
 class InstancesProvider : DocumentsProvider() {
     private val root: File get() = File(requireNotNull(context).filesDir, "instances").apply { mkdirs() }
@@ -25,7 +25,7 @@ class InstancesProvider : DocumentsProvider() {
         val context = requireNotNull(context)
         newRow()
             .add(Root.COLUMN_ROOT_ID, ROOT_ID)
-            .add(Root.COLUMN_DOCUMENT_ID, "")
+            .add(Root.COLUMN_DOCUMENT_ID, ROOT_DOC)
             .add(Root.COLUMN_TITLE, context.getString(R.string.app_name))
             .add(Root.COLUMN_SUMMARY, context.getString(R.string.files_root_summary))
             .add(Root.COLUMN_FLAGS, Root.FLAG_SUPPORTS_CREATE or Root.FLAG_SUPPORTS_IS_CHILD or Root.FLAG_LOCAL_ONLY)
@@ -70,28 +70,32 @@ class InstancesProvider : DocumentsProvider() {
     }
 
     override fun isChildDocument(parentDocumentId: String, documentId: String): Boolean =
-        parentDocumentId.isEmpty() || documentId.startsWith("$parentDocumentId/")
+        documentId.startsWith("$parentDocumentId/")
 
     override fun getDocumentType(documentId: String): String = mime(file(documentId))
 
     /** The file for [id], refusing anything that resolves outside the instances folder. */
     private fun file(id: String): File {
         val base = root.canonicalFile
-        val file = if (id.isEmpty()) base else File(base, id).canonicalFile
+        if (id != ROOT_DOC && !id.startsWith("$ROOT_DOC/")) throw FileNotFoundException(id)
+        val file = if (id == ROOT_DOC) base else File(base, id.removePrefix("$ROOT_DOC/")).canonicalFile
         if (file != base && !file.path.startsWith(base.path + File.separator)) throw FileNotFoundException(id)
         if (!file.exists()) throw FileNotFoundException(id)
         return file
     }
 
-    private fun id(file: File): String = file.canonicalFile.relativeTo(root.canonicalFile).invariantSeparatorsPath
+    private fun id(file: File): String {
+        val relative = file.canonicalFile.relativeTo(root.canonicalFile).invariantSeparatorsPath
+        return if (relative.isEmpty()) ROOT_DOC else "$ROOT_DOC/$relative"
+    }
 
     private fun MatrixCursor.addFile(file: File, id: String) {
         val dir = file.isDirectory
         var flags = if (dir) Document.FLAG_DIR_SUPPORTS_CREATE else Document.FLAG_SUPPORTS_WRITE
-        if (id.isNotEmpty()) flags = flags or Document.FLAG_SUPPORTS_DELETE
+        if (id != ROOT_DOC) flags = flags or Document.FLAG_SUPPORTS_DELETE
         newRow()
             .add(Document.COLUMN_DOCUMENT_ID, id)
-            .add(Document.COLUMN_DISPLAY_NAME, if (id.isEmpty()) requireNotNull(context).getString(R.string.files_root_title) else file.name)
+            .add(Document.COLUMN_DISPLAY_NAME, if (id == ROOT_DOC) requireNotNull(context).getString(R.string.files_root_title) else file.name)
             .add(Document.COLUMN_MIME_TYPE, mime(file))
             .add(Document.COLUMN_SIZE, if (dir) null else file.length())
             .add(Document.COLUMN_LAST_MODIFIED, file.lastModified())
@@ -106,6 +110,7 @@ class InstancesProvider : DocumentsProvider() {
 
     private companion object {
         const val ROOT_ID = "instances"
+        const val ROOT_DOC = "root"
         val ROOT_COLUMNS = arrayOf(
             Root.COLUMN_ROOT_ID, Root.COLUMN_DOCUMENT_ID, Root.COLUMN_TITLE, Root.COLUMN_SUMMARY, Root.COLUMN_FLAGS,
             Root.COLUMN_ICON, Root.COLUMN_AVAILABLE_BYTES,
