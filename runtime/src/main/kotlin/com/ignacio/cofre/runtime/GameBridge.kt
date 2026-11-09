@@ -70,6 +70,10 @@ internal object GameBridge {
             add("-Dorg.lwjgl.librarypath=$nativeDir")
             add("-Dorg.lwjgl.vulkan.libname=libvulkan.so")
             add("-Dorg.lwjgl.system.allocator=system")
+            // LWJGL compares each loaded .so's SHA-1 with Mojang's glibc Linux build (META-INF/linux/arm64/…sha1).
+            // Our natives are built from the same 3.4.1 source for Android, so their bytes can never match.
+            // fetch.sh checks them against the release's SHA256SUMS instead.
+            add("-Dorg.lwjgl.util.NoHashChecks=true")
             // Minecraft 26.2 loads LWJGL's OpenGL bindings at startup whatever the backend. Android has no GLX or
             // libGL, so point LWJGL at the system EGL loader: symbols only, no context or surface is ever created.
             add("-Dorg.lwjgl.opengl.contextAPI=EGL")

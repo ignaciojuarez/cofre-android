@@ -177,6 +177,8 @@ static void *stdio_reader(void *arg) {
     FILE *in = fdopen(stdio_pipe[0], "r");
     char line[4096];
     while (in && fgets(line, sizeof line, in)) {
+        // Bionic ignores OpenJDK's DT_RPATH and warns once per JRE library; LD_LIBRARY_PATH covers it.
+        if (strstr(line, "unused DT entry: DT_RPATH")) continue;
         size_t len = strlen(line);
         if (log_fd >= 0) write(log_fd, line, len);
         if (len && line[len - 1] == '\n') line[len - 1] = 0;
