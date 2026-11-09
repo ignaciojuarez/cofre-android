@@ -70,6 +70,13 @@ class LogsTest {
         val r = GameExitReport.diagnose(1, log = "Device does not support required extensions, missing: {VK_KHR_push_descriptor, VK_KHR_swapchain}\nDevice does not support required features, missing: {timelineSemaphore}")
         assertEquals(ExitReason.VulkanUnsupported, r.reason); assertEquals(listOf("VK_KHR_push_descriptor", "VK_KHR_swapchain", "timelineSemaphore"), r.missingVulkanRequirements)
     }
+    @Test fun vulkanMissingReadsMinecraft262Lines() {
+        val log = "[Render thread/WARN]: Device [llvmpipe] does not support required extensions, missing: [VK_KHR_push_descriptor, VK_EXT_vertex_attribute_divisor]\n" +
+            "[Render thread/WARN]: Device [Adreno (TM) 540] does not have required feature [timelineSemaphore]"
+        val r = GameExitReport.diagnose(1, log = log)
+        assertEquals(ExitReason.VulkanUnsupported, r.reason)
+        assertEquals(listOf("VK_KHR_push_descriptor", "VK_EXT_vertex_attribute_divisor", "timelineSemaphore"), r.missingVulkanRequirements)
+    }
     @Test fun openGLCrashNamesTheModFromNeoForgeAndMixinFrames() {
         val trace = "java.lang.IllegalStateException: No context is current\n\tat TRANSFORMER/minecraft@26.2/net.minecraft.client.Main.run(Main.java:1)\n\tat TRANSFORMER/better_clouds@1.0/com.example.Clouds.render(Clouds.java:9)"
         val r = GameExitReport.diagnose(1, log = trace); assertEquals(ExitReason.OpenGLMod, r.reason); assertEquals("Better Clouds", r.mod); assertTrue("Better Clouds" in r.explanation && "Better Clouds" in r.nextStep)

@@ -50,7 +50,7 @@ data class GameExitReport(val code: Int, val reason: ExitReason, val clue: Strin
             val loader = (report + lines).firstOrNull { "Failure message: " in it || "Error during pre-loading phase: " in it }
             val rules = listOf(
                 ExitReason.Memory to listOf("outofmemoryerror", "out of memory", "gc overhead limit", "cannot allocate memory"),
-                ExitReason.VulkanUnsupported to listOf("does not support required extensions", "does not support required features", "no suitable vulkan device", "failed to find a suitable physical device", "vulkan device not suitable", "missing required vulkan"),
+                ExitReason.VulkanUnsupported to listOf("does not support required extensions", "does not support required features", "does not have required feature", "no suitable vulkan device", "failed to find a suitable physical device", "vulkan device not suitable", "missing required vulkan"),
                 ExitReason.NativeWindowInUse to listOf("vk_error_native_window_in_use_khr"),
                 ExitReason.OpenGLMod to listOf("no context is current", "no glcapabilities instance set", "no opengl context", "cannot be cast to class com.mojang.blaze3d.opengl"),
                 ExitReason.MissingDependency to listOf("missing or unsupported mandatory dependencies", "requires version", "requires any version", "missing dependency", "needs language provider", "requires mod"),
@@ -63,7 +63,7 @@ data class GameExitReport(val code: Int, val reason: ExitReason, val clue: Strin
                 for ((reason, signs) in rules) {
                     val line = source.lastOrNull { l -> signs.any { it in l.lowercase() } } ?: continue
                     if (reason == ExitReason.Renderer && loader != null) return result(if (loader.contains("needs language provider")) ExitReason.MissingDependency else ExitReason.Mods, loader.substringAfter("Failure message: ").substringAfter("Error during pre-loading phase: "))
-                    val missing = if (reason == ExitReason.VulkanUnsupported) Regex("missing:\\s*\\{([^}]+)}", RegexOption.IGNORE_CASE).findAll((report + lines).joinToString("\n")).flatMap { it.groupValues[1].split(',').map { value -> value.trim(' ', '\'', '"') } }.filter { it.isNotBlank() }.distinct().toList() else emptyList()
+                    val missing = if (reason == ExitReason.VulkanUnsupported) vulkanMissing((report + lines).joinToString("\n")) else emptyList()
                     return result(reason, line, missing)
                 }
             }
@@ -102,4 +102,14 @@ data class LaunchFailure(val reason: Reason, val detail: String = "") {
     val recovery: LaunchRecovery get() = when (reason) { Reason.LoaderMissing, Reason.ModsNeedLoader, Reason.UnknownLoader, Reason.ProfileMissing -> LaunchRecovery.RepairInstance; Reason.DownloadFailed -> LaunchRecovery.Retry; Reason.JVMExit, Reason.Unknown -> LaunchRecovery.Log }
     val message: String get() = when (reason) { Reason.LoaderMissing, Reason.ModsNeedLoader -> "This instance needs an installed NeoForge loader. Repair it before playing."; Reason.UnknownLoader -> "Choose a supported NeoForge loader before playing."; Reason.ProfileMissing -> "The instance profile is missing. Repair it before playing."; Reason.DownloadFailed -> "Game files could not be downloaded: $detail"; Reason.JVMExit -> "Minecraft exited before it reached the game: $detail"; Reason.Unknown -> detail.ifEmpty { "Minecraft could not start. Check the launcher log." } }
     companion object { fun modLoaderFailed(log: String): Boolean = listOf("Failed to start FML", "ModLoadingException", "Missing or unsupported mandatory dependencies").any { it in log } }
+}
+
+/**
+ * What Minecraft's Vulkan check said is missing. 26.2 logs "Device [x] does not support required extensions, missing:
+ * [A, B]" (a Java list) and "Device [x] does not have required feature [name]", one line per feature.
+ */
+internal fun vulkanMissing(text: String): List<String> {
+    val lists = Regex("missing:\\s*[\\[{]([^\\]}]+)[\\]}]", RegexOption.IGNORE_CASE).findAll(text).flatMap { it.groupValues[1].split(',') }
+    val features = Regex("does not have required feature \\[([^\\]]+)]", RegexOption.IGNORE_CASE).findAll(text).map { it.groupValues[1] }
+    return (lists + features).map { it.trim(' ', '\'', '"') }.filter { it.isNotBlank() }.distinct().toList()
 }

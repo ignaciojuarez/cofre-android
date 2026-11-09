@@ -48,7 +48,7 @@ class GameLaunch(private val context: Context, val files: GameFiles = GameFiles(
         val crash = (File(gameDir, "crash-reports").listFiles().orEmpty().toList() + gameDir.listFiles { f -> f.name.startsWith("hs_err_pid") }.orEmpty())
             .filter { it.isFile && it.lastModified() >= since }.maxByOrNull { it.lastModified() }
         val report = GameExitReport.diagnose(record?.code ?: KILLED, crash?.readText(), log, gameDir.name)
-        return GameExit(record, report.withVulkanMissing(log.orEmpty())).also {
+        return GameExit(record, report).also {
             Log.i(TAG, "[Cofre] diagnosis code=${record?.code} reason=${it.report.reason} ${it.summary}")
         }
     }
@@ -62,13 +62,6 @@ class GameLaunch(private val context: Context, val files: GameFiles = GameFiles(
             gameDir.mkdirs()
             GameOptions(gameDir).useVulkan()
             if (neoForge) FMLConfig.disableEarlyWindow(gameDir)
-        }
-
-        /** Minecraft logs `missing: [A, B]`; kit's diagnosis only reads `{A, B}`. */
-        internal fun GameExitReport.withVulkanMissing(log: String): GameExitReport {
-            if (reason != ExitReason.VulkanUnsupported || missingVulkanRequirements.isNotEmpty()) return this
-            val missing = Regex("missing:\\s*\\[([^\\]]+)\\]").findAll(log).flatMap { it.groupValues[1].split(',') }.map { it.trim() }.filter { it.isNotEmpty() }.distinct().toList()
-            return copy(missingVulkanRequirements = missing)
         }
     }
 }

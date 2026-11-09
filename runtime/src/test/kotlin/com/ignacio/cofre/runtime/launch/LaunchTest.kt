@@ -5,7 +5,6 @@ import com.ignacio.cofre.kit.logs.ExitReason
 import com.ignacio.cofre.kit.logs.GameExitReport
 import com.ignacio.cofre.kit.versions.InstallProfile
 import com.ignacio.cofre.kit.versions.VersionJson
-import com.ignacio.cofre.runtime.launch.GameLaunch.Companion.withVulkanMissing
 import java.io.File
 import java.nio.file.Files
 import org.junit.Test
@@ -154,7 +153,7 @@ class LaunchTest {
 
     @Test fun vulkanDiagnosisNamesWhatIsMissing() {
         val log = "[12:00:00] [Render thread/WARN]: Device [llvmpipe] does not support required extensions, missing: [VK_KHR_push_descriptor, VK_EXT_vertex_attribute_divisor]"
-        val report = GameExitReport.diagnose(1, null, log).withVulkanMissing(log)
+        val report = GameExitReport.diagnose(1, null, log)
         assertEquals(ExitReason.VulkanUnsupported, report.reason)
         assertEquals(listOf("VK_KHR_push_descriptor", "VK_EXT_vertex_attribute_divisor"), report.missingVulkanRequirements)
         assertEquals(
