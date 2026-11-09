@@ -68,43 +68,72 @@ class ImportModel(
     val phase: StateFlow<ImportPhase> = mutable.asStateFlow()
     private var job: Job? = null
 
-    /** A local archive; [load] copies it out of a content URI first when it came from the picker or another app. */
-    fun open(name: String, load: () -> File) = begin("Reading $name") { inspect(withContext(io) { load() }) }
+    /**
+     * A local archive; [load] copies it out of a content URI first when it came from the picker or another app. The
+     * file is the model's: it's deleted once the import ends, fails or is dropped.
+     */
+    fun open(name: String, load: () -> File) {
+        discard()
+        begin("Reading $name") { inspect(withContext(io) { load() }) }
+    }
 
     /** A pasted link: a Modrinth modpack page, or a direct `.mrpack`/`.zip` link. */
-    fun openLink(text: String) = begin("Fetching the pack") {
-        val url = text.trim().let { if ("://" in it) it else "https://$it" }.toHttpUrlOrNull()
-        require(url != null && url.isHttps) { "Paste a Modrinth modpack page or an https .mrpack link." }
-        val segments = url.pathSegments.filter { it.isNotBlank() }
-        val direct = when {
-            url.encodedPath.endsWith(".mrpack") || url.encodedPath.endsWith(".zip") -> url.toString()
-            url.host.endsWith("modrinth.com") && segments.size >= 2 && segments[0] == "modpack" -> {
-                val versions = modrinth.versions(segments[1], listOf(Target.LOADER.modrinthId), listOf(Target.GAME_VERSION), includeChangelog = false)
-                    .ifEmpty { modrinth.versions(segments[1], includeChangelog = false) }
-                requireNotNull(versions.firstOrNull()?.primaryFile?.url) { "That pack has no files." }
+    fun openLink(text: String) {
+        discard()
+        begin("Fetching the pack") {
+            val url = text.trim().let { if ("://" in it) it else "https://$it" }.toHttpUrlOrNull()
+            require(url != null && url.isHttps) { "Paste a Modrinth modpack page or an https .mrpack link." }
+            val segments = url.pathSegments.filter { it.isNotBlank() }
+            val direct = when {
+                url.encodedPath.endsWith(".mrpack") || url.encodedPath.endsWith(".zip") -> url.toString()
+                url.host.endsWith("modrinth.com") && segments.size >= 2 && segments[0] == "modpack" -> {
+                    val versions = modrinth.versions(segments[1], listOf(Target.LOADER.modrinthId), listOf(Target.GAME_VERSION), includeChangelog = false)
+                        .ifEmpty { modrinth.versions(segments[1], includeChangelog = false) }
+                    requireNotNull(versions.firstOrNull()?.primaryFile?.url) { "That pack has no files." }
+                }
+                else -> throw IllegalArgumentException("Paste a Modrinth modpack page or an https .mrpack link.")
             }
-            else -> throw IllegalArgumentException("Paste a Modrinth modpack page or an https .mrpack link.")
+            val name = direct.substringAfterLast('/').substringBefore('?').takeIf { it.endsWith(".mrpack") || it.endsWith(".zip") } ?: "pack.mrpack"
+            inspect(fetch(direct, name))
         }
-        val name = direct.substringAfterLast('/').substringBefore('?').takeIf { it.endsWith(".mrpack") || it.endsWith(".zip") } ?: "pack.mrpack"
-        inspect(fetch(direct, name))
     }
 
     fun install() {
         val ready = mutable.value as? ImportPhase.Ready ?: return
         val plan = ready.plan ?: return
         begin("Installing ${plan.name}") {
-            val instance = installPack(ready.archive, plan)
-            mutable.value = ImportPhase.Done(instance)
+            try {
+                mutable.value = ImportPhase.Done(installPack(ready.archive, plan))
+            } finally {
+                delete(ready.archive)
+            }
         }
     }
 
     fun reset() {
         job?.cancel()
+        discard()
         mutable.value = ImportPhase.Idle
     }
 
+    /** Drops the archive of an inspected pack nobody installed. */
+    private fun discard() {
+        (mutable.value as? ImportPhase.Ready)?.let { delete(it.archive) }
+    }
+
+    /** Deletes an archive, and the folder [fetch] made for it. */
+    private fun delete(archive: File) {
+        archive.delete()
+        archive.parentFile?.takeIf { it.parentFile == File(cache, "imports") }?.let(FileOps::delete)
+    }
+
     private suspend fun inspect(archive: File) {
-        val pack = withContext(io) { Modpacks.inspect(archive) }
+        val pack = try {
+            withContext(io) { Modpacks.inspect(archive) }
+        } catch (e: Exception) {
+            delete(archive)
+            throw e
+        }
         val (plan, rejected) = try {
             Modpacks.plan(pack) to null
         } catch (e: PackRejected) {
@@ -116,10 +145,16 @@ class ImportModel(
     private suspend fun fetch(url: String, name: String): File = withContext(io) {
         val dir = File(cache, "imports/${UUID.randomUUID()}").apply { mkdirs() }
         val file = File(dir, name)
-        val queue = DownloadQueue(File(dir, "queue.json"))
-        queue.enqueue(DownloadItem(url, file.path, name))
-        check(queue.run() == DownloadQueue.Result.Completed) { "Couldn't download the pack." }
-        file
+        try {
+            val queue = DownloadQueue(File(dir, "queue.json"))
+            queue.enqueue(DownloadItem(url, file.path, name))
+            check(queue.run() == DownloadQueue.Result.Completed) { "Couldn't download the pack." }
+            File(dir, "queue.json").delete()
+            file
+        } catch (e: Exception) {
+            FileOps.delete(dir)
+            throw e
+        }
     }
 
     private suspend fun installPack(archive: File, plan: ModpackInstallPlan): Instance = withContext(io) {
@@ -127,7 +162,7 @@ class ImportModel(
         val journal = File(cache, "imports/${UUID.randomUUID()}.json").apply { parentFile?.mkdirs() }
         try {
             val queue = DownloadQueue(journal)
-            for (file in plan.filesToFetch) queue.enqueue(download(file, stage.directory))
+            queue.enqueue(plan.filesToFetch.map { download(it, stage.directory) })
             val progress = launch {
                 queue.progress.collectLatest { p ->
                     val fraction = if (p.totalBytes > 0) p.bytes.toFloat() / p.totalBytes else null

@@ -21,6 +21,7 @@ import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
@@ -77,6 +78,7 @@ class ImportModelTest {
         val dir = store.directory(done.instance)
         assertTrue(File(dir, "config/sodium-options.json").isFile)
         assertEquals(listOf(done.instance.id), store.list().map { it.id }, "no stage left behind")
+        assertFalse(archive.exists(), "the picked copy is deleted once installed")
     }
 
     @Test fun curseForgeFilesGetAPlainNameAndTheirSha1() = runBlocking {
