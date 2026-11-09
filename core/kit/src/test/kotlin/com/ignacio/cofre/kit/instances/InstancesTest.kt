@@ -64,7 +64,19 @@ class InstancesTest {
     @Test fun unknownSchemaIsNotOverwritten() {
         val s = InstanceStore(root); val i = s.create("A"); val file = File(s.directory(i), "cofre.json")
         val text = file.readText().replace("\"schema\": 1", "\"schema\": 2"); file.writeText(text)
-        assertFails { s.list() }; assertFails { s.save(i) }; assertEquals(text, file.readText())
+        assertTrue(s.list().isEmpty()); assertFails { s.save(i) }; assertEquals(text, file.readText())
+    }
+    @Test fun aCopiedOrBrokenFolderDoesNotHideTheOthers() {
+        val s = InstanceStore(root); val i = s.create("A")
+        s.directory(i).copyRecursively(File(root, "copied-by-hand")) // its cofre.json names another folder
+        File(root, "broken").mkdir(); File(root, "broken/cofre.json").writeText("{")
+        assertEquals(listOf(i), s.list()); assertEquals("B", s.create("B").name)
+    }
+    @Test fun importingAnExportNextToItsOriginalPicksAFreeName() {
+        val s = InstanceStore(File(root, "instances")); val i = s.create("A")
+        val archive = s.export(i.id, File(root, "a.zip"))
+        assertEquals("A 2", s.import(archive).name); assertEquals("A 3", s.import(archive).name)
+        assertEquals("A copy", s.uniqueName("A copy"))
     }
     @Test fun duplicateNamesAndMissingProfilesFail() {
         val s = InstanceStore(root); val i = s.create("A")

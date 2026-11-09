@@ -33,6 +33,10 @@ class ModpacksTest {
         val fabric = Modpacks.inspect(zip(mapOf("modrinth.index.json" to index(loader = "fabric-loader"))))
         assertEquals(PackRejected.Reason.LoaderType(Loader.Fabric), assertFailsWith<PackRejected> { Modpacks.plan(fabric) }.reason)
     }
+    @Test fun blankPackNameBecomesImportedPack() {
+        val pack = Modpacks.inspect(zip(mapOf("modrinth.index.json" to index().replace("\"name\":\"Pack\"", "\"name\":\" \""))))
+        assertEquals("Imported pack", Modpacks.plan(pack).name)
+    }
     @Test fun plainArchiveCanBeInspectedButNeedsTargetEvidence() {
         val p = Modpacks.inspect(zip(mapOf("mods/a.jar" to "a", "config/a" to "b"), "plain.zip"))
         assertEquals(Modpack.Format.Plain, p.format); assertEquals(2, p.overrides.size)

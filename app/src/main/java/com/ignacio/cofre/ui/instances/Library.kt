@@ -57,8 +57,6 @@ class Library(private val graph: AppGraph) {
 
     fun select(id: String) = graph.settings.update { it.copy(activeInstance = id) }
 
-    fun directory(instance: Instance): File = store.directory(instance)
-
     fun refresh() = edit { }
 
     /** Makes a NeoForge 26.2 instance; with [preset], its options and pinned mods (queued as downloads). */
@@ -94,12 +92,7 @@ class Library(private val graph: AppGraph) {
     fun rollbackRuntime(id: String) = edit { store.rollbackRuntime(id) }
 
     fun duplicate(id: String, done: (Instance) -> Unit = {}) = edit(done, owner = id) {
-        val source = store.get(id)
-        val names = store.list().map { it.name }.toSet()
-        val name = generateSequence(1) { it + 1 }
-            .map { n -> graph.context.getString(R.string.instance_copy_name, source.name) + if (n == 1) "" else " $n" }
-            .first { it !in names }
-        store.duplicate(id, name)
+        store.duplicate(id, store.uniqueName(graph.context.getString(R.string.instance_copy_name, store.get(id).name)))
     }
 
     fun trash(id: String) {
@@ -119,10 +112,6 @@ class Library(private val graph: AppGraph) {
         val last = undo ?: return
         undo = null
         restore(last.token)
-    }
-
-    fun dismissUndo() {
-        undo = null
     }
 
     fun restore(token: InstanceStore.TrashToken) = edit { store.restore(token) }

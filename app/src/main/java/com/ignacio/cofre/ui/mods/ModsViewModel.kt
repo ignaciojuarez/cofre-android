@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.ignacio.cofre.AppGraph
 import com.ignacio.cofre.kit.common.ContentKind
+import com.ignacio.cofre.kit.common.Target
 import com.ignacio.cofre.kit.content.ContentStore
 import com.ignacio.cofre.kit.curseforge.CurseForge
 import com.ignacio.cofre.kit.instances.Instance
@@ -144,7 +145,7 @@ class ModsViewModel(private val graph: AppGraph) : ViewModel() {
     /** No instance yet: make the default NeoForge 26.2 one (Library's own create) so Get has somewhere to go. */
     fun createInstance() {
         val library = graph.library
-        library.create(uniqueName("NeoForge 26.2"), library.neoForgeVersions.first(), preset = null) { made ->
+        library.create(graph.instances.uniqueName("${Target.LOADER.displayName} ${Target.GAME_VERSION}"), library.neoForgeVersions.first(), preset = null) { made ->
             library.select(made.id)
             useInstance(made)
         }
@@ -160,11 +161,6 @@ class ModsViewModel(private val graph: AppGraph) : ViewModel() {
     private fun directory(): File? = instance.value?.let(graph.instances::directory)
 
     private fun curseForge(): CurseForge? = graph.curseForgeKey.value?.let(::CurseForge)
-
-    private fun uniqueName(name: String): String {
-        val taken = graph.instances.list().map { it.name }.toSet()
-        return generateSequence(1) { it + 1 }.map { if (it == 1) name else "$name ($it)" }.first { it !in taken }
-    }
 
     /** The installed copy of [project] in the current instance: by Modrinth/CurseForge id for mods, by name otherwise. */
     private suspend fun installedCopy(project: ProjectSummary): InstalledRow? = withContext(Dispatchers.IO) {

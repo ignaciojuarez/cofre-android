@@ -137,7 +137,8 @@ class ImportModel(
             val result = try { queue.run() } finally { progress.cancel() }
             check(result == DownloadQueue.Result.Completed) { "Some of the pack's files didn't download. Nothing was installed." }
             plan.copyOverrides(archive, stage)
-            val instance = Instance(newId(plan.name), uniqueName(plan.name), loader = Loader.NeoForge, loaderVersion = plan.loaderVersion)
+            val instance = Instance(InstanceStore.newID(plan.name), instances.uniqueName(plan.name), loader = Loader.NeoForge, loaderVersion = plan.loaderVersion)
+            instances.validate(instance) // once committed, a bad cofre.json can't be rolled back
             File(stage.directory, "cofre.json").writeText(Kit.json.encodeToString(instance))
             stage.commit(File(instances.root, instance.id))
             instances.get(instance.id)
@@ -169,16 +170,6 @@ class ImportModel(
             }
             is CurseForge.Download.Disabled -> throw IllegalStateException("${cf.displayName} can only be downloaded on the CurseForge website.")
         }
-    }
-
-    private fun uniqueName(name: String): String {
-        val taken = instances.list().map { it.name }.toSet()
-        return generateSequence(1) { it + 1 }.map { if (it == 1) name else "$name $it" }.first { it !in taken }
-    }
-
-    private fun newId(name: String): String {
-        val base = name.lowercase().replace(Regex("[^a-z0-9_-]+"), "-").trim('-').take(60).ifEmpty { "pack" }
-        return "$base-${UUID.randomUUID().toString().take(8)}"
     }
 
     private fun begin(title: String, block: suspend () -> Unit) {

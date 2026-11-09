@@ -49,6 +49,12 @@ class InstanceStore(val root: File) {
          * they never interleave. Not reentrant: never call something that takes it while holding it.
          */
         fun lock(directory: File): Mutex = locks.getOrPut(directory.canonicalPath) { Mutex() }
+
+        /** A fresh folder id: [name] as a slug plus a random suffix. */
+        fun newID(name: String): String {
+            val base = name.lowercase().replace(Regex("[^a-z0-9_-]+"), "-").trim('-').take(60).ifEmpty { "instance" }
+            return "$base-${UUID.randomUUID().toString().take(8)}"
+        }
     }
 
     data class TrashToken(val folder: String)
@@ -56,8 +62,15 @@ class InstanceStore(val root: File) {
     init { require(!Files.isSymbolicLink(root.toPath())); Files.createDirectories(root.toPath()) }
 
     fun directory(instance: Instance): File { validate(instance); return FileOps.child(root, instance.gameDirectory) }
-    fun list(): List<Instance> = root.listFiles().orEmpty().filter { !it.name.startsWith('.') && it.isDirectory && File(it, "cofre.json").isFile }.map { read(it) }.sortedBy { it.name.lowercase() }
+    /** Every readable instance. A folder with a broken or copied `cofre.json` is skipped, so one bad folder never hides the rest. */
+    fun list(): List<Instance> = root.listFiles().orEmpty().filter { !it.name.startsWith('.') && it.isDirectory && File(it, "cofre.json").isFile }.mapNotNull { runCatching { read(it) }.getOrNull() }.sortedBy { it.name.lowercase() }
     fun get(id: String): Instance = read(folder(id))
+
+    /** [base] if no instance has that name yet, else "base 2", "base 3", … */
+    fun uniqueName(base: String): String {
+        val taken = list().map { it.name }.toSet()
+        return generateSequence(1) { it + 1 }.map { if (it == 1) base else "$base $it" }.first { it !in taken }
+    }
 
     fun create(name: String, gameVersion: String = Target.GAME_VERSION, loader: Loader = Target.LOADER, loaderVersion: String? = null): Instance {
         require(name.isNotBlank())
@@ -162,7 +175,7 @@ class InstanceStore(val root: File) {
             val candidates = stage.listFiles().orEmpty().filter { it.isDirectory && File(it, "cofre.json").isFile }
             val source = if (File(stage, "cofre.json").isFile) stage else candidates.singleOrNull() ?: error("Archive contains no instance")
             val old = decode(FileOps.child(source, "cofre.json"))
-            val newName = name ?: old.name
+            val newName = name ?: uniqueName(old.name)
             require(list().none { it.name == newName }) { "Duplicate name" }
             val id = newID(newName)
             val next = old.copy(id = id, gameDirectory = id, name = newName, favorite = false, lastPlayedAt = null)
@@ -181,16 +194,12 @@ class InstanceStore(val root: File) {
         return instance
     }
     private fun decode(file: File): Instance = Kit.json.decodeFromString<Instance>(file.readText()).also(::validate)
-    private fun validate(instance: Instance) {
+    fun validate(instance: Instance) {
         require(instance.schema == 1) { "Unsupported instance schema: ${instance.schema}" }
         require(instance.name.isNotBlank() && instance.id.isNotBlank() && !instance.id.startsWith('.') && '/' !in instance.id)
         require(instance.gameDirectory == instance.id) { "Instance paths must be relative to instances root" }
         FileOps.child(root, instance.gameDirectory)
         require(instance.memoryMB == null || instance.memoryMB > 0)
         require(instance.lastGoodMemoryMB == null || instance.lastGoodMemoryMB > 0)
-    }
-    private fun newID(name: String): String {
-        val base = name.lowercase().replace(Regex("[^a-z0-9_-]+"), "-").trim('-').take(60).ifEmpty { "instance" }
-        return "$base-${UUID.randomUUID().toString().take(8)}"
     }
 }

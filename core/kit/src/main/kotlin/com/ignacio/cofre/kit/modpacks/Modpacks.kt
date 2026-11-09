@@ -101,7 +101,7 @@ object Modpacks {
         if (pack.gameVersion != Target.GAME_VERSION) throw PackRejected(PackRejected.Reason.GameVersion(pack.gameVersion))
         if (pack.loader != Target.LOADER) throw PackRejected(PackRejected.Reason.LoaderType(pack.loader))
         if (pack.loaderVersion.isNullOrBlank()) throw PackRejected(PackRejected.Reason.LoaderVersionMissing)
-        return ModpackInstallPlan(pack.name ?: "Imported pack", pack.gameVersion, pack.loader, pack.loaderVersion, pack.files, pack.overrides)
+        return ModpackInstallPlan(pack.name?.takeIf { it.isNotBlank() } ?: "Imported pack", pack.gameVersion, pack.loader, pack.loaderVersion, pack.files, pack.overrides)
     }
 
     private fun JsonObject.text(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
