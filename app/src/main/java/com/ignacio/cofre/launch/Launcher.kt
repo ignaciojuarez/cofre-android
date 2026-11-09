@@ -140,7 +140,7 @@ class Launcher(private val graph: AppGraph) {
      * requirement, or a mod that will or likely will crash on Vulkan, opens "Before you play". "May not work" doesn't.
      */
     fun play(instance: Instance, quickPlay: QuickPlay? = null) {
-        if (job?.isActive == true || preflight != null) return
+        if (job?.isActive == true || preflight != null || refusedWhileRunning(instance, quickPlay)) return
         graph.library.select(instance.id)
         job = graph.work({ start(instance, quickPlay) }) {
             val dir = graph.instances.directory(instance)
@@ -159,8 +159,19 @@ class Launcher(private val graph: AppGraph) {
     }
 
     private fun start(instance: Instance, quickPlay: QuickPlay?) {
+        if (refusedWhileRunning(instance, quickPlay)) return
         run = Run(instance, quickPlay)
         job = graph.work(::fail) { launch(instance, quickPlay) }
+    }
+
+    /**
+     * Every Play path asks here first: while the game Cofre started still runs (say, Cofre reopened for a pack), a
+     * second launch would rewrite its live launch files and start another game in the same process.
+     */
+    private fun refusedWhileRunning(instance: Instance, quickPlay: QuickPlay?): Boolean {
+        if (!gameRunning) return false
+        run = Run(instance, quickPlay, error = graph.context.getString(R.string.error_game_running))
+        return true
     }
 
     fun retry() {
