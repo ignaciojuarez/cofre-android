@@ -27,7 +27,7 @@ scripts/natives/fetch.sh natives-20261109-7   # Java 25 + game natives (pinned i
 scripts/test.sh                               # tests, screenshots, lint, debug APK
 ```
 
-Microsoft sign-in needs an Azure app client ID that Mojang has approved for Minecraft services. Put it in an untracked `secrets.properties` as `MICROSOFT_CLIENT_ID=…`.
+Microsoft sign-in needs an Azure app client ID that Mojang has approved for Minecraft services. Put it in an untracked `secrets.properties` at the repo root as `microsoftClientId=…` (or pass `-Pcofre.microsoftClientId=…`).
 
 ## Layout
 | Path | What |
