@@ -82,6 +82,17 @@ class InstalledModelTest {
         assertTrue(File(instance, "mods/lib.jar").isFile, "nothing removed until confirmed")
     }
 
+    @Test fun folderPacksListInsteadOfCrashing() = runBlocking {
+        File(instance, "resourcepacks/Folder").mkdirs()
+        File(instance, "resourcepacks/Folder/pack.mcmeta").writeText("""{"pack":{"pack_format":80,"description":"A folder pack"}}""")
+        val installed = model()
+        installed.settle { !it.loading }
+        installed.select(InstalledTab.Packs)
+        val packs = installed.settle { !it.loading && it.tab == InstalledTab.Packs }
+        assertEquals(listOf("Folder"), packs.rows.map { it.item.id })
+        assertNull(packs.message)
+    }
+
     @Test fun removalCanBeUndone() = runBlocking {
         val installed = model()
         val app = installed.settle { !it.loading && it.rows.size == 2 }.rows.first { it.item.name == "App" }

@@ -110,7 +110,7 @@ class InstalledModel(
         loading?.cancel()
         val tab = mutable.value.tab
         loading = scope.launch {
-            val rows = read(tab)
+            val rows = quietly { read(tab) }.orEmpty()
             mutable.update { it.copy(rows = rows, loading = false) }
             if (tab != InstalledTab.Mods) return@launch
             if (!identified) {
@@ -130,16 +130,15 @@ class InstalledModel(
 
     /** Asks first when other mods need this one or it leaves dependencies behind; otherwise removes with undo. */
     fun remove(row: InstalledRow) {
-        val nodes = mods()
-        val file = row.item.urlName
-        val dependents = if (row.item.kind == ContentKind.Mods) ModRemoval.dependents(file, nodes).map { it.name } else emptyList()
-        val extras = if (row.item.kind == ContentKind.Mods) {
+        if (row.item.kind != ContentKind.Mods) return trash(listOf(row))
+        scope.launch {
+            val nodes = quietly { mods() } ?: return@launch
+            val file = row.item.urlName
+            val dependents = ModRemoval.dependents(file, nodes).map { it.name }
             val files = ModRemoval.options(file, nodes).map { it.file }.toSet()
-            mutable.value.rows.filter { it.item.urlName in files }
-        } else {
-            emptyList()
+            val extras = mutable.value.rows.filter { it.item.urlName in files }
+            if (dependents.isEmpty() && extras.isEmpty()) trash(listOf(row)) else mutable.update { it.copy(removal = RemovalPrompt(row, dependents, extras)) }
         }
-        if (dependents.isEmpty() && extras.isEmpty()) trash(listOf(row)) else mutable.update { it.copy(removal = RemovalPrompt(row, dependents, extras)) }
     }
 
     fun confirmRemoval(extras: Set<String>) {
@@ -190,12 +189,13 @@ class InstalledModel(
             val mod = mods[item.urlName]
             val id = item.modID ?: item.id
             val issue = ContentCompatibility.issue(id, item.name, item.kind, item.version)
-                ?: glScans.cached(store.file(item)).takeIf { scannable(item) }?.let { ContentCompatibility.glIssue(id, item.name, it) }
+                ?: item.takeIf(::scannable)?.let { glScans.cached(store.file(it)) }?.let { ContentCompatibility.glIssue(id, item.name, it) }
             InstalledRow(item, mod, update = mod?.projectId?.let(updates::get)?.takeIf { it.versionId != mod.versionId }, issue = issue)
         }
     }
 
-    private fun mods(): List<InstalledMod> = index.installed()
+    /** Reads every jar's metadata, so never on the main thread. */
+    private suspend fun mods(): List<InstalledMod> = withContext(io) { index.installed() }
 
     /** Mods no rule vouches for get the jar scan. */
     private fun scannable(item: ContentStore.Item): Boolean =
@@ -203,7 +203,7 @@ class InstalledModel(
 
     private suspend fun refresh() {
         val tab = mutable.value.tab
-        val rows = read(tab)
+        val rows = quietly { read(tab) } ?: return
         mutable.update { if (it.tab == tab) it.copy(rows = rows) else it }
     }
 
@@ -297,8 +297,8 @@ class GlScanCache(private val file: File) {
     private val lock = Mutex()
     private var entries: MutableMap<String, GlRisk>? = null
 
-    /** The cached finding for this jar, or null when it hasn't been scanned. */
-    fun cached(jar: File): GlRisk? = synchronized(this) { load()[hashOf(jar)] }
+    /** The cached finding for this jar, or null when it hasn't been scanned or isn't a file (a folder in `mods/`). */
+    fun cached(jar: File): GlRisk? = if (!jar.isFile) null else synchronized(this) { load()[hashOf(jar)] }
 
     suspend fun scan(jar: File): GlRisk = lock.withLock {
         val hash = hashOf(jar)
