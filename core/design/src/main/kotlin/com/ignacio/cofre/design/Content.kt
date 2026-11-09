@@ -41,6 +41,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -231,7 +232,7 @@ private fun GalleryCell(
 }
 
 /**
- * Full-screen image viewer: swipe, D-pad or L1/R1 between images; B or ✕ closes. The thumbnail shows at once and
+ * Full-screen image viewer: swipe, D-pad left/right or L1/R1 between images; B or ✕ closes. The thumbnail shows at once and
  * the full image loads over it.
  */
 @Composable
@@ -250,6 +251,15 @@ public fun GalleryViewer(
         modifier
             .fillMaxSize()
             .background(c.lip)
+            .onKeyEvent { e ->
+                val by = when (e.nativeKeyEvent.keyCode) {
+                    AndroidKeyEvent.KEYCODE_DPAD_LEFT -> -1
+                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> 1
+                    else -> return@onKeyEvent false
+                }
+                if (e.type == KeyEventType.KeyDown) step(by)
+                true
+            }
             .controllerActions(
                 ControllerAction(Pad.L1, "Previous") { step(-1) },
                 ControllerAction(Pad.R1, "Next") { step(1) },
@@ -275,7 +285,7 @@ public fun GalleryViewer(
                 CofreTheme.type.label,
                 Modifier.weight(1f),
                 color = c.inkSoft,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                textAlign = TextAlign.Center,
             )
             Box(Modifier.size(32.dp))
         }

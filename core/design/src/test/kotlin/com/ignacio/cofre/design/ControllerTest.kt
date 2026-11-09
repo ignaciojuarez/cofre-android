@@ -13,11 +13,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.isFocused
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -31,13 +36,15 @@ class ControllerTest {
     private lateinit var view: View
 
     /** Presses a key the way a device delivers it: through the window, so it works before anything has focus. */
-    private fun press(keyCode: Int) {
+    private fun press(keyCode: Int, window: View = view) {
         rule.runOnUiThread {
-            view.rootView.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
-            view.rootView.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
+            window.rootView.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, keyCode))
+            window.rootView.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, keyCode))
         }
         rule.waitForIdle()
     }
+
+    private fun focusedTag(): String = rule.onNode(isFocused()).fetchSemanticsNode().config[SemanticsProperties.TestTag]
 
     private fun content(body: @Composable () -> Unit) = rule.setContent {
         view = LocalView.current
@@ -153,5 +160,84 @@ class ControllerTest {
         screen = "list"
         rule.waitForIdle()
         rule.onNodeWithTag("list-2").assertIsFocused()
+    }
+
+    @Test
+    fun sheetTakesFocusAndGivesItBack() {
+        var open by mutableStateOf(false)
+        lateinit var sheetView: View
+        content {
+            ScreenFocus {
+                Column {
+                    BlockButton("Other", {}, Modifier.testTag("other"))
+                    BlockButton("Open", { open = true }, Modifier.testTag("open"))
+                }
+            }
+            if (open) {
+                BlockSheet({ open = false }) {
+                    sheetView = LocalView.current
+                    BlockButton("Inside", {}, Modifier.testTag("inside"))
+                }
+            }
+        }
+        press(KeyEvent.KEYCODE_BUTTON_A)
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        rule.onNodeWithTag("open").assertIsFocused()
+        press(KeyEvent.KEYCODE_BUTTON_A)
+        assertEquals(true, open)
+        rule.onNodeWithTag("inside").assertIsFocused()
+        press(KeyEvent.KEYCODE_BUTTON_B, window = sheetView)
+        assertEquals(false, open)
+        rule.onNodeWithTag("open").assertIsFocused()
+    }
+
+    @Test
+    @Config(qualifiers = "w400dp-h600dp")
+    fun triggersPageThroughAList() {
+        content {
+            ScreenFocus { PaneScroll { repeat(40) { i -> BlockButton("Item $i", {}, Modifier.testTag("item-$i")) } } }
+        }
+        press(KeyEvent.KEYCODE_BUTTON_A)
+        rule.onNodeWithTag("item-0").assertIsFocused()
+        press(KeyEvent.KEYCODE_BUTTON_R2)
+        val afterPage = focusedTag().removePrefix("item-").toInt()
+        assertTrue("R2 moved focus about a screen down, got $afterPage", afterPage in 8..14)
+        press(KeyEvent.KEYCODE_BUTTON_L2)
+        assertTrue("L2 came back up, got ${focusedTag()}", focusedTag().removePrefix("item-").toInt() <= 2)
+    }
+
+    @Test
+    fun touchHidesTheHintBar() {
+        lateinit var controller: ControllerState
+        content {
+            controller = LocalController.current
+            ScreenFocus { BlockButton("Play", {}, Modifier.testTag("play")) }
+        }
+        press(KeyEvent.KEYCODE_BUTTON_A)
+        assertEquals(InputKind.Controller, controller.lastInput)
+        rule.onNodeWithTag("play").performTouchInput { click() }
+        rule.waitForIdle()
+        assertEquals(InputKind.Touch, controller.lastInput)
+    }
+
+    @Test
+    fun hintsFollowTheFocusedRegion() {
+        lateinit var controller: ControllerState
+        content {
+            controller = LocalController.current
+            ScreenFocus(Modifier.controllerActions(ControllerAction(Pad.Y, "Search"))) {
+                Column {
+                    BlockButton("Outer", {}, Modifier.testTag("outer"))
+                    Column(Modifier.controllerActions(ControllerAction(Pad.Y, "Filter"), ControllerAction(Pad.Confirm, "Play"))) {
+                        BlockButton("Inner", {}, Modifier.testTag("inner"))
+                    }
+                }
+            }
+        }
+        press(KeyEvent.KEYCODE_BUTTON_A)
+        rule.onNodeWithTag("outer").assertIsFocused()
+        assertEquals(listOf(Pad.Confirm to "Select", Pad.Back to "Back", Pad.Y to "Search"), controller.hints.map { it.pad to it.label })
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        assertEquals(listOf(Pad.Confirm to "Play", Pad.Back to "Back", Pad.Y to "Filter"), controller.hints.map { it.pad to it.label })
     }
 }
