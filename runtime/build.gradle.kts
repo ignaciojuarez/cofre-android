@@ -36,7 +36,6 @@ kotlin {
 
 // The jars the :game process needs, built by :runtime:glfw-shim.
 val glfwShim: Configuration = configurations.create("glfwShim") { isCanBeConsumed = false }
-val probe: Configuration = configurations.create("probe") { isCanBeConsumed = false }
 
 dependencies {
     implementation(project(":core:kit"))
@@ -45,7 +44,6 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.xz)
     glfwShim(project(":runtime:glfw-shim", "shimElements"))
-    probe(project(":runtime:glfw-shim", "probeElements"))
 
     testImplementation(libs.junit4)
     testImplementation(libs.kotlin.test)
@@ -112,7 +110,6 @@ androidComponents {
         val debug = variant.buildType == "debug"
         val task = tasks.register<RuntimeAssets>("${variant.name}RuntimeAssets") {
             jars.from(glfwShim)
-            if (debug) jars.from(probe)
             // The natives release's license texts, and its JRE's legal/ (the one release builds bundle).
             legal.set(mapOf("natives" to File(nativesDir, "legal"), "java" to File(nativesDir, "jre25/legal")).filterValues { it.isDirectory }.mapValues { it.value.path })
             jre.from(jreOverride.orElse(provider {

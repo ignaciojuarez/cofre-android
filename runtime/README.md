@@ -15,7 +15,7 @@ The game side of Cofre: Vulkan check, JRE install, the `:game` process, the GLFW
 | `GameLaunch(context).prepare(versionId, gameDir, GameAccount(name, uuid), heapMB, extraJvmArgs, extraGameArgs)` | The one place game files and the JRE get installed for a launch. Writes the spec and exit record to `noBackupFilesDir/launch/<instance>[.exit].json`, never into the instance; deletes an older build's `<instance>/.cofre` and old `hs_err_pid*` files (a native crash's `hs_err` goes next to the exit record: it repeats the command line, token included). Then writes `preferredGraphicsBackend:vulkan` and (NeoForge) `earlyWindowControl = false`, returns the spec file for `GameActivity.intent`. Adds `--userType msa --graphicsBackend vulkan`, then `extraGameArgs` (Quick Play). `heapMB` defaults to `JavaHeap.autoMB` |
 | `GameLaunch(context).exit(specFile): GameExit` | `ExitRecord`, game output, newest crash report or `hs_err`, kit's `GameExitReport`; `summary` is the line to show ("Vulkan device not suitable. This device's Vulkan driver is missing: …") |
 
-Debug builds: `RuntimeDebugActivity` has buttons for "Install NeoForge 26.2", "Launch vanilla 26.2" and "Launch NeoForge 26.2" (`--es action install|vanilla|neoforge`), using `DevAccount` (offline `Dev`, token `0`; debug source set only). Probes: `--es main hello|vulkan`, `--es args "exit=3"`, `--ez reinstall true`, `--ez checkOnly true`.
+Debug builds: `RuntimeDebugActivity` has buttons for "Install NeoForge 26.2", "Launch vanilla 26.2" and "Launch NeoForge 26.2" (`--es action install|vanilla|neoforge`), using `DevAccount` (offline `Dev`, token `0`; debug source set only).
 
 ## JRE packaging
 `scripts/dev/fetch-dev-jre.sh` (dev only) writes `.work/dev-jre/jre-25.tar.xz`; debug builds bundle it. Any build can use `-Pcofre.jre=<tar.xz>` instead (the natives release's `jre25-android-arm64.tar.xz`). No tarball → no JRE asset; the build still works.
@@ -26,7 +26,6 @@ Debug builds: `RuntimeDebugActivity` has buttons for "Install NeoForge 26.2", "L
 - Emulator: NeoForge 26.2.0.93 installs (PROCESS_MINECRAFT_JAR in `:installer`, exit 0, ~12 s). Vanilla and NeoForge 26.2 launch up to LWJGL's native load (`Failed to locate library: liblwjgl.so`, diagnosed MissingLibrary) until the natives release lands; FML 11.0.16 boots with no class or module errors.
 
 ## Needs the real device (Odin 3)
-- Vulkan probe through the shim (`--es main vulkan`): needs the LWJGL natives release and a suitable driver.
 - The game's first frame; swapchain rebuild after sleep (`surfaceDestroyed` → iconify + blocked `glfwCreateWindowSurface`).
 - Pointer capture with a real mouse; the built-in controller layout on the Odin pad (A/B swap in Xbox mode, back paddles); look speed.
 - Touch coordinates if the surface gets a fixed lower resolution (they're in view pixels today).
