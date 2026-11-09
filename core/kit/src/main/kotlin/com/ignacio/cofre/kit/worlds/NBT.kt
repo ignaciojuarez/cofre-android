@@ -7,7 +7,7 @@ import java.io.DataOutputStream
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 
-/** All twelve standard NBT types. Unknown named tags survive edits and round trips. */
+/** All twelve standard NBT types. Unknown named tags survive edits and round trips. Arrays stay primitive: a 64 MB file is 64 MB, not 300 boxed. */
 sealed interface NBTTag {
     val type: Int
     data class ByteTag(val value: Byte) : NBTTag { override val type: Int = 1 }
@@ -16,12 +16,24 @@ sealed interface NBTTag {
     data class LongTag(val value: Long) : NBTTag { override val type: Int = 4 }
     data class FloatTag(val value: Float) : NBTTag { override val type: Int = 5 }
     data class DoubleTag(val value: Double) : NBTTag { override val type: Int = 6 }
-    data class ByteArrayTag(val value: List<Byte>) : NBTTag { override val type: Int = 7 }
+    data class ByteArrayTag(val value: ByteArray) : NBTTag {
+        override val type: Int = 7
+        override fun equals(other: Any?): Boolean = other is ByteArrayTag && value.contentEquals(other.value)
+        override fun hashCode(): Int = value.contentHashCode()
+    }
     data class StringTag(val value: String) : NBTTag { override val type: Int = 8 }
     data class ListTag(val elementType: Int, val value: List<NBTTag>) : NBTTag { override val type: Int = 9 }
     data class Compound(val value: Map<String, NBTTag>) : NBTTag { override val type: Int = 10; operator fun get(key: String): NBTTag? = value[key] }
-    data class IntArrayTag(val value: List<Int>) : NBTTag { override val type: Int = 11 }
-    data class LongArrayTag(val value: List<Long>) : NBTTag { override val type: Int = 12 }
+    data class IntArrayTag(val value: IntArray) : NBTTag {
+        override val type: Int = 11
+        override fun equals(other: Any?): Boolean = other is IntArrayTag && value.contentEquals(other.value)
+        override fun hashCode(): Int = value.contentHashCode()
+    }
+    data class LongArrayTag(val value: LongArray) : NBTTag {
+        override val type: Int = 12
+        override fun equals(other: Any?): Boolean = other is LongArrayTag && value.contentEquals(other.value)
+        override fun hashCode(): Int = value.contentHashCode()
+    }
     val string: String? get() = (this as? StringTag)?.value
     val integer: Long? get() = when (this) { is ByteTag -> value.toLong(); is ShortTag -> value.toLong(); is IntTag -> value.toLong(); is LongTag -> value; else -> null }
 }
@@ -63,7 +75,7 @@ object NBT {
             4 -> NBTTag.LongTag(input.readLong())
             5 -> NBTTag.FloatTag(input.readFloat())
             6 -> NBTTag.DoubleTag(input.readDouble())
-            7 -> NBTTag.ByteArrayTag(List(count(input)) { input.readByte() })
+            7 -> NBTTag.ByteArrayTag(ByteArray(count(input)).also(input::readFully))
             8 -> NBTTag.StringTag(input.readUTF())
             9 -> {
                 val element = input.readUnsignedByte(); val size = count(input)
@@ -80,8 +92,8 @@ object NBT {
                 }
                 NBTTag.Compound(tags)
             }
-            11 -> NBTTag.IntArrayTag(List(count(input, 4)) { input.readInt() })
-            12 -> NBTTag.LongArrayTag(List(count(input, 8)) { input.readLong() })
+            11 -> NBTTag.IntArrayTag(IntArray(count(input, 4)) { input.readInt() })
+            12 -> NBTTag.LongArrayTag(LongArray(count(input, 8)) { input.readLong() })
             else -> throw IllegalArgumentException("Unknown NBT type: $type")
         }
     }
@@ -94,7 +106,7 @@ object NBT {
             is NBTTag.LongTag -> out.writeLong(tag.value)
             is NBTTag.FloatTag -> out.writeFloat(tag.value)
             is NBTTag.DoubleTag -> out.writeDouble(tag.value)
-            is NBTTag.ByteArrayTag -> { require(tag.value.size <= MAX_ELEMENTS); out.writeInt(tag.value.size); tag.value.forEach { out.writeByte(it.toInt()) } }
+            is NBTTag.ByteArrayTag -> { require(tag.value.size <= MAX_ELEMENTS); out.writeInt(tag.value.size); out.write(tag.value) }
             is NBTTag.StringTag -> out.writeUTF(tag.value)
             is NBTTag.ListTag -> {
                 require(tag.elementType in 0..12 && tag.value.size <= MAX_ELEMENTS && tag.value.all { it.type == tag.elementType })

@@ -20,7 +20,7 @@ import kotlin.test.*
 class ServersTest {
     @TempDir lateinit var root: File
     @Test fun serversRoundTripKeepsUnknownRootAndRecordTags() {
-        val record = ServerRecord("Name", "play.x", byteArrayOf(1, 2, 3), 1, true, mapOf("future" to NBTTag.IntArrayTag(listOf(1, -2))))
+        val record = ServerRecord("Name", "play.x", byteArrayOf(1, 2, 3), 1, true, mapOf("future" to NBTTag.IntArrayTag(intArrayOf(1, -2))))
         val list = ServerList(listOf(record), mapOf("custom" to NBTTag.StringTag("yes")), "root")
         val decoded = ServersDatCodec.decode(ServersDatCodec.encode(list))
         assertEquals(list.unknown, decoded.unknown); assertEquals("root", decoded.rootName); assertEquals(record.unknown, decoded.records.single().unknown)

@@ -12,8 +12,8 @@ class WorldsTest {
     @TempDir lateinit var root: File
     private fun document(name: String = "My Base"): NBTDocument = NBTDocument(NBTTag.Compound(mapOf("Data" to NBTTag.Compound(linkedMapOf(
         "LevelName" to NBTTag.StringTag(name), "GameType" to NBTTag.IntTag(1), "LastPlayed" to NBTTag.LongTag(1700000000000), "Version" to NBTTag.Compound(mapOf("Name" to NBTTag.StringTag("26.2"))),
-        "byte" to NBTTag.ByteTag(-1), "short" to NBTTag.ShortTag(-123), "float" to NBTTag.FloatTag(1.5f), "double" to NBTTag.DoubleTag(2.5), "bytes" to NBTTag.ByteArrayTag(listOf(-1, 2)),
-        "strings" to NBTTag.ListTag(8, listOf(NBTTag.StringTag("vanilla"), NBTTag.StringTag("neoforge"))), "empty" to NBTTag.ListTag(0, emptyList()), "ints" to NBTTag.IntArrayTag(listOf(-1, 2)), "longs" to NBTTag.LongArrayTag(listOf(-1, 2))
+        "byte" to NBTTag.ByteTag(-1), "short" to NBTTag.ShortTag(-123), "float" to NBTTag.FloatTag(1.5f), "double" to NBTTag.DoubleTag(2.5), "bytes" to NBTTag.ByteArrayTag(byteArrayOf(-1, 2)),
+        "strings" to NBTTag.ListTag(8, listOf(NBTTag.StringTag("vanilla"), NBTTag.StringTag("neoforge"))), "empty" to NBTTag.ListTag(0, emptyList()), "ints" to NBTTag.IntArrayTag(intArrayOf(-1, 2)), "longs" to NBTTag.LongArrayTag(longArrayOf(-1, 2))
     )))), "root")
     private fun world(name: String, game: File = root, level: String = "level.dat"): File = File(game, "saves/$name").apply { mkdirs(); File(this, level).writeBytes(NBT.write(document(name.uppercase()), gzip = true)) }
     @Test fun nbtRoundTripsEveryTypePlainAndGzip() {
@@ -23,6 +23,11 @@ class WorldsTest {
         val doc = document(); val data = doc.root["Data"] as NBTTag.Compound
         val changed = NBTDocument(NBTTag.Compound(doc.root.value + ("Data" to NBTTag.Compound(data.value + ("LevelName" to NBTTag.StringTag("New"))))), doc.name)
         assertEquals(data["longs"], (NBT.read(NBT.write(changed)).root["Data"] as NBTTag.Compound)["longs"])
+    }
+    @Test fun largeArraysStayPrimitive() {
+        val longs = LongArray(1_000_000) { it * 7L }
+        val tag = NBT.read(NBT.write(NBTDocument(NBTTag.Compound(mapOf("heightmap" to NBTTag.LongArrayTag(longs)))))).root["heightmap"]
+        assertContentEquals(longs, assertIs<NBTTag.LongArrayTag>(tag).value)
     }
     @Test fun nbtSupportsJavaModifiedUTF8AndSignedIntegers() {
         val doc = NBTDocument(NBTTag.Compound(mapOf("😀\u0000" to NBTTag.StringTag("𐐀\u0000"), "i" to NBTTag.ShortTag(-321))))
