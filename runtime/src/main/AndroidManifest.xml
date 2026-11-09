@@ -14,5 +14,10 @@
             android:enableOnBackInvokedCallback="true"
             android:resizeableActivity="false"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen" />
+        <!-- NeoForge install processors: one JVM per process, on the game's JRE and launcher. -->
+        <service
+            android:name="com.ignacio.cofre.runtime.launch.InstallerService"
+            android:process=":installer"
+            android:exported="false" />
     </application>
 </manifest>

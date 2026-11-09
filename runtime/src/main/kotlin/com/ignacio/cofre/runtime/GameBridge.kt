@@ -1,6 +1,8 @@
 package com.ignacio.cofre.runtime
 
 import android.content.Context
+import android.system.Os
+import android.util.Log
 import android.view.Surface
 import java.io.File
 import java.util.zip.ZipFile
@@ -38,6 +40,44 @@ internal object GameBridge {
         }
         System.load(File(dir, "libcofre.so").path)
         return dir
+    }
+
+    /**
+     * Starts [spec]'s JVM on its own thread in this process (:game or :installer), with the
+     * device-specific pieces added: java.home/tmpdir, our native folder as the library path for
+     * LWJGL, JNA and System.loadLibrary, and [classpathFirst] ahead of the spec's classpath.
+     */
+    fun start(context: Context, spec: LaunchSpec, nativeDir: File, classpathFirst: List<String> = emptyList(), extraJvmArgs: List<String> = emptyList()) {
+        File(spec.gameDir).mkdirs()
+        File(spec.logFile).parentFile?.mkdirs()
+        val env = mapOf(
+            "JAVA_HOME" to spec.javaHome,
+            "HOME" to spec.gameDir,
+            "TMPDIR" to context.cacheDir.path,
+            "LD_LIBRARY_PATH" to "${spec.javaHome}/lib/server:${spec.javaHome}/lib:$nativeDir",
+        ) + spec.env
+        env.forEach { (key, value) -> Os.setenv(key, value, true) }
+        val args = buildList {
+            add("java")
+            addAll(spec.jvmArgs)
+            addAll(extraJvmArgs)
+            add("-Djava.home=${spec.javaHome}")
+            add("-Djava.io.tmpdir=${context.cacheDir.path}")
+            add("-Duser.home=${spec.gameDir}")
+            add("-Djava.library.path=$nativeDir")
+            add("-Djna.boot.library.path=$nativeDir")
+            add("-Djdk.lang.Process.launchMechanism=FORK") // posix_spawn needs jspawnhelper, which can't run here
+            add("-Dorg.lwjgl.librarypath=$nativeDir")
+            add("-Dorg.lwjgl.vulkan.libname=libvulkan.so")
+            add("-Dorg.lwjgl.system.allocator=system")
+            add("-cp")
+            add((classpathFirst + spec.classpath).joinToString(":"))
+            add(spec.mainClass)
+            addAll(spec.gameArgs)
+        }
+        Log.i(TAG, "[Cofre] launching ${spec.mainClass} java.home=${spec.javaHome}")
+        val result = launch(args.toTypedArray(), spec.javaHome, spec.gameDir, spec.logFile, spec.exitFile)
+        check(result == 0) { "JVM thread didn't start ($result)" }
     }
 
     const val EV_KEY = 1

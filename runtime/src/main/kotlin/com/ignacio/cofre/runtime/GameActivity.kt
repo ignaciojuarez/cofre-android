@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import android.system.Os
 import android.util.Log
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -83,45 +82,16 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
     }
 
     private fun start(spec: LaunchSpec) {
-        val nativeDir = nativeDir.path
         val shim = File(filesDir, "runtimes/cofre-glfw.jar")
         shim.parentFile?.mkdirs()
         assets.open("runtime/cofre-glfw.jar").use { input -> shim.outputStream().use { input.copyTo(it) } }
-        File(spec.gameDir).mkdirs()
-
-        val env = mapOf(
-            "JAVA_HOME" to spec.javaHome,
-            "HOME" to spec.gameDir,
-            "TMPDIR" to cacheDir.path,
-            "LD_LIBRARY_PATH" to "${spec.javaHome}/lib/server:${spec.javaHome}/lib:$nativeDir",
-        ) + spec.env
-        env.forEach { (key, value) -> Os.setenv(key, value, true) }
-
         val refreshRate = if (Build.VERSION.SDK_INT >= 30) {
             display.refreshRate
         } else {
             @Suppress("DEPRECATION")
             windowManager.defaultDisplay.refreshRate
         }
-        val args = buildList {
-            add("java")
-            addAll(spec.jvmArgs)
-            add("-Djava.home=${spec.javaHome}")
-            add("-Djava.io.tmpdir=${cacheDir.path}")
-            add("-Duser.home=${spec.gameDir}")
-            add("-Djdk.lang.Process.launchMechanism=FORK") // posix_spawn needs jspawnhelper, which can't run here
-            add("-Dorg.lwjgl.librarypath=$nativeDir")
-            add("-Dorg.lwjgl.vulkan.libname=libvulkan.so")
-            add("-Dorg.lwjgl.system.allocator=system")
-            add("-Dcofre.refreshRate=${refreshRate.roundToInt()}")
-            add("-cp")
-            add((listOf(shim.path) + spec.classpath).joinToString(":"))
-            add(spec.mainClass)
-            addAll(spec.gameArgs)
-        }
-        Log.i(TAG, "[Cofre] launching ${spec.mainClass} java.home=${spec.javaHome}")
-        val result = GameBridge.launch(args.toTypedArray(), spec.javaHome, spec.gameDir, spec.logFile, spec.exitFile)
-        check(result == 0) { "JVM thread didn't start ($result)" }
+        GameBridge.start(this, spec, nativeDir, classpathFirst = listOf(shim.path), extraJvmArgs = listOf("-Dcofre.refreshRate=${refreshRate.roundToInt()}"))
     }
 
     /** Requests from the game's threads, which must not call into ART themselves. */
