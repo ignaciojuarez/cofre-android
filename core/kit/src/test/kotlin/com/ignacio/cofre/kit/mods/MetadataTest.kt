@@ -112,17 +112,8 @@ class MetadataTest {
         val missing = ModRequirements.missing(mapOf("biomes.jar" to ModJarMetadata(toml.modIds, dependencies = toml.dependencies)))
         assertEquals(listOf("GlitchCore", "TerraBlender"), missing.map { it.name })
     }
-    @Test fun crashCluesPortAllIosFormats() {
-        assertEquals("ordsPcFz", ModRequirements.fromCrash("Mod File mods/bountiful.jar needs language provider kotlinforforge:4 or above to load").single().projectId)
-        assertEquals(listOf("sophisticated-core", "sophisticatedcore"), ModRequirements.fromCrash("Mod backpacks requires sophisticatedcore 1.0 or above\nCurrently, sophisticatedcore is not installed").single().slugs)
-        assertEquals("bountiful", ModRequirements.fromCrash("Mod ID: 'kotlinforforge', Requested by: 'bountiful', Expected range: '[4,)', Actual version: '[MISSING]'").single().neededBy)
-        assertEquals("fabric-language-kotlin", ModRequirements.fromCrash("Mod 'Bountiful' requires any version of fabric-language-kotlin, which is missing!").single().modId)
-        assertTrue(ModRequirements.fromCrash("Mod x requires minecraft 1.21\nCurrently, minecraft is not installed").isEmpty())
-        assertTrue(ModRequirements.fromCrash("Mod foo requires bar 2.0 or above\nCurrently, bar is 1.0").isEmpty())
-    }
-    @Test fun coloredNeoForge262CrashDeduplicatesLibraries() {
-        val text = "Mod ID: 'terrablender', Requested by: 'biomesoplenty', Expected range: '[26.2,)', Actual version: '[MISSING]'\nMod ID: 'glitchcore', Requested by: 'biomesoplenty', Expected range: '[26.2,)', Actual version: '[MISSING]'\nMod §ebiomesoplenty§r requires §6terrablender§r 1 or above\nCurrently, terrablender is not installed"
-        val missing = ModRequirements.fromCrash(text)
-        assertEquals(listOf("terrablender", "glitchcore"), missing.map { it.modId }); assertEquals(listOf("TerraBlender", "GlitchCore"), missing.map { it.name })
+    @Test fun requirementsKnowKotlinForForgeAndLibrarySlugs() {
+        assertEquals("ordsPcFz", ModRequirements.requirement("kotlinforforge", "modLoader").projectId)
+        assertEquals(listOf("sophisticated-core", "sophisticatedcore"), ModRequirements.requirement("sophisticatedcore", "dependency").slugs)
     }
 }

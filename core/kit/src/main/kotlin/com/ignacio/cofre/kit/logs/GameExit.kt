@@ -1,6 +1,7 @@
 package com.ignacio.cofre.kit.logs
 
 import com.ignacio.cofre.kit.compat.KnownModsCatalog
+import com.ignacio.cofre.kit.mods.ModRequirements
 
 enum class ExitReason { Memory, SystemKilled, VulkanUnsupported, NativeWindowInUse, OpenGLMod, Mods, MissingDependency, MissingLibrary, JavaVersion, Java, Renderer, Unknown, Quit }
 
@@ -43,9 +44,10 @@ data class GameExitReport(val code: Int, val reason: ExitReason, val clue: Strin
             require(tail >= 0)
             val lines = log.orEmpty().lines().filter { it.isNotEmpty() }
             val report = crashReport.orEmpty().lines().takeWhile { !it.startsWith("-- System Details --") }.filter { it.isNotEmpty() }
-            val dependencies = missingDependencies(report + lines)
+            val dependencies = dependencies(report + lines)
+            // Only absent mods: one there in the wrong version is the user's to update, not "Get missing mods"' to fetch.
             fun result(reason: ExitReason, clue: String? = null, missing: List<String> = emptyList()): GameExitReport =
-                GameExitReport(code, reason, clue?.let(::clean), instance, lines.takeLast(tail), missing, if (reason == ExitReason.OpenGLMod) glMod(report + lines) else null, dependencies)
+                GameExitReport(code, reason, clue?.let(::clean), instance, lines.takeLast(tail), missing, if (reason == ExitReason.OpenGLMod) glMod(report + lines) else null, dependencies.filter { it.actual == MISSING })
             val stopped = lines.indexOfLast { "Stopping!" in it }
             if (crashReport == null && stopped >= 0 && lines.drop(stopped + 1).none(::isError)) return result(ExitReason.Quit)
             val errors = lines.filter { isError(it) || listOf("No context is current", "No GLCapabilities", "does not support required", "CodeCache is full", "VK_ERROR_").any { marker -> it.contains(marker, true) } }
@@ -58,7 +60,7 @@ data class GameExitReport(val code: Int, val reason: ExitReason, val clue: Strin
             // A SIGKILL leaves no crash report; whatever the log said last (a mixin warning, say) isn't why it stopped.
             val killed = (report + lines).lastOrNull { l -> listOf("low memory killer", "lowmemorykiller", "lmkd", "killed by the system", "killed by android", "sigkill").any { it in l.lowercase() } }
             if (crashReport == null && code in setOf(137, -9, 9)) return result(ExitReason.SystemKilled, killed)
-            if (dependencies.isNotEmpty()) return result(ExitReason.MissingDependency, dependencies.joinToString("; ") { "${modName(it.requestedBy)} needs ${it.modId}" })
+            if (dependencies.isNotEmpty()) return result(ExitReason.MissingDependency, dependencies.joinToString("; ") { "${modName(it.requestedBy.removeSuffix(".jar"))} needs ${it.modId}" })
             val loader = (report + lines).firstOrNull { "Failure message: " in it || "Error during pre-loading phase: " in it }
             // A native crash in the driver: hs_err's "Internal exceptions" would otherwise read as a mod error.
             val fatal = (report + lines).indexOfFirst { "SIGSEGV" in it || "SIGBUS" in it }
@@ -101,10 +103,20 @@ data class GameExitReport(val code: Int, val reason: ExitReason, val clue: Strin
             return null
         }
         private fun modName(id: String) = KnownModsCatalog.name(id) ?: id.replace('_', ' ').replace('-', ' ').split(' ').joinToString(" ") { w -> w.replaceFirstChar(Char::uppercase) }
+        private const val MISSING = "[MISSING]"
         private val dependencyLine = Regex("Mod ID: '([^']+)', Requested by: '([^']+)', Expected range: '([^']*)', Actual version: '([^']*)'")
-        /** FML's "Missing or unsupported mandatory dependencies:" block, one tab-indented line per dependency. */
-        internal fun missingDependencies(lines: List<String>): List<MissingDependency> =
-            lines.mapNotNull { dependencyLine.find(it)?.destructured?.let { (id, by, range, actual) -> MissingDependency(id, by, range, actual) } }.distinct()
+        private val languageProvider = Regex("Mod File (?:mods/)?(\\S+?\\.jar) needs language provider ([A-Za-z0-9_-]+)")
+        /**
+         * FML's "Missing or unsupported mandatory dependencies:" block (one tab-indented line per dependency, wrong
+         * versions too) and its "Mod File x.jar needs language provider y" pre-loading error.
+         */
+        private fun dependencies(lines: List<String>): List<MissingDependency> = lines.flatMap { raw ->
+            val line = raw.replace(Regex("§[0-9a-fk-or]", RegexOption.IGNORE_CASE), "")
+            listOfNotNull(
+                dependencyLine.find(line)?.destructured?.let { (id, by, range, actual) -> MissingDependency(id, by, range, actual) },
+                languageProvider.find(line)?.destructured?.let { (file, id) -> MissingDependency(id, file, "", MISSING) },
+            )
+        }.filter { it.modId.lowercase() !in ModRequirements.builtIn }.distinctBy { it.modId }
         fun isError(line: String): Boolean = listOf("error", "exception", "fatal", "caused by", "failed").any { it in line.lowercase() }
         private fun clean(line: String): String {
             val text = line.replace(Regex("^(?:\\s*\\[[^]]*][ :]*\\s*)+"), "").trim()

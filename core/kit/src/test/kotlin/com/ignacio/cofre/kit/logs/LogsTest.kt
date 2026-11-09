@@ -112,6 +112,16 @@ class LogsTest {
         assertEquals(listOf(MissingDependency("yet_another_config_lib_v3", "controlify", "(,)", "[MISSING]")), r.missingDependencies)
         assertEquals("Controlify needs yet_another_config_lib_v3", r.clue)
     }
+    @Test fun onlyAbsentModsAreOfferedForDownload() {
+        val log = "Mod ID: '§6terrablender§r', Requested by: 'biomesoplenty', Expected range: '[26.2,)', Actual version: '[MISSING]'\n" +
+            "Mod ID: 'glitchcore', Requested by: 'biomesoplenty', Expected range: '[2,)', Actual version: '1.0'\n" +
+            "Mod ID: 'minecraft', Requested by: 'x', Expected range: '[26.3,)', Actual version: '[MISSING]'"
+        val r = GameExitReport.diagnose(1, log = log)
+        assertEquals(ExitReason.MissingDependency, r.reason); assertTrue("glitchcore" in r.clue!!, "a wrong version is still named")
+        assertEquals(listOf("terrablender"), r.missingDependencies.map { it.modId }, "present in the wrong version and built-in ids are left out")
+        val provider = GameExitReport.diagnose(1, log = "[FATAL] Error during pre-loading phase: Mod File mods/bountiful.jar needs language provider kotlinforforge:4 or above to load").missingDependencies.single()
+        assertEquals("kotlinforforge", provider.modId); assertEquals("bountiful.jar", provider.requestedBy)
+    }
     @Test fun openGLCrashNamesTheModFromNeoForgeAndMixinFrames() {
         val trace = "java.lang.IllegalStateException: No context is current\n\tat TRANSFORMER/minecraft@26.2/net.minecraft.client.Main.run(Main.java:1)\n\tat TRANSFORMER/better_clouds@1.0/com.example.Clouds.render(Clouds.java:9)"
         val r = GameExitReport.diagnose(1, log = trace); assertEquals(ExitReason.OpenGLMod, r.reason); assertEquals("Better Clouds", r.mod); assertTrue("Better Clouds" in r.explanation && "Better Clouds" in r.nextStep)

@@ -30,16 +30,6 @@ object ModRequirements {
         val metadata = jars.mapNotNull { jar -> ModJarMetadata.read(jar)?.let { jar.name to it } }.toMap()
         return missing(metadata, jars.filter { it.name !in metadata }.map { it.name })
     }
-    fun fromCrash(raw: String): List<ModRequirement> {
-        val text = raw.replace(Regex("§[0-9a-fk-or]", RegexOption.IGNORE_CASE), "")
-        val out = mutableListOf<ModRequirement>()
-        fun matches(pattern: String): Sequence<List<String>> = Regex(pattern).findAll(text).map { it.groupValues.drop(1) }
-        matches("Mod File (?:mods/)?(\\S+?\\.jar) needs language provider ([A-Za-z0-9_.-]+?)(?::|\\s)").forEach { (file, id) -> out += requirement(id, "modLoader:$id", file) }
-        matches("Mod (\\S+) requires (\\S+) ").filter { (_, id) -> text.contains("Currently, $id is not installed") }.forEach { (owner, id) -> out += requirement(id, "dependency:$id", owner) }
-        matches("Mod ID: '([^']+)', Requested by: '([^']+)'[^\\n]*Actual version: '\\[MISSING\\]'").forEach { (id, owner) -> out += requirement(id, "dependency:$id", owner) }
-        matches("requires (?:any version|version \\S+) of ([A-Za-z0-9_.-]+), which is missing").forEach { (id) -> out += requirement(id, "dependency:$id") }
-        return out.filter { it.modId !in builtIn }.distinctBy { it.modId }
-    }
 }
 
 object ModRemoval {
