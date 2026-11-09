@@ -54,8 +54,8 @@ dependencies {
  * jre-25.version stamp (its SHA-256) that JreManager installs from. Binaries stay out of git.
  * The JRE and the game's .so files come from the pinned natives release (`cofre.natives` in
  * gradle.properties, fetched with scripts/natives/fetch.sh <tag>). -Pcofre.jre=<tar.xz> overrides
- * the JRE; debug builds fall back to scripts/dev/fetch-dev-jre.sh. Without any, the build still
- * works; JreManager.bundledVersion() is then null and the game can't start.
+ * the JRE. Without one, the build still works; JreManager.bundledVersion() is then null and the
+ * game can't start.
  */
 abstract class RuntimeAssets : DefaultTask() {
     @get:InputFiles @get:PathSensitive(PathSensitivity.NAME_ONLY)
@@ -103,22 +103,14 @@ val nativesTag = providers.gradleProperty("cofre.natives").get()
 val nativesDir = rootProject.layout.projectDirectory.dir(".work/natives/$nativesTag").asFile
 val releaseJre = File(nativesDir, "jre25-android-arm64.tar.xz")
 val jreOverride = providers.gradleProperty("cofre.jre").map { file(it) }
-val devJre = rootProject.layout.projectDirectory.file(".work/dev-jre/jre-25.tar.xz").asFile
 
 androidComponents {
     onVariants { variant ->
-        val debug = variant.buildType == "debug"
         val task = tasks.register<RuntimeAssets>("${variant.name}RuntimeAssets") {
             jars.from(glfwShim)
             // The natives release's license texts, and its JRE's legal/ (the one release builds bundle).
             legal.set(mapOf("natives" to File(nativesDir, "legal"), "java" to File(nativesDir, "jre25/legal")).filterValues { it.isDirectory }.mapValues { it.value.path })
-            jre.from(jreOverride.orElse(provider {
-                when {
-                    releaseJre.isFile -> releaseJre
-                    debug -> devJre
-                    else -> file("no-bundled-jre")
-                }
-            }))
+            jre.from(jreOverride.orElse(releaseJre)) // a missing file: no JRE asset
         }
         variant.sources.assets?.addGeneratedSourceDirectory(task, RuntimeAssets::outputDir)
         // LWJGL 3.4.1, OpenAL, shaderc, SPIRV-Cross, freetype and JNA, as lib/arm64-v8a/*.so.

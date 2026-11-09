@@ -18,7 +18,7 @@ The game side of Cofre: Vulkan check, JRE install, the `:game` process, the GLFW
 Debug builds: `RuntimeDebugActivity` has buttons for "Install NeoForge 26.2", "Launch vanilla 26.2" and "Launch NeoForge 26.2" (`--es action install|vanilla|neoforge`), using `DevAccount` (offline `Dev`, token `0`; debug source set only).
 
 ## JRE packaging
-`scripts/dev/fetch-dev-jre.sh` (dev only) writes `.work/dev-jre/jre-25.tar.xz`; debug builds bundle it. Any build can use `-Pcofre.jre=<tar.xz>` instead (the natives release's `jre25-android-arm64.tar.xz`). No tarball → no JRE asset; the build still works.
+Builds bundle the pinned natives release's `jre25-android-arm64.tar.xz` (`scripts/natives/fetch.sh <tag>`); `-Pcofre.jre=<tar.xz>` overrides it. No tarball → no JRE asset; the build still works.
 
 ## Verified (2026-11-09)
 - Emulator (Android 17) and OnePlus 5 (Android 9): Vulkan report, JRE install, HotSpot 25 boots in `:game`, exit codes from `main` returning and from `System.exit`.
