@@ -67,7 +67,9 @@ class ReportBundle(val store: LogStore, val context: ReportContext = ReportConte
     companion object {
         fun signature(text: String): String = Hashes.sha256(redact(text).toByteArray(Charsets.UTF_8))
         fun redact(text: String): String {
-            var s = text
+            // Minecraft logs "Setting user: <name>"; the name then turns up in chat, joins and paths, so drop it everywhere.
+            val names = Regex("(?i)(?:Setting user:|--username)\\s+([A-Za-z0-9_]{3,16})\\b").findAll(text).map { it.groupValues[1] }.toSet()
+            var s = names.fold(text) { acc, name -> acc.replace(Regex("(?<![A-Za-z0-9_])${Regex.escape(name)}(?![A-Za-z0-9_])"), "<redacted-player>") }
             val rules = listOf(
                 "(?i)(authorization\\s*[=:]\\s*bearer\\s+)[^\\s,;\"']+" to "$1<redacted>",
                 "(?i)((?:--)?(?:access[_-]?token|refresh[_-]?token|id[_-]?token|token|client[_-]?secret|password)[\"']?\\s*(?:[=:]\\s*|\\s+)[\"']?)[^\\s,;\"']+" to "$1<redacted>",

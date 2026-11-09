@@ -28,6 +28,12 @@ class LogsTest {
         val json = ReportBundle.redact("{\"access_token\":\"SECRET\",\"refresh_token\":\"REFRESH\"}")
         assertFalse("SECRET" in json || "REFRESH" in json)
     }
+    @Test fun redactionDropsThePlayerNameEverywhere() {
+        val input = "[12:00:00] [Render thread/INFO]: Setting user: Steve_99\n[12:00:05] [Server thread/INFO]: Steve_99 joined the game\n<Steve_99> hi\n--username Steve_99 --version 26.2"
+        val text = ReportBundle.redact(input)
+        assertFalse("Steve_99" in text, text)
+        assertTrue("Setting user: <redacted-player>" in text && "joined the game" in text, text)
+    }
     @Test fun redactionCoversIPsHostsUUIDsAndUserPaths() {
         val input = "192.168.1.2:25565 [2001:db8::1]:25565 ::1\n/Users/alice/My Games/cofre/log.txt\n/data/user/0/com.ignacio.cofre/files/game\n/storage/emulated/0/Documents/game\nC:\\Users\\Alice\\Game\\latest.log\nplay.example.com 123e4567-e89b-12d3-a456-426614174000"
         val text = ReportBundle.redact(input)
