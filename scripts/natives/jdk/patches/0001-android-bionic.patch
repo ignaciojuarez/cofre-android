@@ -541,10 +541,10 @@ index 2f633ad71..513c70f8b 100644
              while ((line = in.readLine()) != null) {
                  int maxvalues = maxperkeyword;
 diff --git a/src/java.base/unix/native/libjava/jni_util_md.c b/src/java.base/unix/native/libjava/jni_util_md.c
-index 7195b3def..460174f9d 100644
+index 7195b3d..ab09e6a 100644
 --- a/src/java.base/unix/native/libjava/jni_util_md.c
 +++ b/src/java.base/unix/native/libjava/jni_util_md.c
-@@ -31,7 +31,7 @@
+@@ -31,11 +31,15 @@
  #include "jni_util.h"
  #include "dlfcn.h"
  
@@ -553,6 +553,14 @@ index 7195b3def..460174f9d 100644
           (defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE < 200112L \
               && defined(_XOPEN_SOURCE) && _XOPEN_SOURCE < 600))
  extern int __xpg_strerror_r(int, char *, size_t);
+ #define strerror_r(a, b, c) __xpg_strerror_r((a), (b), (c))
++#elif defined(__ANDROID__)
++// bionic exports the POSIX (int) strerror_r; _GNU_SOURCE only renames the header declaration.
++extern int android_posix_strerror_r(int, char *, size_t) __asm__("strerror_r");
++#define strerror_r(a, b, c) android_posix_strerror_r((a), (b), (c))
+ #endif
+ 
+ void* getProcessHandle() {
 diff --git a/src/java.base/unix/native/libjli/java_md.c b/src/java.base/unix/native/libjli/java_md.c
 index 0a61971b0..e6ce584ab 100644
 --- a/src/java.base/unix/native/libjli/java_md.c
