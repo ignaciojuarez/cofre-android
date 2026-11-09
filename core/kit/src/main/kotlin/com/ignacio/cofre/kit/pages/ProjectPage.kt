@@ -1,5 +1,6 @@
 package com.ignacio.cofre.kit.pages
 
+import com.ignacio.cofre.kit.common.Target
 import com.ignacio.cofre.kit.curseforge.CurseForge
 import com.ignacio.cofre.kit.modrinth.Modrinth
 import kotlinx.serialization.Serializable
@@ -48,8 +49,8 @@ data class ProjectPage(
             listOf("website" to mod.links.websiteUrl, "source" to mod.links.sourceUrl, "issues" to mod.links.issuesUrl, "wiki" to mod.links.wikiUrl).mapNotNull { (kind, url) -> web(url)?.let { Link(kind, it) } },
             versions = files.map { Version("${it.id}", it.displayName, it.gameVersions.filter { v -> v.firstOrNull()?.isDigit() == true }, it.gameVersions.filter { v -> v.lowercase() in setOf("neoforge", "forge", "fabric", "quilt") }.map(String::lowercase), when (it.releaseType) { 2 -> "beta"; 3 -> "alpha"; else -> "release" }) },
         )
-        suspend fun load(client: Modrinth, id: String): ProjectPage = from(client.project(id), client.matchingFirst(id, listOf("neoforge"), listOf("26.2")))
-        suspend fun load(client: CurseForge, id: Int): ProjectPage = from(client.mod(id), client.description(id), client.files(id, "26.2"))
+        suspend fun load(client: Modrinth, id: String): ProjectPage = from(client.project(id), client.matchingFirst(id, listOf(Target.LOADER.modrinthId), listOf(Target.GAME_VERSION)))
+        suspend fun load(client: CurseForge, id: Int): ProjectPage = from(client.mod(id), client.description(id), client.files(id, Target.GAME_VERSION))
         suspend fun changelog(client: Modrinth, id: String): Body? = client.version(id).changelog?.let(Body::Markdown)
         suspend fun changelog(client: CurseForge, modId: Int, fileId: Int): Body = Body.Html(client.changelog(modId, fileId))
         private fun String?.nonempty(): String? = this?.takeIf { it.isNotBlank() }
