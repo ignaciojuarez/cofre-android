@@ -5,13 +5,14 @@ on:
   pull_request:
 jobs:
   test:
-    runs-on: ubuntu-24.04
+    # macOS, like local builds: Roborazzi baselines are recorded on a Mac, and Linux renders text differently.
+    runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: 21
+          java-version: 25
       - uses: gradle/actions/setup-gradle@v4
       - name: Tests, screenshots, lint, debug APK
         run: ./gradlew --console=plain :core:kit:test testDebugUnitTest verifyRoborazziDebug lintDebug assembleDebug

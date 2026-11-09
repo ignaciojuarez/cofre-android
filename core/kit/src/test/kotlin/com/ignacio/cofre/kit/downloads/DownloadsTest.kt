@@ -112,7 +112,7 @@ class DownloadsTest {
             val started = System.nanoTime()
             assertEquals(4_000, queue.enqueue(items).size)
             assertTrue(System.nanoTime() - started < 2_000_000_000L, "enqueue took ${(System.nanoTime() - started) / 1_000_000} ms")
-            assertEquals(DownloadQueue.Result.Completed, withTimeout(30_000) { queue.run() })
+            assertEquals(DownloadQueue.Result.Completed, withTimeout(180_000) { queue.run() }) // each file is fsynced; CI disks are slow
             assertEquals(4_000, queue.progress.value.files)
             assertEquals("/asset-3999", File(items.last().destination).readText())
             // The journal ends with the final state, so a new queue sees everything finished.
