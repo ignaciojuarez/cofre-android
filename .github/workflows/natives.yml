@@ -1,0 +1,68 @@
+name: Android natives
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: android-natives
+  cancel-in-progress: false
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        piece: [jdk, lwjgl, jna]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Install build dependencies and pinned NDK r28c
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y autoconf automake libtool ninja-build cmake clang lld libx11-dev libxext-dev libxrender-dev libxtst-dev libxt-dev libfontconfig1-dev libcups2-dev libasound2-dev
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;28.2.13676358'
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+      - name: Test alignment gate
+        run: python3 scripts/natives/test_verify.py
+      - name: Build from pinned source
+        env:
+          PIECE: ${{ matrix.piece }}
+          NATIVE_JOBS: '4'
+        run: |
+          case "$PIECE" in
+            jdk) scripts/natives/jdk/build.sh ;;
+            lwjgl) scripts/natives/lwjgl/build.sh ;;
+            jna) scripts/natives/jna.sh ;;
+          esac
+      - uses: actions/upload-artifact@v4
+        with:
+          name: natives-${{ matrix.piece }}
+          path: .work/natives/dist/*
+          if-no-files-found: error
+          compression-level: 0
+  release:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: natives-*
+          path: dist
+          merge-multiple: true
+      - name: Publish verified natives and corresponding sources
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="natives-$(date -u +%Y%m%d)-${GITHUB_RUN_NUMBER}"
+          cd dist
+          sha256sum *.tar.xz *-alignment.tsv > SHA256SUMS
+          printf 'Android arm64, API 28, NDK r28c, 16 KB LOAD alignment.\n\nSource revision: %s\n\nSee runtime/NATIVES.md and the source archives for pins, licenses, patches and build instructions. Alignment and per-library hashes are in the TSV assets. Device execution is verified separately.\n' "$GITHUB_SHA" > release-notes.md
+          gh release create "$tag" *.tar.xz *-alignment.tsv SHA256SUMS --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$tag" --notes-file release-notes.md
+          echo "### Released [$tag](https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag)" >> "$GITHUB_STEP_SUMMARY"

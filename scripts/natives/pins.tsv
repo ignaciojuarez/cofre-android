@@ -1,0 +1,10 @@
+# name repository commit (tags and licenses are documented in runtime/NATIVES.md)
+jdk openjdk/jdk25u fda231468e56663992785ec199a6efb8eca3cc7a
+lwjgl LWJGL/lwjgl3 b800ccffab14396fc529ddb6c931b7c5c5226763
+freetype LWJGL-CI/FreeType 526ec5c47b9ebccc4754c85ac0c0cdf7c85a5e9b
+shaderc LWJGL-CI/Shaderc 301b4ede53d59b68bf55f95bb26412d9233c8187
+spvc LWJGL-CI/SPIRV-Cross a0fba56c34a6700f1724bf9b751da5b488a3775c
+openal kcat/openal-soft dc7d7054a5b4f3bec1dc23a42fd616a0847af948
+oboe google/oboe a81bb9f87d4105b84b682685d3bfbb5beca371d1
+libffi libffi/libffi e2eda0cf72a0598b44278cc91860ea402273fa29
+jna java-native-access/jna 695ae749e7bfd92f88324147c5d96b7129efec3e
