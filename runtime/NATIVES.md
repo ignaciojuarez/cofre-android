@@ -1,6 +1,6 @@
 # Android natives
 
-Build in progress; no release is pinned until the released binaries pass verification.
+**Pinned release: [`natives-20261109-7`](https://github.com/ignaciojuarez/cofre-android/releases/tag/natives-20261109-7)** (verified on the Mac 2026-11-09, see [Released artifacts](#released-artifacts)). Fetch it with `scripts/natives/fetch.sh natives-20261109-7`.
 Only `scripts/natives/**`, this document, and `.github/workflows/natives.yml` are owned by the native builder.
 
 ## Build and fetch
@@ -14,8 +14,10 @@ scripts/natives/jdk/build.sh
 scripts/natives/lwjgl/build.sh
 scripts/natives/jna.sh
 # After publication:
-scripts/natives/fetch.sh natives-YYYYMMDD-N
+scripts/natives/fetch.sh natives-20261109-7
 ```
+
+To rerun only a failed piece, dispatch the workflow with `pieces` set to e.g. `["jdk"]` and `reuse_run` set to an earlier run whose other pieces are green; the release job takes the missing pieces (and their alignment reports) from that run and refuses to publish without all three tarballs.
 
 The fetcher verifies SHA256SUMS before extracting the complete JRE into `.work/natives/<tag>/jre25/` and the native files into `.work/natives/<tag>/lib/arm64-v8a/`. Keep JRE `conf`, `legal`, `release`, `lib/modules`, `lib/server/libjvm.so`, other libraries and launcher helpers together. Runtime launch paths and Android packaging are handled by the runtime module.
 
@@ -81,6 +83,8 @@ Mojo's Android diffs modify OpenJDK source files whose own license headers grant
 | jdk/patches/0001-android-bionic.patch | OpenJDK bionic port for API 28: treat `*-android` as Linux in autoconf/make, sysv hash style, PIC everywhere, no libjsound/libsaproc/splashscreen, headless fontmanager; HotSpot: SYS_gettid, no glibc version probe, Android temp dir, libjvm path from `/proc/self/maps`, `RTLD_DI_LINKMAP` guard, getcpu warning instead of exit, `getloadavg` via `sysinfo` (bionic adds it only at API 29), no utmpx, fork/exec in error reporting, `Thread::current()` instead of the TLS asm helper; libjli exec path from `JAVA_HOME`; `/etc/resolv.conf` override (`ext.net.resolvPath`); awt path lookup from maps |
 | jdk/patches/0002-android-ipv6.patch | Skip Android-incompatible proc/network availability probe |
 | jdk/patches/0003-statx-fallback.patch | Fall back when statx exists in libc but is blocked/missing in the kernel |
+
+`0001` also routes `getErrorString` in `libjava/jni_util_md.c` to bionic's POSIX `strerror_r` symbol. OpenJDK uses glibc's `__xpg_strerror_r` for the same reason; bionic has no `__xpg_` alias, and with `_GNU_SOURCE` (API ≥ 23) its header renames `strerror_r` to the `char *`-returning `__gnu_strerror_r`. Written for Cofre, not from the inherited lineage.
 | lwjgl/patch.py | Use direct process_vm_readv/writev syscalls at API 28; use NDK UAPI structs instead of liburing compatibility duplicates; no ENOSYS success stubs |
 
 Deliberately removed from the inherited lineage because bionic provides them at API 28 and the copies either shadow libc with incompatible layouts or are broken: `dlvsym` (API 24), `getifaddrs` (API 24; the copied version `memset`s an uninitialised pointer), `nl_langinfo` (API 26) and the hard-coded `"ASCII"` codeset, `getgrgid_r`/`getgrnam_r` (API 24), `iconv` (API 28, so no `libtinyiconv`), and `posix_spawn` (API 28; the dhcpcd copy ignored file actions). This also drops the matching AOSP/dhcpcd notices.
@@ -96,6 +100,40 @@ JNA Maven Central AAR: `https://repo.maven.apache.org/maven2/net/java/dev/jna/jn
 | jna-5.17.0.aar | 4dbeffffa665d97ad5aa7eee297531d3c841a86716ab7f774fd6956422b3cf38 | n/a |
 | libjnidispatch.so (unmodified AAR bytes) | abc26e994517bcaa3309acdb0a27373864086c7569c89d3087b8626fada9ef06 | 0x4000, 0x4000 |
 
-`verify.py` runs `llvm-readelf -h` and `-lW` on every `.so` (including versioned names) and JRE `bin/java`, rejects non-aarch64 and every LOAD Align below 0x4000, and fails on an empty file set. `test_verify.py` exercises positive, 4 KB, mixed-segment and empty cases. CI also checks the JRE's full image layout, Java 25 release metadata and `file` output. Final released hashes and Mac verification will be recorded here after the release passes. No device execution is claimed.
+`verify.py` runs `llvm-readelf -h` and `-lW` on every `.so` (including versioned names) and JRE `bin/java`, rejects non-aarch64 and every LOAD Align below 0x4000, and fails on an empty file set. `test_verify.py` exercises positive, 4 KB, mixed-segment and empty cases. CI also checks the JRE's full image layout, Java 25 release metadata and `file` output. No device execution is claimed.
 
 The libffi 3.5.2 release source tarball (SHA-256 `f3a3082a23b37c293a4fcd1053147b371f2ff91fa7ea1b2a52e335676bac82dc`) supplies its generated configure files, avoiding an incompatible host libtool macro. It is bundled in the corresponding sources.
+
+## Released artifacts
+
+Release [`natives-20261109-7`](https://github.com/ignaciojuarez/cofre-android/releases/tag/natives-20261109-7), workflow run [42586160735](https://github.com/ignaciojuarez/cofre-android/actions/runs/42586160735). `jdk` and `lwjgl` were built in run [42583890396](https://github.com/ignaciojuarez/cofre-android/actions/runs/42583890396) at `4f037c2` and reused; `jna` was rebuilt at `7eb0620`. The native build scripts and patches are identical at both commits. Toolchain for all: Ubuntu 24.04, NDK r28c (28.2.13676358), API 28, Temurin 25 host JDK.
+
+| Asset | Size | SHA-256 | Source / tag | Patches | License |
+|---|---|---|---|---|---|
+| jre25-android-arm64.tar.xz | 45,951,484 | 0269f3ac87dde79501b07483466fc454eb474ea124794807825f5ef5d77933eb | openjdk/jdk25u jdk-25.0.5-ga + FreeType VER-2-14-1 | jdk/patches/0001–0003 | GPL-2.0 + Classpath Exception; FreeType License |
+| lwjgl-3.4.1-android-arm64.tar.xz | 3,929,412 | accb3d1385a9b10fee5927ec6fdbde50605f3d651feb45bf053d1bd439b8c50d | LWJGL 3.4.1 + deps in the pin table | lwjgl/patch.py | see pin table |
+| jna-5.17.0-android-arm64.tar.xz | 40,720 | e59306494a446f256402ebc3f66939e0216b968f654bf25fc55109953fba51c9 | JNA 5.17.0 AAR (unmodified) | none | Apache-2.0; libffi MIT |
+| jdk25-sources.tar.xz | 78,734,152 | 6ea4332ea9abd45422d7cc99296464934096ec4b52099d3ea489dd497fcc3bbc | corresponding source | | |
+| lwjgl-sources.tar.xz | 38,495,032 | 12459042754fd4fad72c0a790de416ef3b9a0a334769bb1ee0bf2c607918f4e8 | corresponding source | | |
+| jna-sources.tar.xz | 75,611,212 | bb3749a1e0fbe464e7cba25e35cfaf4f1f3e0844e9f2d0453eb5ecd008bcd2fb | corresponding source | | |
+
+The JRE tarball has no top-level folder: `bin/ conf/ legal/ lib/ release` sit at its root. `release` reads `JAVA_VERSION="25.0.5"`, `JAVA_RUNTIME_VERSION="25.0.5+8"`, `OS_ARCH="aarch64"`. The library tarballs extract to `lib/arm64-v8a/` and `legal/`.
+
+Mac verification (`fetch.sh`, then NDK `llvm-readelf -h` / `-lW`): all 46 ELF files (45 `.so` + `bin/java`) are AArch64 and every LOAD `Align` is 0x4000.
+
+| File | Size | SHA-256 | LOAD Align |
+|---|---|---|---|
+| jre25/bin/java | 7,424 | 8b6f013485e3c24d513146c29299663a30712d0aa583af9aaa30bd31115a84bd | 0x4000 |
+| jre25/lib/server/libjvm.so | 26,692,528 | 6ed057c1cf2b7f820719c2eaee59616929bb0284cb73d8961ed711ee3fced96b | 0x4000 |
+| liblwjgl.so | 561,864 | 5e0e765789d1ea2e867a2e17ffff09cec0b2cdc72ce4b6a070ad5973da79d936 | 0x4000 |
+| liblwjgl_stb.so | 424,456 | 5e2f32cf12ade943e23535b399d0a240ea130c1a9514c3568cab8ee4cddd14b0 | 0x4000 |
+| liblwjgl_vma.so | 373,056 | d393ffa2d74717938a4e0222acb400b37f64d1e1f1979a70fcdb12cd41c3be7c | 0x4000 |
+| liblwjgl_tinyfd.so | 85,392 | 92fe66680b5c7b85f7d72518facb568d3f20ca410a82ef83419f6d5d859854d0 | 0x4000 |
+| liblwjgl_opengl.so | 335,568 | 03d35205245f1ef7b0a110688efa8ebbbc0b72b1ba6595074ac6fdeb52c3544b | 0x4000 |
+| libshaderc.so | 8,806,688 | 2691050d17204d74ac1681a9a7ec7df75cb8d7c4cbdae5544825ea4526fb2c9f | 0x4000 |
+| libspirv-cross.so | 3,491,504 | 4a010231c4656ca124f5be4570ee114da75f9ba1c79ec4b4d2d598896bc27f15 | 0x4000 |
+| libopenal.so | 1,781,152 | fa92af2f282d3f387c87932cd86f522e8392ea36f104bbb4db1e313299d3c445 | 0x4000 |
+| libfreetype.so | 781,232 | cc69f4341b61ae97a1a716c908d4d03309ffb7efbf6759893fabb3181524183d | 0x4000 |
+| libjnidispatch.so | 176,520 | abc26e994517bcaa3309acdb0a27373864086c7569c89d3087b8626fada9ef06 | 0x4000 |
+
+Per-file hashes for every JRE library are in the `jre25-alignment.tsv` release asset.
