@@ -77,6 +77,7 @@ internal object GameBridge {
             // A native crash report repeats the whole command line, access token included: keep it next to the
             // exit record (noBackupFilesDir/launch), never in the instance, which is shared and exported.
             add("-XX:ErrorFile=${File(spec.exitFile).parent}/hs_err_pid%p.log")
+            add("-XX:HeapDumpPath=${File(spec.exitFile).parent}") // a heap dump (if a player turns them on) holds the token too
             add("-Djava.home=${spec.javaHome}")
             add("-Djava.io.tmpdir=${tmpDir.path}")
             add("-Duser.home=${spec.gameDir}")
