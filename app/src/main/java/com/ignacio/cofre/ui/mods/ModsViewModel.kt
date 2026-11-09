@@ -66,7 +66,7 @@ class ModsViewModel(private val graph: AppGraph) : ViewModel() {
 
     val import = ImportModel(viewModelScope, graph.instances, graph.modrinth, { curseForge() }, File(graph.context.cacheDir, "mods"))
 
-    private val glScans = GlScanCache(File(graph.context.cacheDir, "mods/gl-scans.json"))
+    private val glScans = GlScanCache(File(graph.context.cacheDir, "mods/gl-risk.json"))
     private val projects = mutableMapOf<String, ProjectModel>()
     private val summaries = mutableMapOf<String, ProjectSummary>()
 

@@ -5,7 +5,9 @@ import com.ignacio.cofre.kit.common.ContentKind
 import com.ignacio.cofre.kit.common.Hashes
 import com.ignacio.cofre.kit.common.Kit
 import com.ignacio.cofre.kit.common.Target
+import com.ignacio.cofre.kit.compat.CompatibilityIssue
 import com.ignacio.cofre.kit.compat.ContentCompatibility
+import com.ignacio.cofre.kit.compat.GlRisk
 import com.ignacio.cofre.kit.compat.GlUsageScanner
 import com.ignacio.cofre.kit.content.ContentStore
 import com.ignacio.cofre.kit.mods.InstalledMod
@@ -45,9 +47,8 @@ data class InstalledRow(
     /** The jar's metadata and index entry (mods only). */
     val mod: InstalledMod? = null,
     val update: ModCandidate? = null,
-    /** "Needs OpenGL", "Not on Vulkan"… */
-    val badge: String? = null,
-    val reason: String? = null,
+    /** A known-mods rule, or the graded OpenGL scan of a jar no rule vouches for. */
+    val issue: CompatibilityIssue? = null,
 ) {
     val key: String get() = "${item.kind}:${item.id}"
 }
@@ -186,18 +187,18 @@ class InstalledModel(
         val mods = if (tab == InstalledTab.Mods) index.installed().associateBy { it.file } else emptyMap()
         tab.kinds.flatMap { kind -> runCatching { store.list(kind) }.getOrDefault(emptyList()) }.map { item ->
             val mod = mods[item.urlName]
-            val known = ContentCompatibility.issue(item.modID ?: item.id, item.name, item.kind)
-            val gl = if (item.kind == ContentKind.Mods) glScans.cached(store.file(item)) else null
-            InstalledRow(
-                item, mod,
-                update = mod?.projectId?.let(updates::get)?.takeIf { it.versionId != mod.versionId },
-                badge = known?.badge ?: gl?.let { "Needs OpenGL" },
-                reason = known?.reason ?: gl?.let { "This mod calls OpenGL, so it will crash on Vulkan." },
-            )
+            val id = item.modID ?: item.id
+            val issue = ContentCompatibility.issue(id, item.name, item.kind, item.version)
+                ?: glScans.cached(store.file(item)).takeIf { scannable(item) }?.let { ContentCompatibility.glIssue(id, item.name, it) }
+            InstalledRow(item, mod, update = mod?.projectId?.let(updates::get)?.takeIf { it.versionId != mod.versionId }, issue = issue)
         }
     }
 
     private fun mods(): List<InstalledMod> = index.installed()
+
+    /** Mods no rule vouches for get the jar scan. */
+    private fun scannable(item: ContentStore.Item): Boolean =
+        item.kind == ContentKind.Mods && !ContentCompatibility.vouched(item.modID ?: item.id, item.name, item.version)
 
     private suspend fun refresh() {
         val tab = mutable.value.tab
@@ -206,15 +207,13 @@ class InstalledModel(
     }
 
     private suspend fun scanForOpenGl() {
-        val rows = mutable.value.rows.filter { it.item.kind == ContentKind.Mods && it.badge == null }
+        val rows = mutable.value.rows.filter { it.issue == null && scannable(it.item) }
         for (row in rows) {
             val jar = store.file(row.item)
             // A jar the scanner can't read stays unflagged; the launch-time check still runs.
-            val usages = silently { withContext(io) { glScans.scan(jar) } } ?: continue
-            if (usages.isEmpty()) continue
-            mutable.update { s ->
-                s.copy(rows = s.rows.map { if (it.key == row.key) it.copy(badge = "Needs OpenGL", reason = "This mod calls OpenGL, so it will crash on Vulkan.") else it })
-            }
+            val risk = silently { withContext(io) { glScans.scan(jar) } } ?: continue
+            val issue = ContentCompatibility.glIssue(row.item.modID ?: row.item.id, row.item.name, risk) ?: continue
+            mutable.update { s -> s.copy(rows = s.rows.map { if (it.key == row.key) it.copy(issue = issue) else it }) }
         }
     }
 
@@ -290,20 +289,20 @@ private suspend fun <T> silently(block: suspend () -> T): T? = try {
 }
 
 /**
- * OpenGL findings per jar, cached on disk by SHA-1 so a jar is scanned once. The scan reads every class; it's slow
+ * The OpenGL risk per jar, cached on disk by SHA-1 so a jar is scanned once. The scan reads every class; it's slow
  * on big jars, which is why it runs in the background.
  */
 class GlScanCache(private val file: File) {
     private val lock = Mutex()
-    private var entries: MutableMap<String, List<String>>? = null
+    private var entries: MutableMap<String, GlRisk>? = null
 
     /** The cached finding for this jar, or null when it hasn't been scanned. */
-    fun cached(jar: File): List<String>? = synchronized(this) { load()[hashOf(jar)] }
+    fun cached(jar: File): GlRisk? = synchronized(this) { load()[hashOf(jar)] }
 
-    suspend fun scan(jar: File): List<String> = lock.withLock {
+    suspend fun scan(jar: File): GlRisk = lock.withLock {
         val hash = hashOf(jar)
         synchronized(this) { load()[hash] }?.let { return it }
-        val found = GlUsageScanner.scan(jar).usages.map { it.className }
+        val found = GlUsageScanner.scan(jar).risk
         synchronized(this) {
             load()[hash] = found
             file.parentFile?.mkdirs()
@@ -312,8 +311,8 @@ class GlScanCache(private val file: File) {
         found
     }
 
-    private fun load(): MutableMap<String, List<String>> = entries ?: runCatching {
-        Kit.json.decodeFromString<Map<String, List<String>>>(file.readText()).toMutableMap()
+    private fun load(): MutableMap<String, GlRisk> = entries ?: runCatching {
+        Kit.json.decodeFromString<Map<String, GlRisk>>(file.readText()).toMutableMap()
     }.getOrDefault(mutableMapOf()).also { entries = it }
 
     /** Hashing a jar is cheap next to scanning it, but still remembered per path, size and time. */

@@ -1,6 +1,5 @@
 package com.ignacio.cofre.kit.compat
 
-import com.ignacio.cofre.kit.common.Hashes
 import com.ignacio.cofre.kit.modpacks.Zip
 import java.io.ByteArrayInputStream
 import java.io.DataInputStream
@@ -8,30 +7,41 @@ import java.io.File
 import java.util.zip.ZipFile
 
 data class GlUsage(val className: String, val references: Set<String>)
-data class GlScan(val usages: List<GlUsage>, val excluded: List<GlUsage>)
 
-/** Static references, not proof of execution. Unknown/malformed classes fail the scan rather than pass silently. */
+/** How likely a jar's OpenGL references are to run under Vulkan. */
+enum class GlRisk { None, May, Likely }
+
+/** [backendAware]: the jar also uses Mojang's backend-neutral GPU API, so its GL code is probably one backend of several. */
+data class GlScan(val usages: List<GlUsage>, val backendAware: Boolean = false) {
+    val risk: GlRisk get() = when { usages.isEmpty() -> GlRisk.None; backendAware -> GlRisk.May; else -> GlRisk.Likely }
+}
+
+/**
+ * Static references, not proof of execution. Unknown/malformed classes fail the scan rather than pass silently.
+ * Known Vulkan-ready mods are vouched for by id and version in known-mods.json, not here.
+ */
 object GlUsageScanner {
-    private const val SODIUM_SHA512 = "15fb941bd58abe3e57b53eb91f070f00e9a5178c718d50cbae588986e4cd8349c5a2ef4f6c84cc4887320d85ec561aa2094214723f502fddd3aeb493c80b5c39"
-    private val sodiumGLClasses = setOf("net/caffeinemc/mods/sodium/client/compatibility/environment/GlContextInfo", "net/caffeinemc/mods/sodium/client/compatibility/workarounds/nvidia/NvidiaWorkarounds")
-    internal fun excluded(sha512: String, className: String): Boolean = sha512 == SODIUM_SHA512 && className in sodiumGLClasses
+    /** 26.2's backend-neutral GPU API (`RenderSystem.getDevice()` returns a GpuDevice) and the Vulkan backend itself. */
+    private val neutral = listOf("com/mojang/blaze3d/systems/GpuDevice", "com/mojang/blaze3d/systems/GpuBackend", "com/mojang/blaze3d/systems/CommandEncoder", "com/mojang/blaze3d/systems/RenderPass", "com/mojang/blaze3d/vulkan/", "org/lwjgl/vulkan/")
     /** Also scans jars nested in `META-INF/jarjar/` (NeoForge) and `META-INF/jars/`; their classes read `inner.jar!/pkg/Cls`. */
     fun scan(jar: File): GlScan {
-        val usages = mutableListOf<GlUsage>(); val exclusions = mutableListOf<GlUsage>()
-        scan(jar, "", 0, usages, exclusions)
-        return GlScan(usages.sortedBy { it.className }, exclusions.sortedBy { it.className })
+        val usages = mutableListOf<GlUsage>(); var aware = false
+        scan(jar, "", 0) { name, refs ->
+            refs.filter(::isGL).toSet().takeIf { it.isNotEmpty() }?.let { usages += GlUsage(name, it) }
+            if (!aware) aware = refs.any { r -> neutral.any(r::startsWith) }
+        }
+        return GlScan(usages.sortedBy { it.className }, aware)
     }
-    private fun scan(jar: File, prefix: String, depth: Int, usages: MutableList<GlUsage>, exclusions: MutableList<GlUsage>) {
+    private fun scan(jar: File, prefix: String, depth: Int, found: (String, Set<String>) -> Unit) {
         val all = Zip.entries(jar).filter { !it.directory }
         val entries = all.filter { it.path.endsWith(".class") }
         require(entries.sumOf { it.size } <= 256L shl 20) { "Class scan size limit" }
-        val digest = Hashes.sha512(jar)
         for (nested in all.filter { it.path.endsWith(".jar") && (it.path.startsWith("META-INF/jarjar/") || it.path.startsWith("META-INF/jars/")) }) {
             require(depth < 3) { "Nested jar depth limit: ${nested.path}" }
             val temp = File.createTempFile("cofre-nested-", ".jar")
             try {
                 temp.writeBytes(Zip.read(jar, nested.path, 64L shl 20))
-                scan(temp, prefix + nested.path.substringAfterLast('/') + "!/", depth + 1, usages, exclusions)
+                scan(temp, prefix + nested.path.substringAfterLast('/') + "!/", depth + 1, found)
             } finally { temp.delete() }
         }
         ZipFile(jar).use { zip ->
@@ -42,16 +52,14 @@ object GlUsageScanner {
                     while (true) { val n = input.read(buffer); if (n == -1) break; require(out.size() + n <= e.size); out.write(buffer, 0, n) }
                     require(out.size().toLong() == e.size); out.toByteArray()
                 }
-                val refs = references(bytes)
-                if (refs.isNotEmpty()) {
-                    val className = e.path.removeSuffix(".class")
-                    val usage = GlUsage(prefix + className, refs)
-                    if (excluded(digest, className)) exclusions += usage else usages += usage
-                }
+                found(prefix + e.path.removeSuffix(".class"), classReferences(bytes))
             }
         }
     }
-    fun references(bytes: ByteArray): Set<String> {
+    /** The OpenGL classes one class file references. */
+    fun references(bytes: ByteArray): Set<String> = classReferences(bytes).filterTo(linkedSetOf(), ::isGL)
+    /** Every class a class file references: class constants plus types in field, method and call descriptors. */
+    private fun classReferences(bytes: ByteArray): Set<String> {
         require(bytes.size <= 8 shl 20)
         val input = DataInputStream(ByteArrayInputStream(bytes))
         require(input.readInt() == 0xCAFEBABE.toInt()) { "Invalid class magic" }
@@ -81,13 +89,10 @@ object GlUsageScanner {
         }
         attributes(); require(input.available() == 0)
         val result = linkedSetOf<String>()
-        for (index in classNames) {
-            val name = requireNotNull(utf8[index]) { "Invalid class name index" }.trimStart('[').removePrefix("L").removeSuffix(";")
-            if (isGL(name)) result += name
-        }
-        val pattern = Regex("L((?:org/lwjgl/opengl/|com/mojang/blaze3d/opengl/)[^;]+);")
-        for (index in descriptors) pattern.findAll(requireNotNull(utf8[index]) { "Invalid descriptor index" }).forEach { result += it.groupValues[1] }
+        for (index in classNames) result += requireNotNull(utf8[index]) { "Invalid class name index" }.trimStart('[').removePrefix("L").removeSuffix(";")
+        for (index in descriptors) descriptor.findAll(requireNotNull(utf8[index]) { "Invalid descriptor index" }).forEach { result += it.groupValues[1] }
         return result
     }
+    private val descriptor = Regex("L([^;]+);")
     private fun isGL(value: String): Boolean = value.startsWith("org/lwjgl/opengl/") || value.startsWith("com/mojang/blaze3d/opengl/")
 }

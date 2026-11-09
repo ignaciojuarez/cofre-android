@@ -128,7 +128,7 @@ private fun Confirm(
     val target = phase.plan.target ?: return
     // The warning leads, so it's read before Get.
     issue?.let {
-        Banner(it.badge, PixelGlyph.Ore, tone = Tone.Danger)
+        Banner(it.badge, PixelGlyph.Ore, tone = it.tone)
         CofreText(it.reason, CofreTheme.type.secondary, color = CofreTheme.colors.muted)
     }
     BlockRow(

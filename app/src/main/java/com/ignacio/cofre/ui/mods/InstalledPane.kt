@@ -197,10 +197,10 @@ private fun InstalledItemRow(
                     if (version.isNotBlank()) CofreText(VersionLabel.clean(version), CofreTheme.type.caption, color = CofreTheme.colors.muted, maxLines = 1)
                     if (!item.enabled) Badge(stringResource(R.string.mods_off))
                     if (item.inUse) Badge(stringResource(R.string.mods_in_use), tone = Tone.Accent)
-                    row.badge?.let { Badge(it, tone = Tone.Danger) }
+                    row.issue?.let { Badge(it.badge, tone = it.tone) }
                     row.update?.let { Badge(stringResource(R.string.mods_update_badge, VersionLabel.clean(it.version)), tone = Tone.Warn) }
                 }
-                row.reason?.let { CofreText(it, CofreTheme.type.caption, color = CofreTheme.colors.danger, maxLines = 2) }
+                row.issue?.let { CofreText(it.reason, CofreTheme.type.caption, color = CofreTheme.colors.tone(it.tone), maxLines = 2) }
             }
         },
         trailing = {

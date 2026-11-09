@@ -137,6 +137,146 @@
       "reason": "This OpenGL Voxy build calls OpenGL directly. Check a Vulkan-compatible release before enabling it.",
       "evidence": "expected",
       "evidenceRef": "Minecraft 26.2 --graphicsBackend vulkan; static OpenGL requirements"
+    },
+    {
+      "ids": [
+        "sodium"
+      ],
+      "slugs": [
+        "sodium"
+      ],
+      "name": "Sodium",
+      "scope": "vulkan",
+      "gameVersions": [
+        "26.2"
+      ],
+      "minVersion": "0.9.0",
+      "severity": "works",
+      "reason": "Sodium supports Vulkan.",
+      "evidence": "expected",
+      "evidenceRef": "Vulkan support since 0.9.0; 0.9.2 nests GL backend mixins (GlDeviceMixin, GLDrawContext) beside VK draw batches. Supports Mojang's Vulkan backend; its OpenGL classes only run on the GL backend. Checked 2026-11-09 against the 26.2 NeoForge jar from Modrinth"
+    },
+    {
+      "ids": [
+        "immediatelyfast"
+      ],
+      "slugs": [
+        "immediatelyfast"
+      ],
+      "name": "ImmediatelyFast",
+      "scope": "vulkan",
+      "gameVersions": [
+        "26.2"
+      ],
+      "minVersion": "1.16.0",
+      "severity": "works",
+      "reason": "ImmediatelyFast supports Vulkan.",
+      "evidence": "expected",
+      "evidenceRef": "Vulkan-compatible since 1.16.0; 1.16.5 mixes into GlCommandEncoder/GlSurface only. Supports Mojang's Vulkan backend; its OpenGL classes only run on the GL backend. Checked 2026-11-09 against the 26.2 NeoForge jar from Modrinth"
+    },
+    {
+      "ids": [
+        "modernfix"
+      ],
+      "slugs": [
+        "modernfix-mvus"
+      ],
+      "name": "ModernFix (mVUS)",
+      "scope": "vulkan",
+      "gameVersions": [
+        "26.2"
+      ],
+      "minVersion": "5.27.18",
+      "severity": "works",
+      "reason": "ModernFix (mVUS) supports Vulkan.",
+      "evidence": "expected",
+      "evidenceRef": "mVUS fork for 26.2; 5.27.21 touches GL only in AsyncLoadingScreen. Supports Mojang's Vulkan backend; its OpenGL classes only run on the GL backend. Checked 2026-11-09 against the 26.2 NeoForge jar from Modrinth"
+    },
+    {
+      "ids": [
+        "distanthorizons"
+      ],
+      "slugs": [
+        "distanthorizons"
+      ],
+      "name": "Distant Horizons",
+      "scope": "vulkan",
+      "gameVersions": [
+        "26.2"
+      ],
+      "minVersion": "3.1.0",
+      "severity": "works",
+      "reason": "Distant Horizons supports Vulkan.",
+      "evidence": "expected",
+      "evidenceRef": "Vulkan rendering since 3.1.0; 3.3.3 keeps an openGl renderer package beside GpuDevice code. Supports Mojang's Vulkan backend; its OpenGL classes only run on the GL backend. Checked 2026-11-09 against the 26.2 NeoForge jar from Modrinth"
+    },
+    {
+      "ids": [
+        "entityculling"
+      ],
+      "slugs": [
+        "entityculling"
+      ],
+      "name": "Entity Culling",
+      "scope": "vulkan",
+      "gameVersions": [
+        "26.2"
+      ],
+      "severity": "works",
+      "reason": "Entity Culling supports Vulkan.",
+      "evidence": "expected",
+      "evidenceRef": "1.11.3 has no OpenGL references. Supports Mojang's Vulkan backend; its OpenGL classes only run on the GL backend. Checked 2026-11-09 against the 26.2 NeoForge jar from Modrinth"
+    },
+    {
+      "ids": [
+        "ferritecore"
+      ],
+      "slugs": [
+        "ferrite-core"
+      ],
+      "name": "FerriteCore",
+      "scope": "vulkan",
+      "gameVersions": [
+        "26.2"
+      ],
+      "severity": "works",
+      "reason": "FerriteCore supports Vulkan.",
+      "evidence": "expected",
+      "evidenceRef": "9.0.0 has no OpenGL references. Supports Mojang's Vulkan backend; its OpenGL classes only run on the GL backend. Checked 2026-11-09 against the 26.2 NeoForge jar from Modrinth"
+    },
+    {
+      "ids": [
+        "controlify"
+      ],
+      "slugs": [
+        "controlify"
+      ],
+      "name": "Controlify",
+      "scope": "vulkan",
+      "gameVersions": [
+        "26.2"
+      ],
+      "severity": "works",
+      "reason": "Controlify supports Vulkan.",
+      "evidence": "expected",
+      "evidenceRef": "3.5.3 has no OpenGL references. Supports Mojang's Vulkan backend; its OpenGL classes only run on the GL backend. Checked 2026-11-09 against the 26.2 NeoForge jar from Modrinth"
+    },
+    {
+      "ids": [
+        "yet_another_config_lib_v3"
+      ],
+      "slugs": [
+        "yacl"
+      ],
+      "name": "YetAnotherConfigLib",
+      "scope": "vulkan",
+      "gameVersions": [
+        "26.2"
+      ],
+      "severity": "works",
+      "reason": "YetAnotherConfigLib supports Vulkan.",
+      "evidence": "expected",
+      "evidenceRef": "3.9.7 has no OpenGL references. Supports Mojang's Vulkan backend; its OpenGL classes only run on the GL backend. Checked 2026-11-09 against the 26.2 NeoForge jar from Modrinth"
     }
   ]
 }

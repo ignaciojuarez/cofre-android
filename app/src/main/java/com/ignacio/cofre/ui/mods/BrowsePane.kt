@@ -52,7 +52,6 @@ import com.ignacio.cofre.design.SelectButton
 import com.ignacio.cofre.design.SheetHeader
 import com.ignacio.cofre.design.Spinner
 import com.ignacio.cofre.design.ToggleRow
-import com.ignacio.cofre.design.Tone
 import com.ignacio.cofre.design.WidthClass
 import com.ignacio.cofre.design.outline
 import com.ignacio.cofre.design.pageScroll
@@ -235,7 +234,7 @@ internal fun ProjectRow(
                 CofreText(project.summary, CofreTheme.type.caption, color = CofreTheme.colors.muted, maxLines = 1)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     project.downloads?.let { Meta("↓ " + count(it)) }
-                    issue?.let { Badge(it.badge, tone = Tone.Danger) }
+                    issue?.let { Badge(it.badge, tone = it.tone) }
                 }
             }
         },

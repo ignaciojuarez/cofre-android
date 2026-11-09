@@ -1,6 +1,7 @@
 package com.ignacio.cofre.ui.mods
 
 import androidx.compose.runtime.Immutable
+import com.ignacio.cofre.design.Tone
 import com.ignacio.cofre.kit.common.ContentKind
 import com.ignacio.cofre.kit.common.Target
 import com.ignacio.cofre.kit.compat.CompatibilityIssue
@@ -48,14 +49,20 @@ data class BrowseQuery(
     val fitsInstance: Boolean get() = filters.followGame && filters.followLoader
 }
 
-/** Short badge text for a compatibility issue: what a row can say in two words. */
+/** Short badge text for a compatibility issue. Only known-bad rules sound certain; scan findings are graded. */
 val CompatibilityIssue.badge: String
     get() = when {
         kind == ContentKind.Shaders -> "Not on Vulkan"
-        reason.contains("OpenGL") -> "Needs OpenGL"
+        severity == "likely" -> "Likely to crash"
+        severity == "may" -> "May not work"
         severity == "slow" -> "Slow on Vulkan"
+        reason.contains("OpenGL") -> "Needs OpenGL"
         else -> "Won't run"
     }
+
+/** Danger for what will or likely will crash; a warning for the rest. */
+val CompatibilityIssue.tone: Tone
+    get() = if (severity == "may" || severity == "slow") Tone.Warn else Tone.Danger
 
 /**
  * The two project sources behind one search and resolve surface. CurseForge is there only when the user gave a key.

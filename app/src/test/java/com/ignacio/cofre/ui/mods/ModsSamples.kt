@@ -2,6 +2,8 @@ package com.ignacio.cofre.ui.mods
 
 import com.ignacio.cofre.kit.common.ContentKind
 import com.ignacio.cofre.kit.common.Loader
+import com.ignacio.cofre.kit.compat.ContentCompatibility
+import com.ignacio.cofre.kit.compat.GlRisk
 import com.ignacio.cofre.kit.content.ContentStore
 import com.ignacio.cofre.kit.mods.InstalledMod
 import com.ignacio.cofre.kit.mods.ModCandidate
@@ -92,7 +94,7 @@ internal object ModsSamples {
             ),
             InstalledRow(
                 item("glwidgets-1.2.jar", "GL Widgets", "1.2"), null,
-                badge = "Needs OpenGL", reason = "This mod calls OpenGL, so it will crash on Vulkan.",
+                issue = ContentCompatibility.glIssue("glwidgets", "GL Widgets", GlRisk.Likely),
             ),
             InstalledRow(item("controlify-3.5.3.jar", "Controlify", "3.5.3+mc26.2", enabled = false)),
         ),

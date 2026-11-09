@@ -107,7 +107,7 @@ internal fun ModPage(
         PaneScroll(readable = true) {
             PageHeader(state)
             p.issue?.let { issue ->
-                Banner(issue.badge + " · " + issue.reason, PixelGlyph.Ore, tone = Tone.Danger)
+                Banner(issue.badge + " · " + issue.reason, PixelGlyph.Ore, tone = issue.tone)
             }
             ActionButton(state, onAction)
             Segmented(
