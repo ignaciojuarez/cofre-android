@@ -4,7 +4,7 @@ source "$(dirname "$0")/common.sh"
 ndk_setup
 source_tree jna
 AAR="$WORK/jna-5.17.0.aar"
-curl -fL --retry 3 -o "$AAR" https://repo.maven.apache.org/maven2/net/java/dev/jna/jna/5.17.0/jna-5.17.0.aar
+curl -fL --retry 8 --retry-delay 5 --retry-all-errors -o "$AAR" https://repo.maven.apache.org/maven2/net/java/dev/jna/jna/5.17.0/jna-5.17.0.aar
 printf '%s  %s\n' 4dbeffffa665d97ad5aa7eee297531d3c841a86716ab7f774fd6956422b3cf38 "$AAR" | sha256sum -c -
 mkdir -p "$WORK/jna/lib/arm64-v8a" "$WORK/jna/legal"
 unzip -p "$AAR" jni/arm64-v8a/libjnidispatch.so > "$WORK/jna/lib/arm64-v8a/libjnidispatch.so"

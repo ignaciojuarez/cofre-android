@@ -32,7 +32,11 @@ bash configure --with-conf-name=android-arm64 --openjdk-target=aarch64-linux-and
     --with-version-pre= --with-version-opt= --with-version-build=8 \
     CC="$CC" CXX="$CXX" AR="$AR" RANLIB="$RANLIB" STRIP="$STRIP" OBJCOPY="$OBJCOPY" \
     BUILD_CC=/usr/bin/clang BUILD_CXX=/usr/bin/clang++ BUILD_LD=/usr/bin/ld.lld
-make CONF=android-arm64 JOBS="$JOBS" images
+# -k surfaces every compile error in one run; the build still fails if any target fails.
+make -k CONF=android-arm64 JOBS="$JOBS" images || {
+    grep -rh -A4 'error:' "$JDK/build/android-arm64/make-support/failure-logs" | head -300
+    exit 1
+}
 IMAGE="$JDK/build/android-arm64/images/jdk"
 JRE="$WORK/jre25"
 mkdir -p "$JRE"

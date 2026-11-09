@@ -7,7 +7,7 @@ DEST="$ROOT/.work/natives/$1"
 mkdir -p "$DEST"
 BASE="https://github.com/ignaciojuarez/cofre-android/releases/download/$1"
 assets=(jre25-android-arm64.tar.xz lwjgl-3.4.1-android-arm64.tar.xz jna-5.17.0-android-arm64.tar.xz)
-for asset in SHA256SUMS "${assets[@]}"; do curl -fL --retry 3 -o "$DEST/$asset" "$BASE/$asset"; done
+for asset in SHA256SUMS "${assets[@]}"; do curl -fL --retry 8 --retry-delay 5 --retry-all-errors -o "$DEST/$asset" "$BASE/$asset"; done
 python3 - "$DEST" "${assets[@]}" <<'PY'
 import hashlib,pathlib,sys
 root=pathlib.Path(sys.argv[1])

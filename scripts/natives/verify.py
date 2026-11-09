@@ -33,6 +33,9 @@ def main():
         header = subprocess.check_output([readelf, '-h', str(path)], text=True)
         if 'AArch64' not in header:
             raise ValueError(f'Not aarch64: {path}')
+        dynamic = subprocess.check_output([readelf, '-d', str(path)], text=True)
+        if any(name in dynamic for name in ['libc.so.6', 'libstdc++.so.6', 'libpthread.so.0', 'libc++_shared.so']):
+            raise ValueError(f'Unpackaged or glibc runtime dependency: {path}')
         segments = subprocess.check_output([readelf, '-lW', str(path)], text=True)
         align = min(load_alignments(segments))
         print(f'{path.relative_to(root)}\t0x{align:x}\t{hashlib.sha256(path.read_bytes()).hexdigest()}')
