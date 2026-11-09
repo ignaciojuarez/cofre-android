@@ -70,6 +70,13 @@ class LogsTest {
         val r = GameExitReport.diagnose(1, log = "Device does not support required extensions, missing: {VK_KHR_push_descriptor, VK_KHR_swapchain}\nDevice does not support required features, missing: {timelineSemaphore}")
         assertEquals(ExitReason.VulkanUnsupported, r.reason); assertEquals(listOf("VK_KHR_push_descriptor", "VK_KHR_swapchain", "timelineSemaphore"), r.missingVulkanRequirements)
     }
+    @Test fun openGLCrashNamesTheModFromNeoForgeAndMixinFrames() {
+        val trace = "java.lang.IllegalStateException: No context is current\n\tat TRANSFORMER/minecraft@26.2/net.minecraft.client.Main.run(Main.java:1)\n\tat TRANSFORMER/better_clouds@1.0/com.example.Clouds.render(Clouds.java:9)"
+        val r = GameExitReport.diagnose(1, log = trace); assertEquals(ExitReason.OpenGLMod, r.reason); assertEquals("Better Clouds", r.mod); assertTrue("Better Clouds" in r.explanation && "Better Clouds" in r.nextStep)
+        assertEquals("Iris", GameExitReport.diagnose(1, crashReport = "java.lang.RuntimeException: No GLCapabilities instance set\n\tat net.Foo.bar(Foo.java) [mixin from mod iris]").mod)
+        val unknown = GameExitReport.diagnose(1, log = "java.lang.IllegalStateException: No context is current\n\tat TRANSFORMER/neoforge@26.2.0.93/net.neoforged.X.y(X.java:1)")
+        assertNull(unknown.mod); assertTrue(unknown.explanation.startsWith("A mod")); assertNull(GameExitReport.diagnose(1, log = "java.lang.OutOfMemoryError").mod)
+    }
     @Test fun crashReportPrecedesLogAndMemoryPrecedesModsWithinSource() {
         assertEquals(ExitReason.Memory, GameExitReport.diagnose(1, crashReport = "java.lang.OutOfMemoryError: metaspace", log = "[ERROR] VK_ERROR_DEVICE_LOST").reason)
         assertEquals(ExitReason.Memory, GameExitReport.diagnose(1, log = "[ERROR] NoSuchMethodError\n[ERROR] java.lang.OutOfMemoryError").reason)

@@ -1,15 +1,17 @@
 package com.ignacio.cofre.kit.logs
 
+import com.ignacio.cofre.kit.compat.KnownModsCatalog
+
 enum class ExitReason { Memory, SystemKilled, VulkanUnsupported, NativeWindowInUse, OpenGLMod, Mods, MissingDependency, MissingLibrary, JavaVersion, Java, Renderer, Unknown, Quit }
 
-data class GameExitReport(val code: Int, val reason: ExitReason, val clue: String? = null, val instance: String? = null, val logTail: List<String> = emptyList(), val missingVulkanRequirements: List<String> = emptyList()) {
+data class GameExitReport(val code: Int, val reason: ExitReason, val clue: String? = null, val instance: String? = null, val logTail: List<String> = emptyList(), val missingVulkanRequirements: List<String> = emptyList(), val mod: String? = null) {
     val title: String get() = if (reason == ExitReason.Quit) "Minecraft closed" else "Minecraft stopped"
     val explanation: String get() = when (reason) {
         ExitReason.Memory -> "Minecraft ran out of memory."
         ExitReason.SystemKilled -> "Android killed the game process."
         ExitReason.VulkanUnsupported -> "This device is missing Vulkan extensions or features Minecraft requires."
         ExitReason.NativeWindowInUse -> "The game surface is already in use."
-        ExitReason.OpenGLMod -> "A mod called OpenGL, which is unavailable with Vulkan."
+        ExitReason.OpenGLMod -> "${mod ?: "A mod"} called OpenGL, which is unavailable with Vulkan."
         ExitReason.Mods -> "A mod failed to load or conflicts with another mod."
         ExitReason.MissingDependency -> "A mod needs a dependency that is missing or incompatible."
         ExitReason.MissingLibrary -> "A game file or native library is missing or could not load."
@@ -23,7 +25,7 @@ data class GameExitReport(val code: Int, val reason: ExitReason, val clue: Strin
         ExitReason.Memory, ExitReason.SystemKilled -> "Lower the instance memory limit or remove mods, then try again."
         ExitReason.VulkanUnsupported -> "Use a device or driver that supports the listed Vulkan requirements."
         ExitReason.NativeWindowInUse -> "Restart the game. Check that the early loading window is disabled."
-        ExitReason.OpenGLMod -> "Disable the mod that calls OpenGL, then play again."
+        ExitReason.OpenGLMod -> "Turn off ${mod ?: "the mod that calls OpenGL"} in Mods, then play again."
         ExitReason.Mods, ExitReason.MissingDependency -> "Read Details to update the mod or install its dependency."
         ExitReason.MissingLibrary -> "Repair the instance to recheck game files."
         ExitReason.JavaVersion -> "Use Java 25 for Minecraft 26.2 and compatible mod versions."
@@ -40,7 +42,8 @@ data class GameExitReport(val code: Int, val reason: ExitReason, val clue: Strin
             require(tail >= 0)
             val lines = log.orEmpty().lines().filter { it.isNotEmpty() }
             val report = crashReport.orEmpty().lines().takeWhile { !it.startsWith("-- System Details --") }.filter { it.isNotEmpty() }
-            fun result(reason: ExitReason, clue: String? = null, missing: List<String> = emptyList()): GameExitReport = GameExitReport(code, reason, clue?.let(::clean), instance, lines.takeLast(tail), missing)
+            fun result(reason: ExitReason, clue: String? = null, missing: List<String> = emptyList()): GameExitReport =
+                GameExitReport(code, reason, clue?.let(::clean), instance, lines.takeLast(tail), missing, if (reason == ExitReason.OpenGLMod) glMod(report + lines) else null)
             val stopped = lines.indexOfLast { "Stopping!" in it }
             if (crashReport == null && stopped >= 0 && lines.drop(stopped + 1).none(::isError)) return result(ExitReason.Quit)
             val errors = lines.filter { isError(it) || listOf("No context is current", "No GLCapabilities", "does not support required", "CodeCache is full", "VK_ERROR_").any { marker -> it.contains(marker, true) } }
@@ -72,6 +75,18 @@ data class GameExitReport(val code: Int, val reason: ExitReason, val clue: Strin
             if (fatal >= 0 && (report + lines).drop(fatal).any { "libvulkan" in it || "vulkan.adreno" in it }) return result(ExitReason.Renderer, "The Vulkan driver crashed.")
             val java = (report + errors).firstOrNull { "Exception" in it || "java.lang." in it } ?: report.firstOrNull { it.startsWith("Description:") }?.substringAfter("Description:")
             return when { java != null || report.isNotEmpty() -> result(ExitReason.Java, java); code == 0 -> result(ExitReason.Quit); else -> result(ExitReason.Unknown, errors.lastOrNull()) }
+        }
+        private val glMarkers = listOf("no context is current", "no glcapabilities", "no opengl context", "com.mojang.blaze3d.opengl")
+        private val platformIDs = setOf("minecraft", "neoforge", "forge", "fml", "fmlloader", "fancymodloader", "mixinextras")
+        /** The first mod frame after the OpenGL error: NeoForge's `TRANSFORMER/<id>@<version>/` or a mixin's `from mod <id>`. */
+        internal fun glMod(lines: List<String>): String? {
+            val start = lines.indexOfFirst { l -> glMarkers.any { it in l.lowercase() } }.takeIf { it >= 0 } ?: return null
+            val frame = Regex("^\\s*at [A-Z-]+/([a-z][a-z0-9_]{1,63})@|from mod ([A-Za-z0-9_-]{2,64})")
+            for (line in lines.drop(start).take(60)) {
+                val id = frame.findAll(line).map { (it.groupValues[1].ifEmpty { it.groupValues[2] }).lowercase() }.firstOrNull { it !in platformIDs } ?: continue
+                return KnownModsCatalog.name(id) ?: id.replace('_', ' ').replace('-', ' ').split(' ').joinToString(" ") { w -> w.replaceFirstChar(Char::uppercase) }
+            }
+            return null
         }
         fun isError(line: String): Boolean = listOf("error", "exception", "fatal", "caused by", "failed").any { it in line.lowercase() }
         private fun clean(line: String): String {
