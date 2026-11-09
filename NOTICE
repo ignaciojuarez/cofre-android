@@ -12,3 +12,10 @@ PojavLauncher (https://github.com/PojavLauncherTeam/PojavLauncher), LGPL-3.0.
   native event queue shared with ART, and the JRE start-up sequence (library load order,
   LD_LIBRARY_PATH update, JLI_Launch on our own thread), are modelled on jre_lwjgl3glfw,
   jre_launcher.c, utils.c and JREUtils.java.
+
+Fonts in core/design/src/main/res/font, under the SIL Open Font License 1.1 (full text in
+core/design/src/main/res/raw/ofl.txt, shown in the app's licenses screen; no Reserved Font Names):
+  Pixelify Sans Medium, SemiBold, Bold. Copyright 2021 The Pixelify Sans Project Authors
+  (https://github.com/eifetx/Pixelify-Sans).
+  Geist Regular, Medium, SemiBold and Geist Mono Regular, Medium, v1.8.2. Copyright 2024 The Geist
+  Project Authors (https://github.com/vercel/geist-font).

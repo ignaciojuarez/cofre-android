@@ -1,0 +1,282 @@
+package com.ignacio.cofre.design
+
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+
+// §3.2 AdaptiveShell and §2 #27 NavChrome: one section list drawn as a tab bar (compact), a 76 dp rail
+// (medium) or a 248 dp sidebar (expanded).
+
+/** The shell's sections. */
+public enum class ShellSection(public val title: String, public val glyph: PixelGlyph) {
+    Play("Play", PixelGlyph.Play),
+    Instances("Instances", PixelGlyph.Grass),
+    Mods("Mods", PixelGlyph.Book),
+    Settings("Settings", PixelGlyph.Gear),
+}
+
+/** How the shell draws its navigation. */
+public enum class NavStyle { TabBar, Rail, Sidebar }
+
+/**
+ * The app frame. Bottom tab bar under 700 dp, rail under 1100 dp, sidebar above (or a rail when
+ * [preferRail]). L1/R1 cycle sections. Each section keeps its saved state and its last focused item, and the
+ * controller hint bar sits under the content.
+ *
+ * [navFooter] fills the bottom of the rail and sidebar (account, status).
+ */
+@Composable
+public fun AdaptiveShell(
+    section: ShellSection,
+    onSectionChange: (ShellSection) -> Unit,
+    modifier: Modifier = Modifier,
+    preferRail: Boolean = false,
+    modsBadge: Int = 0,
+    navFooter: @Composable ColumnScope.(NavStyle) -> Unit = {},
+    content: @Composable (ShellSection) -> Unit,
+) {
+    val sections = ShellSection.entries
+    val holder = rememberSaveableStateHolder()
+    BoxWithConstraints(
+        modifier
+            .fillMaxSize()
+            .pageBackground()
+            .controllerActions(
+                ControllerAction(Pad.L1, "Sections") { onSectionChange(sections.cycle(section, -1)) },
+                ControllerAction(Pad.R1, "Sections") { onSectionChange(sections.cycle(section, 1)) },
+            ),
+    ) {
+        val widthClass = WidthClass.of(maxWidth)
+        val style = when {
+            widthClass == WidthClass.Compact -> NavStyle.TabBar
+            widthClass == WidthClass.Expanded && !preferRail -> NavStyle.Sidebar
+            else -> NavStyle.Rail
+        }
+        CompositionLocalProvider(LocalWidthClass provides widthClass) {
+            // One layout for every width, so resizing moves the chrome without rebuilding the content.
+            ShellLayout(compact = style == NavStyle.TabBar) {
+                Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        holder.SaveableStateProvider(section) {
+                            ScreenFocus(Modifier.fillMaxSize()) { content(section) }
+                        }
+                    }
+                    ControllerHintBar()
+                }
+                NavChrome(style, section, onSectionChange, modsBadge, navFooter)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ShellLayout(
+    compact: Boolean,
+    content: @Composable () -> Unit,
+) {
+    Layout(content) { measurables, constraints ->
+        val (body, chrome) = measurables
+        val w = constraints.maxWidth
+        val h = constraints.maxHeight
+        if (compact) {
+            val bar = chrome.measure(Constraints(minWidth = w, maxWidth = w, maxHeight = h))
+            val main = body.measure(Constraints.fixed(w, h - bar.height))
+            layout(w, h) {
+                main.place(0, 0)
+                bar.place(0, h - bar.height)
+            }
+        } else {
+            val side = chrome.measure(Constraints(maxWidth = w, minHeight = h, maxHeight = h))
+            val main = body.measure(Constraints.fixed(w - side.width, h))
+            layout(w, h) {
+                main.placeRelative(side.width, 0)
+                side.placeRelative(0, 0)
+            }
+        }
+    }
+}
+
+@Composable
+private fun NavChrome(
+    style: NavStyle,
+    section: ShellSection,
+    onSelect: (ShellSection) -> Unit,
+    modsBadge: Int,
+    footer: @Composable ColumnScope.(NavStyle) -> Unit,
+) {
+    val c = CofreTheme.colors
+    fun badge(s: ShellSection) = if (s == ShellSection.Mods) modsBadge else 0
+    when (style) {
+        NavStyle.TabBar -> Row(
+            Modifier
+                .fillMaxWidth()
+                .background(c.side)
+                .drawBehind { drawRect(c.outline, size = Size(size.width, CofreBlock.outline.toPx())) },
+        ) {
+            ShellSection.entries.forEach { s ->
+                NavItem(s, s == section, onSelect, NavStyle.TabBar, badge(s), Modifier.weight(1f))
+            }
+        }
+        NavStyle.Rail, NavStyle.Sidebar -> Column(
+            Modifier
+                .width(if (style == NavStyle.Rail) CofreSpacing.rail else CofreSpacing.sidebar)
+                .fillMaxHeight()
+                .background(c.side)
+                .drawBehind {
+                    val o = CofreBlock.outline.toPx()
+                    val x = if (layoutDirection == LayoutDirection.Ltr) size.width - o else 0f
+                    drawRect(c.outline, Offset(x, 0f), Size(o, size.height))
+                }
+                .padding(horizontal = if (style == NavStyle.Rail) 6.dp else 12.dp)
+                .padding(top = 10.dp, bottom = if (style == NavStyle.Rail) 12.dp else 16.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+            horizontalAlignment = if (style == NavStyle.Rail) Alignment.CenterHorizontally else Alignment.Start,
+        ) {
+            if (style == NavStyle.Rail) {
+                AppIcon(Modifier.padding(top = 6.dp, bottom = 12.dp), size = 34.dp)
+            } else {
+                Row(
+                    Modifier.padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AppIcon(size = 30.dp)
+                    CofreText("Cofre", CofreTheme.type.title2)
+                }
+            }
+            ShellSection.entries.forEach { s -> NavItem(s, s == section, onSelect, style, badge(s)) }
+            Spacer(Modifier.weight(1f))
+            footer(style)
+        }
+    }
+}
+
+@Composable
+private fun NavItem(
+    s: ShellSection,
+    on: Boolean,
+    onSelect: (ShellSection) -> Unit,
+    style: NavStyle,
+    badge: Int,
+    modifier: Modifier = Modifier,
+) {
+    val c = CofreTheme.colors
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    val ink = if (on) c.ink else c.muted
+    val bar = if (style == NavStyle.TabBar) CofreBlock.tabSelectionBar else if (style == NavStyle.Rail) 3.dp else 4.dp
+    val base = modifier
+        .blockClickable(interaction) { onSelect(s) }
+        .semantics { selected = on }
+        .background(if (on) c.raised else if (hovered) c.hover else Color.Transparent)
+        .drawBehind {
+            if (on) {
+                val b = bar.toPx()
+                if (style == NavStyle.TabBar) {
+                    drawRect(c.accent, size = Size(size.width, b))
+                } else {
+                    val x = if (layoutDirection == LayoutDirection.Ltr) 0f else size.width - b
+                    drawRect(c.accent, Offset(x, 0f), Size(b, size.height))
+                }
+            }
+        }
+    when (style) {
+        NavStyle.TabBar -> Column(
+            base.heightIn(min = CofreSpacing.tabBar),
+            verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box {
+                PixelIcon(s.glyph, Modifier.alpha(if (on) 1f else 0.55f), size = 18.dp, foreground = ink)
+                CountBadge(badge, Modifier.align(Alignment.TopEnd).padding(start = 22.dp))
+            }
+            CofreText(s.title, CofreTheme.type.navSmall, color = ink, maxLines = 1)
+        }
+        NavStyle.Rail -> Column(
+            base.fillMaxWidth().heightIn(min = 62.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box {
+                PixelIcon(s.glyph, Modifier.alpha(if (on) 1f else 0.55f), size = 22.dp, foreground = ink)
+                CountBadge(badge, Modifier.align(Alignment.TopEnd).padding(start = 26.dp))
+            }
+            CofreText(s.title, CofreTheme.type.navSmall, color = ink, maxLines = 1)
+        }
+        NavStyle.Sidebar -> Row(
+            base.fillMaxWidth().heightIn(min = 44.dp).padding(horizontal = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PixelIcon(s.glyph, Modifier.alpha(if (on) 1f else 0.55f), size = 20.dp, foreground = ink)
+            CofreText(s.title, CofreTheme.type.nav, Modifier.weight(1f), color = ink, maxLines = 1)
+            CountBadge(badge)
+        }
+    }
+}
+
+@Composable
+private fun CountBadge(
+    n: Int,
+    modifier: Modifier = Modifier,
+) {
+    if (n <= 0) return
+    Box(modifier.background(CofreTheme.colors.tint(Tone.Warn)).outline().padding(horizontal = 5.dp).padding(bottom = 1.dp)) {
+        CofreText("$n", CofreTheme.type.badge)
+    }
+}
+
+/** Cofre's amethyst block icon. Decorative. */
+@Composable
+public fun AppIcon(
+    modifier: Modifier = Modifier,
+    size: Dp = 30.dp,
+) {
+    val shape = RoundedCornerShape(size * 0.22f)
+    Image(
+        ImageBitmap.imageResource(R.drawable.cofre_app_icon),
+        contentDescription = null,
+        modifier = modifier.size(size).clip(shape).border(2.dp, CofreTheme.colors.outline, shape),
+        filterQuality = FilterQuality.None,
+    )
+}
