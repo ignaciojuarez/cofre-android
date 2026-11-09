@@ -23,7 +23,7 @@ data class LaunchSpec(
     /** Working directory of the game (the instance folder). */
     val gameDir: String,
     val env: Map<String, String> = emptyMap(),
-    /** The JVM's stdout and stderr go here (and to logcat). */
+    /** The JVM's stdout and stderr go here (and to logcat in debuggable builds). */
     val logFile: String,
     /** Where the :game process writes its [ExitRecord] as it ends. */
     val exitFile: String,

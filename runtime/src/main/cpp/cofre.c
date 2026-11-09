@@ -166,9 +166,9 @@ static void deadline(struct timespec *ts, long millis) {
     }
 }
 
-// ---- stdout/stderr → log file + logcat --------------------------------------------------------
+// ---- stdout/stderr → log file (+ logcat in debuggable builds) ------------------------------------
 
-static int stdio_pipe[2] = {-1, -1}, log_fd = -1, stdio_done;
+static int stdio_pipe[2] = {-1, -1}, log_fd = -1, stdio_done, mirror_logcat;
 static pthread_mutex_t stdio_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t stdio_closed = PTHREAD_COND_INITIALIZER;
 
@@ -182,7 +182,7 @@ static void *stdio_reader(void *arg) {
         size_t len = strlen(line);
         if (log_fd >= 0) write(log_fd, line, len);
         if (len && line[len - 1] == '\n') line[len - 1] = 0;
-        __android_log_write(ANDROID_LOG_INFO, TAG, line);
+        if (mirror_logcat) __android_log_write(ANDROID_LOG_INFO, TAG, line);
     }
     if (log_fd >= 0) fsync(log_fd);
     pthread_mutex_lock(&stdio_lock);
@@ -391,8 +391,9 @@ static char *dup_string(JNIEnv *env, jstring s) {
 }
 
 JNIEXPORT jint JNICALL Java_com_ignacio_cofre_runtime_GameBridge_launch(
-    JNIEnv *env, jclass clazz, jobjectArray args, jstring home, jstring dir, jstring log_file, jstring exit_file) {
+    JNIEnv *env, jclass clazz, jobjectArray args, jstring home, jstring dir, jstring log_file, jstring exit_file, jboolean mirror) {
     (void) clazz;
+    mirror_logcat = mirror; // game output holds player names, chat and server addresses
     char *log_path = dup_string(env, log_file);
     redirect_stdio(log_path);
     free(log_path);

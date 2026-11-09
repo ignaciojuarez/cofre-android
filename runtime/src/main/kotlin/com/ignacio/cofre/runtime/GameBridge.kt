@@ -1,6 +1,7 @@
 package com.ignacio.cofre.runtime
 
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.system.Os
 import android.util.Log
 import android.view.Surface
@@ -61,7 +62,9 @@ internal object GameBridge {
         env.forEach { (key, value) -> Os.setenv(key, value, true) }
         val args = command(spec, nativeDir, context.cacheDir, classpathFirst, extraJvmArgs)
         Log.i(TAG, "[Cofre] launching ${spec.mainClass} java.home=${spec.javaHome}")
-        val result = launch(args.toTypedArray(), spec.javaHome, spec.gameDir, spec.logFile, spec.exitFile)
+        // The game prints player names, chat and server addresses: logcat gets them only in debuggable builds.
+        val debuggable = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+        val result = launch(args.toTypedArray(), spec.javaHome, spec.gameDir, spec.logFile, spec.exitFile, debuggable)
         check(result == 0) { "JVM thread didn't start ($result)" }
     }
 
@@ -131,8 +134,8 @@ internal object GameBridge {
     /** The SurfaceView's surface, or null once it's destroyed. Never used with EGL. */
     @JvmStatic external fun setSurface(surface: Surface?, width: Int, height: Int)
 
-    /** Starts the JVM on its own thread: `args` is a full java command line starting with "java". */
-    @JvmStatic external fun launch(args: Array<String>, javaHome: String, gameDir: String, logFile: String, exitFile: String): Int
+    /** Starts the JVM on its own thread: `args` is a full java command line starting with "java". Output goes to [logFile], and to logcat when [mirrorToLogcat]. */
+    @JvmStatic external fun launch(args: Array<String>, javaHome: String, gameDir: String, logFile: String, exitFile: String, mirrorToLogcat: Boolean): Int
 
     /** Blocks until the game asks the activity for something (REQ_*). */
     @JvmStatic external fun nextRequest(): Int
