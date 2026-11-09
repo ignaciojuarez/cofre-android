@@ -1,0 +1,81 @@
+package com.ignacio.cofre.kit.mods
+
+import kotlinx.serialization.Serializable
+
+@Serializable data class ModRequirement(val modId: String, val name: String = modId, val projectId: String? = null, val reason: String, val neededBy: String? = null) {
+    val slugs: List<String> get() = if (projectId != null) emptyList() else listOfNotNull(ModRequirements.aliases[modId], modId, modId.replace('_', '-')).distinct()
+}
+object ModRequirements {
+    val builtIn: Set<String> = setOf("minecraft", "forge", "neoforge", "fml", "javafml", "lowcodefml", "mcp", "java", "fabricloader", "fabric-loader")
+    val aliases: Map<String, String> = mapOf("kotlinforforge" to "kotlin-for-forge", "architectury" to "architectury-api", "cloth_config" to "cloth-config", "forgeconfigapiport" to "forge-config-api-port", "puzzleslib" to "puzzles-lib", "resourcefullib" to "resourceful-lib", "bookshelf" to "bookshelf-lib", "owo" to "owo-lib", "yet_another_config_lib_v3" to "yacl", "fabric" to "fabric-api", "fabric_language_kotlin" to "fabric-language-kotlin", "sophisticatedcore" to "sophisticated-core")
+    fun requirement(id: String, reason: String, neededBy: String? = null): ModRequirement {
+        val key = id.lowercase()
+        return ModRequirement(key, when (key) { "kotlinforforge" -> "Kotlin for Forge"; "terrablender" -> "TerraBlender"; "glitchcore" -> "GlitchCore"; else -> key }, if (key == "kotlinforforge") "ordsPcFz" else null, reason, neededBy)
+    }
+    fun missing(jars: Map<String, ModJarMetadata>, otherFiles: List<String> = emptyList()): List<ModRequirement> {
+        val ids = jars.values.flatMap { it.modIds }.map { it.lowercase() }.toSet()
+        val files = (jars.keys + otherFiles + jars.values.flatMap { it.bundled }).map(::modKey)
+        fun present(id: String): Boolean = id.lowercase() in builtIn || id.lowercase() in ids || files.any { it.startsWith(modKey(id)) }
+        return buildList {
+            for ((file, jar) in jars) {
+                if (jar.modLoader?.lowercase() == "kotlinforforge" && !present("kotlinforforge")) add(requirement("kotlinforforge", "modLoader:kotlinforforge", file))
+                jar.dependencies.filter { it.required && !present(it.id) }.forEach { add(requirement(it.id, "dependency:${it.id}", file)) }
+            }
+        }.distinctBy { it.modId }
+    }
+    fun fromCrash(raw: String): List<ModRequirement> {
+        val text = raw.replace(Regex("§[0-9a-fk-or]", RegexOption.IGNORE_CASE), "")
+        val out = mutableListOf<ModRequirement>()
+        fun matches(pattern: String): Sequence<List<String>> = Regex(pattern).findAll(text).map { it.groupValues.drop(1) }
+        matches("Mod File (?:mods/)?(\\S+?\\.jar) needs language provider ([A-Za-z0-9_.-]+?)(?::|\\s)").forEach { (file, id) -> out += requirement(id, "modLoader:$id", file) }
+        matches("Mod (\\S+) requires (\\S+) ").filter { (_, id) -> text.contains("Currently, $id is not installed") }.forEach { (owner, id) -> out += requirement(id, "dependency:$id", owner) }
+        matches("Mod ID: '([^']+)', Requested by: '([^']+)'[^\\n]*Actual version: '\\[MISSING\\]'").forEach { (id, owner) -> out += requirement(id, "dependency:$id", owner) }
+        matches("requires (?:any version|version \\S+) of ([A-Za-z0-9_.-]+), which is missing").forEach { (id) -> out += requirement(id, "dependency:$id") }
+        return out.filter { it.modId !in builtIn }.distinctBy { it.modId }
+    }
+}
+
+object ModRemoval {
+    fun dependents(removing: String, nodes: List<InstalledMod>): List<InstalledMod> {
+        val root = nodes.firstOrNull { it.file == removing || it.projectId == removing } ?: return emptyList()
+        val affected = linkedSetOf(root.file)
+        var changed: Boolean
+        do {
+            changed = false
+            nodes.filter { it.file !in affected }.forEach { node ->
+                if (node.dependencies.any { dependency -> dependency.required && nodes.any { it.file in affected && modKey(dependency.id) in it.keys } }) { affected += node.file; changed = true }
+            }
+        } while (changed)
+        return nodes.filter { it.file != root.file && it.file in affected }
+    }
+    fun options(removing: String, nodes: List<InstalledMod>): List<InstalledMod> {
+        val root = nodes.firstOrNull { it.file == removing || it.projectId == removing } ?: return emptyList()
+        val reachable = linkedSetOf(root.file)
+        var changed: Boolean
+        do {
+            changed = false
+            nodes.filter { it.file in reachable }.flatMap { it.dependencies }.filter { it.required }.forEach { dependency ->
+                nodes.firstOrNull { modKey(dependency.id) in it.keys && !it.installedDirectly && !it.protectedFromRemoval }?.let { if (reachable.add(it.file)) changed = true }
+            }
+        } while (changed)
+        return keepOnlyUnneeded(root.file, reachable, nodes).sortedBy { it.name.lowercase() }
+    }
+    fun selected(removing: String, candidates: Set<String>, nodes: List<InstalledMod>): List<InstalledMod> {
+        val root = nodes.firstOrNull { it.file == removing || it.projectId == removing } ?: return emptyList()
+        val offered = options(root.file, nodes).map { it.file }.toSet()
+        return keepOnlyUnneeded(root.file, setOf(root.file) + candidates.intersect(offered), nodes)
+    }
+    private fun keepOnlyUnneeded(root: String, candidates: Set<String>, nodes: List<InstalledMod>): List<InstalledMod> {
+        val removed = candidates.toMutableSet()
+        var changed: Boolean
+        do {
+            changed = false
+            nodes.filter { it.file !in removed }.forEach { node ->
+                node.dependencies.filter { it.required }.forEach { dependency ->
+                    nodes.filter { modKey(dependency.id) in it.keys && it.file != root }.forEach { if (removed.remove(it.file)) changed = true }
+                }
+            }
+        } while (changed)
+        return nodes.filter { it.file != root && it.file in removed }
+    }
+}

@@ -26,6 +26,7 @@ class Modrinth(
         @SerialName("date_modified") val dateModified: String? = null,
     ) {
         val iconUrl: String? get() = icon?.takeIf { it.isNotBlank() }
+        val updated: java.time.Instant? get() = dateModified?.let { runCatching { java.time.Instant.parse(it) }.getOrNull() }
         val pageUrl: String? get() = slug?.let { "https://modrinth.com/$projectType/$it" }
     }
     @Serializable

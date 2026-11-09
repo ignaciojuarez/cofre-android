@@ -58,7 +58,7 @@ data class VersionDownloads(val clientBytes: Long = 0, val libraryBytes: Long = 
         fun missing(version: VersionJson, root: File, context: RuleContext = RuleContext()): VersionDownloads {
             fun has(path: String): Boolean = File(root, path).isFile
             return VersionDownloads(
-                if (has("versions/${version.id}/${version.id}.jar")) 0 else version.downloads["client"]?.size ?: 0,
+                if (has("versions/${version.jar ?: version.id}/${version.jar ?: version.id}.jar")) 0 else version.downloads["client"]?.size ?: 0,
                 version.libraries.filter { context.allows(it.rules) }.flatMap { library ->
                     listOfNotNull(library.downloads?.artifact) + library.natives[context.osName]?.let { classifier -> library.downloads?.classifiers?.get(classifier.replace("\${arch}", if (context.arch.contains("64")) "64" else "32")) }.let(::listOfNotNull)
                 }.distinctBy { it.path }.filter { it.path != null && !has("libraries/${it.path}") }.sumOf { it.size ?: 0 },

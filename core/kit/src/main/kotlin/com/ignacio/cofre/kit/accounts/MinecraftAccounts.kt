@@ -92,34 +92,37 @@ class MinecraftAccounts(
     suspend fun exchangeCode(code: String, pkce: Pkce): MsaToken {
         require(code.isNotBlank())
         val form = form().add("grant_type", "authorization_code").add("code", code).add("code_verifier", pkce.verifier).build()
-        return Kit.json.decodeFromString(request("Microsoft", endpoints.token, form))
+        return decode("Microsoft", request("Microsoft", endpoints.token, form))
     }
     suspend fun refresh(refreshToken: String): MsaToken {
         require(refreshToken.isNotBlank())
-        val token = Kit.json.decodeFromString<MsaToken>(request("Microsoft", endpoints.token, form().add("grant_type", "refresh_token").add("refresh_token", refreshToken).build()))
+        val token = decode<MsaToken>("Microsoft", request("Microsoft", endpoints.token, form().add("grant_type", "refresh_token").add("refresh_token", refreshToken).build()))
         return if (token.refreshToken == null) token.copy(refreshToken = refreshToken) else token
     }
     suspend fun signIn(code: String, pkce: Pkce): Session = minecraft(exchangeCode(code, pkce))
     suspend fun refreshSession(refreshToken: String): Session = minecraft(refresh(refreshToken))
     suspend fun minecraft(msa: MsaToken): Session {
-        val xbox = Kit.json.decodeFromString<XboxToken>(request("Xbox", endpoints.xbox, jsonBody(buildJsonObject {
+        val xbox = decode<XboxToken>("Xbox", request("Xbox", endpoints.xbox, jsonBody(buildJsonObject {
             put("Properties", buildJsonObject { put("AuthMethod", "RPS"); put("SiteName", "user.auth.xboxlive.com"); put("RpsTicket", "d=${msa.accessToken}") })
             put("RelyingParty", "http://auth.xboxlive.com"); put("TokenType", "JWT")
         })))
-        val xsts = Kit.json.decodeFromString<XboxToken>(request("XSTS", endpoints.xsts, jsonBody(buildJsonObject {
+        val xsts = decode<XboxToken>("XSTS", request("XSTS", endpoints.xsts, jsonBody(buildJsonObject {
             put("Properties", buildJsonObject { put("SandboxId", "RETAIL"); put("UserTokens", JsonArray(listOf(JsonPrimitive(xbox.token)))) })
             put("RelyingParty", "rp://api.minecraftservices.com/"); put("TokenType", "JWT")
         })))
         val uhs = xsts.claims.xui.firstOrNull()?.uhs ?: throw AccountError.InvalidResponse("XSTS")
-        val minecraft = Kit.json.decodeFromString<MinecraftToken>(request("Minecraft", endpoints.minecraft, jsonBody(buildJsonObject {
+        val minecraft = decode<MinecraftToken>("Minecraft", request("Minecraft", endpoints.minecraft, jsonBody(buildJsonObject {
             put("identityToken", "XBL3.0 x=$uhs;${xsts.token}")
         })))
-        val entitlements = Kit.json.parseToJsonElement(request("Entitlements", endpoints.entitlements, bearer = minecraft.accessToken)).jsonObject
+        val entitlements = decode<JsonObject>("Entitlements", request("Entitlements", endpoints.entitlements, bearer = minecraft.accessToken))
         val items = entitlements["items"]?.jsonArray ?: throw AccountError.InvalidResponse("Entitlements")
         if (items.none { it.jsonObject["name"]?.jsonPrimitive?.content in setOf("game_minecraft", "product_minecraft") }) throw AccountError.NoMinecraft
-        val profile = Kit.json.decodeFromString<Profile>(request("Profile", endpoints.profile, bearer = minecraft.accessToken))
+        val profile = decode<Profile>("Profile", request("Profile", endpoints.profile, bearer = minecraft.accessToken))
         return Session(msa, minecraft, profile)
     }
+    private inline fun <reified T> decode(stage: String, text: String): T = try {
+        Kit.json.decodeFromString<T>(text)
+    } catch (_: IllegalArgumentException) { throw AccountError.InvalidResponse(stage) }
     private fun form(): FormBody.Builder = FormBody.Builder().add("client_id", clientId).add("redirect_uri", redirectUri).add("scope", SCOPE)
     private fun jsonBody(value: JsonObject): RequestBody = Kit.json.encodeToString(value).toRequestBody("application/json".toMediaType())
     private suspend fun request(stage: String, url: String, body: RequestBody? = null, bearer: String? = null): String {

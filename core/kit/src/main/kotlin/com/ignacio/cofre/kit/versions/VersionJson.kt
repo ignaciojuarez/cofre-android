@@ -22,7 +22,7 @@ data class RuleContext(val osName: String = "linux", val arch: String = "arm64",
         for (rule in rules) {
             val os = rule.os
             if (os?.name != null && os.name != osName) continue
-            if (os?.arch != null && !matches(os.arch, arch) && !(os.arch == "aarch64" && arch == "arm64")) continue
+            if (os?.arch != null && !runCatching { Regex(os.arch).matches(arch) }.getOrDefault(false) && !(os.arch == "aarch64" && arch == "arm64")) continue
             if (os?.version != null && !matches(os.version, osVersion)) continue
             if (os?.versionRange != null) {
                 val range = os.versionRange
@@ -94,7 +94,7 @@ sealed interface Argument {
     val key: String get() { val parts = name.split(':'); return parts.take(2).joinToString(":") + ":" + parts.drop(3).joinToString(":") + "@" + name.substringAfter('@', "jar") }
 }
 @Serializable data class AssetIndexReference(val id: String, val url: String, val sha1: String? = null, val size: Long? = null, val totalSize: Long? = null)
-@Serializable data class AssetIndex(val objects: Map<String, Asset>, val virtual: Boolean = false, val map_to_resources: Boolean = false) {
+@Serializable data class AssetIndex(val objects: Map<String, Asset>, val virtual: Boolean = false, @kotlinx.serialization.SerialName("map_to_resources") val mapToResources: Boolean = false) {
     @Serializable data class Asset(val hash: String, val size: Long) {
         val path: String get() = "${hash.take(2)}/$hash"
         val url: String get() = "https://resources.download.minecraft.net/$path"

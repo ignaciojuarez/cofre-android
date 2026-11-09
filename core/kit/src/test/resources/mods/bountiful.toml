@@ -1,0 +1,30 @@
+# Shape ported from CofreKitTests/ModRequirementsTests.swift (Bountiful 8.0.0-beta.2).
+modLoader = "kotlinforforge" # language provider
+loaderVersion = "[4,)"
+logoFile = "logo.png"
+[[mods]]
+modId = "bountiful"
+displayName = "Bountiful"
+version = "8.0.0-beta.2"
+description = '''
+Bounty boards.
+[[mods]]
+modId = "notreal"
+'''
+[[dependencies.bountiful]]
+modId = "neoforge"
+type = "required"
+versionRange = "[26.2,)"
+[[dependencies.bountiful]]
+modId = "architectury"
+type = "required"
+[[dependencies.bountiful]]
+modId = "jei"
+type = "optional"
+[[dependencies.bountiful]]
+modId = "serverstuff"
+required = true
+side = "SERVER"
+[[dependencies.bountiful]]
+modId = "${placeholder}"
+type = "required"
