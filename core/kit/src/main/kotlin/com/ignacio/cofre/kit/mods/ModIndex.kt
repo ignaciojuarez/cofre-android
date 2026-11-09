@@ -3,6 +3,7 @@ package com.ignacio.cofre.kit.mods
 import com.ignacio.cofre.kit.common.Hashes
 import com.ignacio.cofre.kit.common.Kit
 import com.ignacio.cofre.kit.downloads.DownloadQueue
+import com.ignacio.cofre.kit.instances.InstanceStore
 import com.ignacio.cofre.kit.modrinth.Modrinth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -31,7 +32,7 @@ class ModIndex(val instance: File) {
         }
     }
     suspend fun identifyUnknown(client: Modrinth): Map<String, Entry> = withContext(Dispatchers.IO) {
-        ModInstaller.lock(instance).lock()
+        InstanceStore.lock(instance).lock()
         try {
             val entries = read().toMutableMap(); val jars = jars()
             val hashes = jars.associateWith { Hashes.sha1(it) }
@@ -44,7 +45,7 @@ class ModIndex(val instance: File) {
                 entries[jar.name] = Entry(version.projectId, version.id, channel = VersionChannel.from(version.versionType), sha1 = hash)
             }
             entries.keys.retainAll(jars.map { it.name }.toSet()); write(entries); entries
-        } finally { ModInstaller.lock(instance).unlock() }
+        } finally { InstanceStore.lock(instance).unlock() }
     }
 }
 /** A single file name (no folders, no `..`): mod files from APIs and indexes go through this before touching disk. */

@@ -10,6 +10,8 @@ import java.io.File
 import java.nio.file.Files
 import java.time.Instant
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.sync.Mutex
 
 /** cofre.json schema 1: gameDirectory is always relative to InstanceStore.root. */
 @Serializable
@@ -39,6 +41,14 @@ class InstanceStore(val root: File) {
     companion object {
         /** Cofre's own files in an instance (trash, temp writes, legacy launch state): never exported, copied or shared. */
         fun isPrivate(path: String): Boolean = path.startsWith(".cofre")
+
+        private val locks = ConcurrentHashMap<String, Mutex>()
+
+        /**
+         * The one owner of an instance folder: mod installs, toggles, trash, duplicate, export and launch take it, so
+         * they never interleave. Not reentrant: never call something that takes it while holding it.
+         */
+        fun lock(directory: File): Mutex = locks.getOrPut(directory.canonicalPath) { Mutex() }
     }
 
     data class TrashToken(val folder: String)

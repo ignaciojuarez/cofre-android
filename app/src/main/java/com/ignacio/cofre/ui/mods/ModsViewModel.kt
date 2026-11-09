@@ -101,8 +101,9 @@ class ModsViewModel(private val graph: AppGraph) : ViewModel() {
             return
         }
         val dir = directory() ?: return
+        // The app's scope: leaving Mods mid-install must not cancel it halfway.
         mutableInstall.value = InstallModel(
-            viewModelScope, project, project.issue,
+            graph.scope, project, project.issue,
             plan = { optional ->
                 val mods = withContext(Dispatchers.IO) { ModIndex(dir).installed() }
                 catalog.value.resolver(project, mods).plan(project.id, versionId, optional)

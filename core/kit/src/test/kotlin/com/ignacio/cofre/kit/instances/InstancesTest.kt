@@ -103,4 +103,9 @@ class InstancesTest {
         })
         val copy = s.duplicate(i.id); assertTrue(s.directory(copy).list().orEmpty().none { it.startsWith(".cofre") })
     }
+    @Test fun oneLockPerInstanceFolder() {
+        val s = InstanceStore(root); val a = s.create("A"); val b = s.create("B")
+        assertSame(InstanceStore.lock(s.directory(a)), InstanceStore.lock(File(root, "./${a.id}")))
+        assertNotSame(InstanceStore.lock(s.directory(a)), InstanceStore.lock(s.directory(b)))
+    }
 }

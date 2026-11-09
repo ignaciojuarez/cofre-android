@@ -19,6 +19,8 @@ import com.ignacio.cofre.moveToDocument
 import com.ignacio.cofre.onIo
 import com.ignacio.cofre.scratch
 import com.ignacio.cofre.work
+import com.ignacio.cofre.kit.downloads.DownloadItem
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -91,7 +93,7 @@ class Library(private val graph: AppGraph) {
 
     fun rollbackRuntime(id: String) = edit { store.rollbackRuntime(id) }
 
-    fun duplicate(id: String, done: (Instance) -> Unit = {}) = edit(done) {
+    fun duplicate(id: String, done: (Instance) -> Unit = {}) = edit(done, owner = id) {
         val source = store.get(id)
         val names = store.list().map { it.name }.toSet()
         val name = generateSequence(1) { it + 1 }
@@ -102,7 +104,14 @@ class Library(private val graph: AppGraph) {
 
     fun trash(id: String) {
         val name = instances.firstOrNull { it.id == id }?.name ?: return
-        edit({ token -> undo = Undo(name, token) }) { store.trash(id) }
+        edit({ token -> undo = Undo(name, token) }, owner = id) {
+            // Queued preset or pack downloads would land in a folder that's gone.
+            val dir = store.directory(store.get(id)).canonicalPath + File.separator
+            graph.downloads.progress.value.items
+                .filter { File(it.destination).canonicalPath.startsWith(dir) && it.state != DownloadItem.State.Finished }
+                .forEach { graph.downloads.cancel(it.id) }
+            store.trash(id)
+        }
         if (graph.nav.instance == id) graph.nav.instance = null
     }
 
@@ -119,7 +128,7 @@ class Library(private val graph: AppGraph) {
     fun restore(token: InstanceStore.TrashToken) = edit { store.restore(token) }
     fun purge(token: InstanceStore.TrashToken) = edit { store.purge(token) }
 
-    fun export(id: String, uri: Uri, includeWorlds: Boolean = true) = edit {
+    fun export(id: String, uri: Uri, includeWorlds: Boolean = true) = edit(owner = id) {
         val file = graph.scratch("instance.zip")
         store.export(id, file, includeWorlds)
         graph.moveToDocument(file, uri)
@@ -153,11 +162,14 @@ class Library(private val graph: AppGraph) {
         if (graph.autoStartDownloads) graph.downloadsModel.start()
     }
 
-    private fun <T> edit(done: (T) -> Unit = {}, block: () -> T) {
+    /** Runs [block] off the main thread; with [owner], while holding that instance's [InstanceStore.lock]. */
+    private fun <T> edit(done: (T) -> Unit = {}, owner: String? = null, block: () -> T) {
         busy = true
         error = null
         graph.work({ error = it; busy = false; reloadLater() }) {
-            val result = graph.onIo(block)
+            val result = if (owner == null) graph.onIo(block) else {
+                InstanceStore.lock(graph.onIo { store.directory(store.get(owner)) }).withLock { graph.onIo(block) }
+            }
             reload()
             busy = false
             done(result)

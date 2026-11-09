@@ -18,6 +18,7 @@ import com.ignacio.cofre.kit.common.Kit
 import com.ignacio.cofre.kit.common.Target
 import com.ignacio.cofre.kit.content.ContentStore
 import com.ignacio.cofre.kit.instances.Instance
+import com.ignacio.cofre.kit.instances.InstanceStore
 import com.ignacio.cofre.kit.logs.ExitReason
 import com.ignacio.cofre.kit.logs.GameExitReport
 import com.ignacio.cofre.kit.logs.LogStore
@@ -43,6 +44,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import java.io.File
@@ -247,7 +249,7 @@ class Launcher(private val graph: AppGraph) {
             val account = GameAccount(session.name, session.uuid)
             val heap = heapMB(instance)
             val jvm = instance.jvmArguments.split(Regex("\\s+")).filter { it.isNotBlank() }
-            val file = withContext(graph.io) { game.prepare(version, dir, account, heap, jvm, quickPlay?.args.orEmpty()) }
+            val file = InstanceStore.lock(dir).withLock { withContext(graph.io) { game.prepare(version, dir, account, heap, jvm, quickPlay?.args.orEmpty()) } }
             log(graph.context.getString(R.string.log_heap, heap))
             file
         } finally {
@@ -302,7 +304,8 @@ class Launcher(private val graph: AppGraph) {
         val current = stopped ?: return
         val mod = current.mod ?: return
         graph.work({}) {
-            graph.onIo { ContentStore(graph.instances.directory(current.instance)).setEnabled(false, mod) }
+            val dir = graph.instances.directory(current.instance)
+            InstanceStore.lock(dir).withLock { graph.onIo { ContentStore(dir).setEnabled(false, mod) } }
             stopped = current.copy(modOff = true)
         }
     }

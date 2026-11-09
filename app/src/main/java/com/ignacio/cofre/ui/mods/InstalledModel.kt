@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import com.ignacio.cofre.kit.instances.InstanceStore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -153,7 +154,7 @@ class InstalledModel(
         val note = mutable.value.undo ?: return
         mutable.update { it.copy(undo = null) }
         scope.launch {
-            quietly { withContext(io) { note.tokens.asReversed().forEach(store::restore) } }
+            quietly { InstanceStore.lock(directory).withLock { withContext(io) { note.tokens.asReversed().forEach(store::restore) } } }
             reload()
         }
     }
@@ -243,7 +244,7 @@ class InstalledModel(
 
     private fun trash(rows: List<InstalledRow>) {
         scope.launch {
-            val tokens = quietly { withContext(io) { rows.map { store.trash(it.item) } } } ?: return@launch
+            val tokens = quietly { InstanceStore.lock(directory).withLock { withContext(io) { rows.map { store.trash(it.item) } } } } ?: return@launch
             val text = if (rows.size == 1) "Removed ${rows[0].item.name}" else "Removed ${rows.size} items"
             mutable.update { it.copy(undo = UndoNote(text, tokens)) }
             refresh()
@@ -252,7 +253,7 @@ class InstalledModel(
 
     private fun act(row: InstalledRow, block: () -> Unit) {
         scope.launch {
-            quietly { withContext(io) { block() } }
+            quietly { InstanceStore.lock(directory).withLock { withContext(io) { block() } } }
             refresh()
         }
         // Flip at once so the switch answers the press; the reload confirms it.

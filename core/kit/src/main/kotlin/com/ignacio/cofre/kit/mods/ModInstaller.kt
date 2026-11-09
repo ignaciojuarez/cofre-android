@@ -6,10 +6,10 @@ import com.ignacio.cofre.kit.common.Kit
 import com.ignacio.cofre.kit.downloads.DownloadItem
 import com.ignacio.cofre.kit.downloads.DownloadProgress
 import com.ignacio.cofre.kit.downloads.DownloadQueue
+import com.ignacio.cofre.kit.instances.InstanceStore
 import com.ignacio.cofre.kit.modrinth.HttpFailure
 import com.ignacio.cofre.kit.modrinth.Modrinth
 import kotlinx.coroutines.*
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
 import java.io.File
@@ -17,7 +17,6 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 
 sealed class ModInstallFailure(message: String) : IOException(message) {
     data class Blocked(val reason: PlanBlock?) : ModInstallFailure("Mod install is blocked")
@@ -44,7 +43,7 @@ class ModInstaller(
             else -> File(instance, requireNotNull(kind.folderName))
         }
         val name = requireNotNull(candidate.filename) { "No file to download" }; safeFilename(name)
-        lock(instance).withLock {
+        InstanceStore.lock(instance).withLock {
             val stage = File(instance, ".cofre-mods-staging/${UUID.randomUUID()}")
             try {
                 val download = File(stage, name)
@@ -59,7 +58,7 @@ class ModInstaller(
 
     suspend fun install(plan: ModInstallPlan, metered: Boolean = false, allowMetered: Boolean = false, onProgress: (DownloadProgress) -> Unit = {}): List<InstalledMod> = withContext(Dispatchers.IO) {
         if (plan.blocked != null || plan.target == null) throw ModInstallFailure.Blocked(plan.blocked)
-        val mutex = lock(instance); mutex.lock()
+        val mutex = InstanceStore.lock(instance); mutex.lock()
         val stage = File(instance, ".cofre-mods-staging/${UUID.randomUUID()}")
         var preserveBackup = false
         var ownsStage = false
@@ -196,10 +195,5 @@ class ModInstaller(
             if (rollbackFailure != null) throw ModInstallFailure.Rollback(stage.path, failure)
             throw failure
         }
-    }
-    companion object {
-        // One small mutex per used instance; the app has a finite instance list.
-        private val locks = ConcurrentHashMap<String, Mutex>()
-        internal fun lock(instance: File): Mutex = locks.getOrPut(instance.canonicalPath) { Mutex() }
     }
 }
