@@ -28,7 +28,6 @@ import com.ignacio.cofre.kit.options.JavaHeap
 import com.ignacio.cofre.onIo
 import com.ignacio.cofre.runtime.GameActivity
 import com.ignacio.cofre.runtime.JreManager
-import com.ignacio.cofre.runtime.LaunchSpec
 import com.ignacio.cofre.scratch
 import com.ignacio.cofre.share
 import com.ignacio.cofre.ui.setup.plainVulkan
@@ -151,11 +150,7 @@ class Launcher(private val graph: AppGraph) {
         graph.library.refresh()
     }
 
-    /**
-     * Game files, NeoForge and the launch arguments → a [LaunchSpec] file, through the runtime's launch builder.
-     * Cofre's own heap, the instance's JVM arguments and quick play go into the spec afterwards: [GameLaunch]
-     * picks the RAM-tier heap and takes no game arguments yet.
-     */
+    /** Game files, NeoForge, then the runtime's launch spec with this instance's heap, JVM arguments and quick play. */
     private suspend fun prepareGame(instance: Instance, session: Accounts.Session, quickPlay: QuickPlay?): File = coroutineScope {
         val game = GameLaunch(graph.context)
         val progress = launch(graph.io) {
@@ -173,17 +168,10 @@ class Launcher(private val graph: AppGraph) {
             log("NeoForge $loader", LogLevel.Success)
             val dir = graph.instances.directory(instance)
             val account = GameAccount(session.name, session.uuid, session.accessToken)
-            val file = withContext(graph.io) { game.prepare(version, dir, account) }
             val heap = heapMB(instance)
+            val jvm = instance.jvmArguments.split(Regex("\\s+")).filter { it.isNotBlank() }
+            val file = withContext(graph.io) { game.prepare(version, dir, account, heap, jvm, quickPlay?.args.orEmpty()) }
             log(graph.context.getString(R.string.log_heap, heap))
-            graph.onIo {
-                val spec = LaunchSpec.read(file)
-                val extra = instance.jvmArguments.split(Regex("\\s+")).filter { it.isNotBlank() }
-                spec.copy(
-                    jvmArgs = spec.jvmArgs.filterNot { it.startsWith("-Xmx") } + "-Xmx${heap}m" + extra,
-                    gameArgs = spec.gameArgs + quickPlay?.args.orEmpty(),
-                ).write(file)
-            }
             file
         } finally {
             progress.cancel()

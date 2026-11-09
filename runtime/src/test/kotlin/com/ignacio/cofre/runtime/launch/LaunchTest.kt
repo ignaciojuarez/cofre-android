@@ -59,6 +59,14 @@ class LaunchTest {
         assertTrue(args.none { "\${" in it })
     }
 
+    @Test fun heapInstanceArgsAndQuickPlayGoLast() {
+        val spec = LaunchArgs.spec(vanilla, files, File("/g"), account, "/jre", 3072, listOf("-XX:+UseZGC"), listOf("--quickPlaySingleplayer", "World"))
+        assertEquals(listOf("-Xmx3072m"), spec.jvmArgs.filter { it.startsWith("-Xmx") })
+        assertEquals("-XX:+UseZGC", spec.jvmArgs.last())
+        assertEquals(listOf("--quickPlaySingleplayer", "World"), spec.gameArgs.takeLast(2))
+        assertEquals("vulkan", spec.gameArgs[spec.gameArgs.indexOf("--graphicsBackend") + 1])
+    }
+
     @Test fun neoForgeArgsAppendToVanilla() {
         val spec = LaunchArgs.spec(neoforge, files, File("/g"), account, "/jre", 4096)
         assertEquals("net.neoforged.fml.startup.Client", spec.mainClass)

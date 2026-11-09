@@ -24,18 +24,33 @@ data class GameAccount(val username: String, val uuid: String, val accessToken: 
  */
 class GameLaunch(private val context: Context, val files: GameFiles = GameFiles(File(context.filesDir, "minecraft"))) {
 
-    /** Blocking work and downloads: call off the main thread. [versionId] is `26.2` or an installed `neoforge-…`. */
-    suspend fun prepare(versionId: String, gameDir: File, account: GameAccount, extraJvmArgs: List<String> = emptyList()): File {
+    /**
+     * Blocking work and downloads: call off the main thread. [versionId] is `26.2` or an installed `neoforge-…`.
+     * [heapMB] is `-Xmx` (the device's RAM tier unless the launcher picks one), [extraJvmArgs] the instance's own,
+     * and [extraGameArgs] go after the game's (Quick Play: `--quickPlaySingleplayer <world>`).
+     */
+    suspend fun prepare(
+        versionId: String,
+        gameDir: File,
+        account: GameAccount,
+        heapMB: Int = autoHeapMB(),
+        extraJvmArgs: List<String> = emptyList(),
+        extraGameArgs: List<String> = emptyList(),
+    ): File {
         val version = files.install(versionId)
         val javaHome = JreManager(context).install()
-        val memory = ActivityManager.MemoryInfo().also { context.getSystemService(ActivityManager::class.java).getMemoryInfo(it) }
-        val spec = LaunchArgs.spec(version, files, gameDir, account, javaHome.path, JavaHeap.autoMB((memory.totalMem shr 20).toInt()), extraJvmArgs)
+        val spec = LaunchArgs.spec(version, files, gameDir, account, javaHome.path, heapMB, extraJvmArgs, extraGameArgs)
         prepareGameDir(gameDir, LaunchArgs.isNeoForge(version))
         val file = File(gameDir, ".cofre/launch.json")
         File(spec.exitFile).delete()
         spec.write(file)
         Log.i(TAG, "[Cofre] launch prepared ${version.id} main=${spec.mainClass} classpath=${spec.classpath.size} jars heap=${spec.jvmArgs.first { it.startsWith("-Xmx") }}")
         return file
+    }
+
+    private fun autoHeapMB(): Int {
+        val memory = ActivityManager.MemoryInfo().also { context.getSystemService(ActivityManager::class.java).getMemoryInfo(it) }
+        return JavaHeap.autoMB((memory.totalMem shr 20).toInt())
     }
 
     /** How the run described by [specFile] ended, with kit's diagnosis. */
@@ -83,7 +98,16 @@ internal object LaunchArgs {
 
     fun isNeoForge(version: VersionJson) = version.mainClass.orEmpty().startsWith("net.neoforged.")
 
-    fun spec(version: VersionJson, files: GameFiles, gameDir: File, account: GameAccount, javaHome: String, heapMB: Int, extraJvmArgs: List<String> = emptyList()): LaunchSpec {
+    fun spec(
+        version: VersionJson,
+        files: GameFiles,
+        gameDir: File,
+        account: GameAccount,
+        javaHome: String,
+        heapMB: Int,
+        extraJvmArgs: List<String> = emptyList(),
+        extraGameArgs: List<String> = emptyList(),
+    ): LaunchSpec {
         val classpath = files.classpath(version).map { it.path }
         val values = mapOf(
             "natives_directory" to File(files.root, "natives/${version.id}").path,
@@ -112,7 +136,7 @@ internal object LaunchArgs {
             classpath = classpath,
             jvmArgs = listOf("-Xms256m", "-Xmx${heapMB}m") + jvm(version, values) + extraJvmArgs,
             mainClass = requireNotNull(version.mainClass) { "${version.id} has no main class" },
-            gameArgs = game(version, values),
+            gameArgs = game(version, values) + extraGameArgs,
             gameDir = gameDir.path,
             logFile = File(gameDir, "logs/cofre-output.log").path,
             exitFile = File(gameDir, ".cofre/exit.json").path,
