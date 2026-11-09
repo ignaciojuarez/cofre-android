@@ -89,5 +89,7 @@ jobs:
           cd dist
           sha256sum *.tar.xz *-alignment.tsv > SHA256SUMS
           printf 'Android arm64, API 28, NDK r28c, 16 KB LOAD alignment.\n\nSource revision: %s\nReused pieces from run: %s\n\nSee runtime/NATIVES.md and the source archives for pins, licenses, patches and build instructions. Alignment and per-library hashes are in the TSV assets. Device execution is verified separately.\n' "$GITHUB_SHA" "${REUSE_RUN:-none}" > release-notes.md
-          gh release create "$tag" *.tar.xz *-alignment.tsv SHA256SUMS --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$tag" --notes-file release-notes.md
+          git tag "$tag" "$GITHUB_SHA"
+          git push origin "refs/tags/$tag"
+          gh release create "$tag" *.tar.xz *-alignment.tsv SHA256SUMS --repo "$GITHUB_REPOSITORY" --verify-tag --title "$tag" --notes-file release-notes.md
           echo "### Released [$tag](https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag)" >> "$GITHUB_STEP_SUMMARY"
