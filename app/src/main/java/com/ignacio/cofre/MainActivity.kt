@@ -1,6 +1,7 @@
 package com.ignacio.cofre
 
 import android.Manifest
+import android.content.ContentResolver
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -61,6 +62,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        intent = contentPacksOnly(intent)
         setContent { CofreRoot(graph) }
         // Immersive is optional: hide the system bars (a swipe shows them for a moment) while it's on.
         lifecycleScope.launch {
@@ -82,17 +84,24 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onNewIntent(intent: Intent) {
+        val safe = contentPacksOnly(intent)
         // Kept as the activity's intent so the Mods section imports it when it opens; if it's already open, its
         // new-intent listener (run by super) takes it first and clears it.
-        if (modpackUri(intent) != null) setIntent(intent)
-        super.onNewIntent(intent)
-        handle(intent)
+        if (modpackUri(safe) != null) setIntent(safe)
+        super.onNewIntent(safe)
+        handle(safe)
     }
 
     override fun onResume() {
         super.onResume()
         graph.accounts.refresh()
         graph.launcher.onResume()
+    }
+
+    /** Packs arrive only as content:// URIs: a file:// one could point Cofre at its own private files. */
+    private fun contentPacksOnly(intent: Intent): Intent {
+        val scheme = modpackUri(intent)?.scheme ?: return intent
+        return if (scheme == ContentResolver.SCHEME_CONTENT) intent else Intent(Intent.ACTION_MAIN)
     }
 
     /**
