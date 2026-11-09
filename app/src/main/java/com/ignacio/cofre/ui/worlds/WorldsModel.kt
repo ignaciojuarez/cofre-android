@@ -14,6 +14,7 @@ import com.ignacio.cofre.kit.worlds.WorldStore
 import com.ignacio.cofre.moveToDocument
 import com.ignacio.cofre.onIo
 import com.ignacio.cofre.scratch
+import com.ignacio.cofre.ui.common.displayName
 import com.ignacio.cofre.work
 
 /** One instance's worlds: list, backups, export/import, copy to another instance, delete with undo. */
@@ -44,8 +45,10 @@ class WorldsModel(private val graph: AppGraph, val instance: Instance) {
         graph.moveToDocument(file, uri)
     }
 
-    fun import(uri: Uri, name: String) = edit {
-        val file = graph.copyToCache(uri, "zip")
+    /** A world zip from the picker. The copy keeps a `.mcworld` extension, so a Bedrock world is refused, not imported broken. */
+    fun import(uri: Uri) = edit {
+        val name = graph.context.displayName(uri) ?: uri.lastPathSegment?.substringAfterLast('/').orEmpty()
+        val file = graph.copyToCache(uri, if (name.endsWith(".mcworld", ignoreCase = true)) "mcworld" else "zip")
         try { store.import(file, name.removeSuffix(".zip").ifBlank { "Imported world" }) } finally { file.delete() }
     }
 

@@ -2,6 +2,8 @@ package com.ignacio.cofre.ui.common
 
 import android.content.Context
 import android.graphics.BitmapFactory
+import android.net.Uri
+import android.provider.OpenableColumns
 import android.text.format.DateUtils
 import android.text.format.Formatter
 import androidx.compose.foundation.Image
@@ -51,6 +53,11 @@ object Fmt {
 
     fun memory(mb: Int): String = if (mb % 1024 == 0) "${mb / 1024} GB" else "%.1f GB".format(mb / 1024f)
 }
+
+/** A picked document's file name ("Ironwood.zip"), or null when its provider doesn't say. */
+fun Context.displayName(uri: Uri): String? = runCatching {
+    contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+}.getOrNull()
 
 /** Same art for an instance on every launch. */
 val Instance.seed: Int get() = Math.floorMod(id.hashCode(), 50)

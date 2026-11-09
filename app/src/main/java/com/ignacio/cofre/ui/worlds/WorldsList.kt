@@ -56,7 +56,7 @@ fun WorldsList(
     var acting by rememberSaveable(instance.id) { mutableStateOf<String?>(null) }
     LaunchedEffect(model) { model.refresh() }
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let { model.import(it, it.lastPathSegment?.substringAfterLast('/').orEmpty()) }
+        uri?.let(model::import)
     }
     val play = { world: World ->
         graph.launcher.play(instance, Launcher.QuickPlay(MinecraftLaunchArguments.singleplayer(world.folder), world.name))
