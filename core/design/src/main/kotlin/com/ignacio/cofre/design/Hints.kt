@@ -151,25 +151,6 @@ private fun DrawScope.drawGlyph(shape: GlyphShape) {
     }
 }
 
-/** A keyboard key cap ("esc", "⌘"). */
-@Composable
-public fun KeyCap(
-    key: String,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier
-            .heightIn(min = 20.dp)
-            .widthIn(min = 20.dp)
-            .block(BlockKind.Well)
-            .padding(horizontal = 5.dp)
-            .padding(bottom = 1.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        CofreText(key, CofreTheme.type.code, color = CofreTheme.colors.inkSoft)
-    }
-}
-
 /**
  * The bottom strip of controller prompts ("Ⓐ Select  Ⓑ Back  LB RB Sections"), for where focus is now. Shown
  * only while the last input came from a controller; touch hides it. Hints keep their order (Select and Back first)

@@ -150,15 +150,6 @@ public fun ValueRow(
     )
 }
 
-/** Two-digit index lead ("01") for step lists. */
-@Composable
-public fun RowIndex(
-    n: Int,
-    modifier: Modifier = Modifier,
-) {
-    CofreText(n.toString().padStart(2, '0'), CofreTheme.type.label, modifier, color = CofreTheme.colors.muted)
-}
-
 /** Trailing chevron for rows that push. */
 @Composable
 public fun Chevron(modifier: Modifier = Modifier) {

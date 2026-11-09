@@ -27,15 +27,6 @@ import androidx.compose.ui.unit.dp
 /** Spacing scale and fixed sizes (§1.3). */
 @Immutable
 public object CofreSpacing {
-    public val s1: Dp = 2.dp
-    public val s2: Dp = 4.dp
-    public val s3: Dp = 6.dp
-    public val s4: Dp = 8.dp
-    public val s5: Dp = 10.dp
-    public val s6: Dp = 12.dp
-    public val s7: Dp = 16.dp
-    public val s8: Dp = 20.dp
-    public val s9: Dp = 28.dp
     public val hit: Dp = 44.dp
     public val rowMin: Dp = 44.dp
     public val field: Dp = 38.dp
@@ -45,7 +36,6 @@ public object CofreSpacing {
     public val readable: Dp = 720.dp
     public val card: Dp = 560.dp
     public val aside: Dp = 380.dp
-    public val inspector: Dp = 360.dp
 }
 
 /** Block geometry (§1.4). Square everywhere: corner radius is always 0. */
@@ -70,9 +60,6 @@ public object CofreBlock {
 public object CofreMotion {
     public const val PRESS: Int = 90
     public const val TOGGLE: Int = 120
-    public const val SELECT: Int = 120
-    public const val COLUMN: Int = 220
-    public const val REDUCED_CROSSFADE: Int = 150
 }
 
 /** Width classes (§3.1), from the shell's measured width, never the device. */

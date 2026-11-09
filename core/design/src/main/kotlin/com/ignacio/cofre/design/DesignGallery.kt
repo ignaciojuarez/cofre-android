@@ -239,7 +239,7 @@ private fun RowsPage() {
                 )
                 BlockRow("Focused row", Modifier.ringPreview(accent), subtitle = "Ring 2 dp outside", onClick = {}, leading = { PixelIcon(PixelGlyph.Chest, size = 26.dp) })
                 BlockRow("Old snapshot", subtitle = "Dimmed", dimmed = true, leading = { PixelIcon(PixelGlyph.Cobble, size = 26.dp) })
-                BlockRow("Big row", big = true, leading = { RowIndex(1) }, trailing = { Badge("Done", tone = Tone.Success) })
+                BlockRow("Big row", big = true, trailing = { Badge("Done", tone = Tone.Success) })
             }
         },
         right = {
@@ -468,11 +468,6 @@ private fun ControllerPage() {
             ListSection(label = "Swapped confirm/back · Nintendo") {
                 val state = remember { ControllerState().apply { style = ControllerStyle.Nintendo; swapConfirmBack = true } }
                 CompositionLocalProvider(LocalController provides state) { ControllerHintBar(alwaysShow = true) }
-            }
-            ListSection(label = "Key caps") {
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    listOf("esc", "⇧", "Tab", "↩").forEach { KeyCap(it) }
-                }
             }
             ListSection(label = "Focus ring") {
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
