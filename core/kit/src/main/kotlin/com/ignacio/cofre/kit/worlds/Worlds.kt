@@ -1,7 +1,7 @@
 package com.ignacio.cofre.kit.worlds
 
-import com.ignacio.cofre.kit.modpacks.FileOps
-import com.ignacio.cofre.kit.modpacks.Zip
+import com.ignacio.cofre.kit.common.FileOps
+import com.ignacio.cofre.kit.common.Zip
 import com.ignacio.cofre.kit.options.Storage
 import java.io.File
 import java.nio.file.Files

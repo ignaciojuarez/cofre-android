@@ -5,7 +5,7 @@ import android.content.Context
 import android.util.Log
 import com.ignacio.cofre.kit.logs.ExitReason
 import com.ignacio.cofre.kit.logs.GameExitReport
-import com.ignacio.cofre.kit.modpacks.FileOps
+import com.ignacio.cofre.kit.common.FileOps
 import com.ignacio.cofre.kit.options.FMLConfig
 import com.ignacio.cofre.kit.options.GameOptions
 import com.ignacio.cofre.kit.options.JavaHeap

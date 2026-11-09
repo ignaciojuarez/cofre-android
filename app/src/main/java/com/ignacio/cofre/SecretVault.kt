@@ -3,7 +3,7 @@ package com.ignacio.cofre
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import com.ignacio.cofre.kit.common.Kit
-import com.ignacio.cofre.kit.modpacks.FileOps
+import com.ignacio.cofre.kit.common.FileOps
 import java.io.File
 import java.security.GeneralSecurityException
 import java.security.KeyStore

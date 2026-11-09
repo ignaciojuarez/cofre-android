@@ -1,6 +1,6 @@
 package com.ignacio.cofre.kit.compat
 
-import com.ignacio.cofre.kit.modpacks.Zip
+import com.ignacio.cofre.kit.common.Zip
 import java.io.ByteArrayInputStream
 import java.io.DataInputStream
 import java.io.File

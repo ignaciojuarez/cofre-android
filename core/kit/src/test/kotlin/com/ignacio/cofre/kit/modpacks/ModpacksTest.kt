@@ -1,6 +1,7 @@
 package com.ignacio.cofre.kit.modpacks
 
 import com.ignacio.cofre.kit.common.Loader
+import com.ignacio.cofre.kit.common.Zip
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File

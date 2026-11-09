@@ -1,4 +1,4 @@
-package com.ignacio.cofre.kit.modpacks
+package com.ignacio.cofre.kit.common
 
 import java.io.File
 import java.io.InputStream

@@ -4,7 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.ignacio.cofre.kit.common.Kit
-import com.ignacio.cofre.kit.modpacks.FileOps
+import com.ignacio.cofre.kit.common.FileOps
 import kotlinx.serialization.Serializable
 import java.io.File
 

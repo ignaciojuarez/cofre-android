@@ -2,8 +2,8 @@ package com.ignacio.cofre.kit.content
 
 import com.ignacio.cofre.kit.common.ContentKind
 import com.ignacio.cofre.kit.common.Kit
-import com.ignacio.cofre.kit.modpacks.FileOps
-import com.ignacio.cofre.kit.modpacks.Zip
+import com.ignacio.cofre.kit.common.FileOps
+import com.ignacio.cofre.kit.common.Zip
 import com.ignacio.cofre.kit.mods.ModJarMetadata
 import kotlinx.serialization.json.*
 import java.io.File

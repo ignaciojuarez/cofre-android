@@ -1,7 +1,7 @@
 package com.ignacio.cofre.kit.servercards
 
 import com.ignacio.cofre.kit.common.Kit
-import com.ignacio.cofre.kit.modpacks.FileOps
+import com.ignacio.cofre.kit.common.FileOps
 import com.ignacio.cofre.kit.servercards.ServerJoinError.Reason
 import kotlinx.serialization.Serializable
 import org.bouncycastle.math.ec.rfc8032.Ed25519

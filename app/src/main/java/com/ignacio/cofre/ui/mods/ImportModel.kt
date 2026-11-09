@@ -9,7 +9,7 @@ import com.ignacio.cofre.kit.downloads.DownloadItem
 import com.ignacio.cofre.kit.downloads.DownloadQueue
 import com.ignacio.cofre.kit.instances.Instance
 import com.ignacio.cofre.kit.instances.InstanceStore
-import com.ignacio.cofre.kit.modpacks.FileOps
+import com.ignacio.cofre.kit.common.FileOps
 import com.ignacio.cofre.kit.modpacks.Modpack
 import com.ignacio.cofre.kit.modpacks.ModpackInstallPlan
 import com.ignacio.cofre.kit.modpacks.Modpacks

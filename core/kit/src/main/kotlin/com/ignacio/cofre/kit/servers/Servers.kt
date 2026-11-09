@@ -1,6 +1,6 @@
 package com.ignacio.cofre.kit.servers
 
-import com.ignacio.cofre.kit.modpacks.FileOps
+import com.ignacio.cofre.kit.common.FileOps
 import com.ignacio.cofre.kit.worlds.NBT
 import com.ignacio.cofre.kit.worlds.NBTDocument
 import com.ignacio.cofre.kit.worlds.NBTTag

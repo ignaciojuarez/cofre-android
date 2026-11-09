@@ -1,7 +1,7 @@
 package com.ignacio.cofre.kit.accounts
 
 import com.ignacio.cofre.kit.common.Kit
-import com.ignacio.cofre.kit.modpacks.FileOps
+import com.ignacio.cofre.kit.common.FileOps
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import java.io.File

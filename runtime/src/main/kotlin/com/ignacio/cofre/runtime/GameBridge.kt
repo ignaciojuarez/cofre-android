@@ -5,7 +5,7 @@ import android.content.pm.ApplicationInfo
 import android.system.Os
 import android.util.Log
 import android.view.Surface
-import com.ignacio.cofre.kit.modpacks.FileOps
+import com.ignacio.cofre.kit.common.FileOps
 import java.io.File
 import java.util.zip.ZipFile
 

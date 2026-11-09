@@ -1,4 +1,4 @@
-package com.ignacio.cofre.kit.modrinth
+package com.ignacio.cofre.kit.common
 
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.Call
@@ -6,7 +6,7 @@ import okhttp3.Callback
 import okhttp3.Response
 import java.io.IOException
 
-/** Shared internal transport, kept here because the common package is owned separately. */
+/** OkHttp's callback as a suspend call; cancelling the coroutine cancels the request. */
 internal suspend fun Call.await(): Response = suspendCancellableCoroutine { continuation ->
     continuation.invokeOnCancellation { cancel() }
     enqueue(object : Callback {

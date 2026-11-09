@@ -1,7 +1,7 @@
 package com.ignacio.cofre.runtime
 
 import android.content.Context
-import com.ignacio.cofre.kit.modpacks.FileOps
+import com.ignacio.cofre.kit.common.FileOps
 import java.io.BufferedInputStream
 import java.io.DataInputStream
 import java.io.File

@@ -1,6 +1,6 @@
 package com.ignacio.cofre.kit.worlds
 
-import com.ignacio.cofre.kit.modpacks.Zip
+import com.ignacio.cofre.kit.common.Zip
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File

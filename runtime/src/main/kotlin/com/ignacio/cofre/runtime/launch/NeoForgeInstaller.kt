@@ -6,7 +6,7 @@ import com.ignacio.cofre.kit.common.Hashes
 import com.ignacio.cofre.kit.common.Kit
 import com.ignacio.cofre.kit.common.Target
 import com.ignacio.cofre.kit.downloads.DownloadItem
-import com.ignacio.cofre.kit.modpacks.FileOps
+import com.ignacio.cofre.kit.common.FileOps
 import com.ignacio.cofre.kit.versions.InstallProfile
 import com.ignacio.cofre.kit.versions.NeoForgeVersion
 import com.ignacio.cofre.kit.versions.VersionJson

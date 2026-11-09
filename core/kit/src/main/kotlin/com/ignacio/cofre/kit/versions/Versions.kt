@@ -2,8 +2,8 @@ package com.ignacio.cofre.kit.versions
 
 import com.ignacio.cofre.kit.common.Kit
 import com.ignacio.cofre.kit.common.Target
-import com.ignacio.cofre.kit.modrinth.HttpFailure
-import com.ignacio.cofre.kit.modrinth.await
+import com.ignacio.cofre.kit.common.HttpFailure
+import com.ignacio.cofre.kit.common.await
 import kotlinx.serialization.Serializable
 import okhttp3.OkHttpClient
 import okhttp3.Request

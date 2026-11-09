@@ -1,6 +1,6 @@
 package com.ignacio.cofre.kit.options
 
-import com.ignacio.cofre.kit.modpacks.FileOps
+import com.ignacio.cofre.kit.common.FileOps
 import java.io.File
 
 /** Edits only known keys, keeping unknown lines, comments and line endings. */

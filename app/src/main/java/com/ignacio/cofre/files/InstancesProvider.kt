@@ -10,7 +10,7 @@ import android.provider.DocumentsProvider
 import android.webkit.MimeTypeMap
 import com.ignacio.cofre.R
 import com.ignacio.cofre.kit.instances.InstanceStore
-import com.ignacio.cofre.kit.modpacks.FileOps
+import com.ignacio.cofre.kit.common.FileOps
 import java.io.File
 import java.io.FileNotFoundException
 

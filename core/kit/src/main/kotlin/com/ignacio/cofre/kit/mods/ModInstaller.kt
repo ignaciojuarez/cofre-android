@@ -7,8 +7,8 @@ import com.ignacio.cofre.kit.downloads.DownloadItem
 import com.ignacio.cofre.kit.downloads.DownloadProgress
 import com.ignacio.cofre.kit.downloads.DownloadQueue
 import com.ignacio.cofre.kit.instances.InstanceStore
-import com.ignacio.cofre.kit.modpacks.FileOps
-import com.ignacio.cofre.kit.modrinth.HttpFailure
+import com.ignacio.cofre.kit.common.FileOps
+import com.ignacio.cofre.kit.common.HttpFailure
 import com.ignacio.cofre.kit.modrinth.Modrinth
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.withLock

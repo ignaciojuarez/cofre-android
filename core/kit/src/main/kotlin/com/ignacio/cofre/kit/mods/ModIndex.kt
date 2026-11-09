@@ -3,7 +3,7 @@ package com.ignacio.cofre.kit.mods
 import com.ignacio.cofre.kit.common.Hashes
 import com.ignacio.cofre.kit.common.Kit
 import com.ignacio.cofre.kit.instances.InstanceStore
-import com.ignacio.cofre.kit.modpacks.FileOps
+import com.ignacio.cofre.kit.common.FileOps
 import com.ignacio.cofre.kit.modrinth.Modrinth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

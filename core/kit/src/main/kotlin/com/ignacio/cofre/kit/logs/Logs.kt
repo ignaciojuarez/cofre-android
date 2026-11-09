@@ -2,8 +2,8 @@ package com.ignacio.cofre.kit.logs
 
 import com.ignacio.cofre.kit.common.Hashes
 import com.ignacio.cofre.kit.common.Kit
-import com.ignacio.cofre.kit.modpacks.FileOps
-import com.ignacio.cofre.kit.modpacks.Zip
+import com.ignacio.cofre.kit.common.FileOps
+import com.ignacio.cofre.kit.common.Zip
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import java.io.File

@@ -1,7 +1,7 @@
 package com.ignacio.cofre.kit.accounts
 
 import com.ignacio.cofre.kit.common.Kit
-import com.ignacio.cofre.kit.modrinth.await
+import com.ignacio.cofre.kit.common.await
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*

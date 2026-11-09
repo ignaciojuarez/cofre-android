@@ -1,6 +1,8 @@
 package com.ignacio.cofre.kit.modrinth
 
+import com.ignacio.cofre.kit.common.HttpFailure
 import com.ignacio.cofre.kit.common.Kit
+import com.ignacio.cofre.kit.common.await
 import kotlinx.coroutines.delay
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

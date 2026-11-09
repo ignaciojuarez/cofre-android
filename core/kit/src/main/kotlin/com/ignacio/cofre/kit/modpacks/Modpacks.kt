@@ -1,8 +1,10 @@
 package com.ignacio.cofre.kit.modpacks
 
+import com.ignacio.cofre.kit.common.FileOps
 import com.ignacio.cofre.kit.common.Kit
 import com.ignacio.cofre.kit.common.Loader
 import com.ignacio.cofre.kit.common.Target
+import com.ignacio.cofre.kit.common.Zip
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
