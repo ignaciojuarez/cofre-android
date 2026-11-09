@@ -14,6 +14,7 @@ import com.ignacio.cofre.runtime.ExitRecord
 import com.ignacio.cofre.runtime.JreManager
 import com.ignacio.cofre.runtime.LaunchSpec
 import java.io.File
+import java.io.RandomAccessFile
 
 /** Who plays. Comes from Microsoft sign-in; debug builds also have `DevAccount`. The token goes to `GameActivity.intent`, never to disk. */
 data class GameAccount(val username: String, val uuid: String)
@@ -66,7 +67,7 @@ class GameLaunch(private val context: Context, val files: GameFiles = GameFiles(
         val record = ExitRecord.read(File(spec.exitFile))
         val since = specFile.lastModified()
         val gameDir = File(spec.gameDir)
-        val log = File(spec.logFile).takeIf { it.isFile }?.readText() ?: File(gameDir, "logs/latest.log").takeIf { it.isFile }?.readText()
+        val log = listOf(File(spec.logFile), File(gameDir, "logs/latest.log")).firstOrNull { it.isFile }?.let(::tail)
         // hs_err files sit next to the exit record (GameBridge's -XX:ErrorFile).
         val crash = (File(gameDir, "crash-reports").listFiles().orEmpty().toList() + File(spec.exitFile).parentFile?.listFiles { f -> f.name.startsWith("hs_err_pid") }.orEmpty())
             .filter { it.isFile && it.lastModified() >= since }.maxByOrNull { it.lastModified() }
@@ -79,6 +80,17 @@ class GameLaunch(private val context: Context, val files: GameFiles = GameFiles(
     companion object {
         private const val TAG = "Cofre"
         private const val KILLED = -9
+
+        /**
+         * The end of [file], at most [max] bytes, from a line start: a long session's output can be far bigger than the
+         * heap, and the diagnosis only needs the end. UTF-8 safe: a cut character can only be in the dropped first line.
+         */
+        internal fun tail(file: File, max: Int = 2 shl 20): String = RandomAccessFile(file, "r").use { input ->
+            val start = maxOf(0L, input.length() - max)
+            input.seek(start)
+            val text = ByteArray((input.length() - start).toInt()).also(input::readFully).decodeToString()
+            if (start > 0) text.substringAfter('\n', "") else text
+        }
 
         /** Before every launch: Vulkan in options.txt; for NeoForge, its GL early window off in config/fml.toml. */
         fun prepareGameDir(gameDir: File, neoForge: Boolean) {

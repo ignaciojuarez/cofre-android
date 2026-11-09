@@ -170,6 +170,17 @@ class LaunchTest {
         }
     }
 
+    @Test fun exitReadsOnlyTheEndOfTheGameOutput() {
+        val file = Files.createTempFile("cofre-output", ".log").toFile()
+        try {
+            file.writeText("first line\nüü\nlast line\n")
+            assertEquals("first line\nüü\nlast line\n", GameLaunch.tail(file))
+            assertEquals("last line\n", GameLaunch.tail(file, max = 12)) // the cut lands inside the second "ü": that line is dropped
+        } finally {
+            file.delete()
+        }
+    }
+
     @Test fun vulkanDiagnosisNamesWhatIsMissing() {
         val log = "[12:00:00] [Render thread/WARN]: Device [llvmpipe] does not support required extensions, missing: [VK_KHR_push_descriptor, VK_EXT_vertex_attribute_divisor]"
         val report = GameExitReport.diagnose(1, null, log)
