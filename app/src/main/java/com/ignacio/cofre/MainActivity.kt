@@ -40,6 +40,7 @@ import com.ignacio.cofre.ui.downloads.DownloadsSheet
 import com.ignacio.cofre.ui.instances.InstancesSection
 import com.ignacio.cofre.ui.instances.NewInstanceSheet
 import com.ignacio.cofre.ui.mods.ModsSection
+import com.ignacio.cofre.ui.mods.modpackUri
 import com.ignacio.cofre.ui.play.GameStoppedScreen
 import com.ignacio.cofre.ui.play.LaunchScreen
 import com.ignacio.cofre.ui.play.PlaySection
@@ -66,6 +67,9 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onNewIntent(intent: Intent) {
+        // Kept as the activity's intent so the Mods section imports it when it opens; if it's already open, its
+        // new-intent listener (run by super) takes it first and clears it.
+        if (modpackUri(intent) != null) setIntent(intent)
         super.onNewIntent(intent)
         handle(intent)
     }
@@ -81,6 +85,8 @@ class MainActivity : ComponentActivity() {
      * `--ez cofre.skipVulkanCheck true` lets Play run past the Vulkan check.
      */
     private fun handle(intent: Intent?) {
+        // A pack opened from another app: go to Mods, whose Import pane picks it up.
+        if (intent != null && modpackUri(intent) != null) graph.nav.section = ShellSection.Mods
         if (BuildConfig.DEBUG && intent?.getBooleanExtra("cofre.skipVulkanCheck", false) == true) graph.launcher.skipVulkanCheck = true
         val demo = intent?.getStringExtra("cofre.demoExit") ?: return
         if (!BuildConfig.DEBUG) return
