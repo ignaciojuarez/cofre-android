@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -36,6 +37,7 @@ import com.ignacio.cofre.kit.compat.CompatibilityIssue
 import com.ignacio.cofre.kit.mods.ModCandidate
 import com.ignacio.cofre.kit.mods.PlanBlock
 import com.ignacio.cofre.kit.mods.VersionChannel
+import com.ignacio.cofre.ui.common.Fmt
 
 /** M05 wired to a running Get. Closing it mid-install leaves the install running. */
 @Composable
@@ -129,6 +131,7 @@ private fun Confirm(
     onConfirm: () -> Unit,
 ) {
     val target = phase.plan.target ?: return
+    val context = LocalContext.current
     // The warning leads, so it's read before Get.
     issue?.let {
         Banner(it.badge, PixelGlyph.Ore, tone = it.tone)
@@ -156,7 +159,7 @@ private fun Confirm(
                 m.title,
                 checked = m.projectId in phase.picked,
                 onCheckedChange = { onToggle(m.projectId) },
-                subtitle = m.size?.let(::size),
+                subtitle = m.size?.let { Fmt.bytes(context, it) },
                 enabled = !phase.replanning,
             )
         }
@@ -170,7 +173,7 @@ private fun Confirm(
         else -> stringResource(R.string.mods_install)
     }
     BlockButton(
-        "$label · ${size(phase.bytes)}",
+        "$label · ${Fmt.bytes(context, phase.bytes)}",
         onConfirm,
         role = if (issue == null) ButtonRole.Primary else ButtonRole.Secondary,
         loading = phase.replanning,
@@ -179,9 +182,10 @@ private fun Confirm(
 
 @Composable
 private fun Sized(candidate: ModCandidate) {
+    val context = LocalContext.current
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         if (candidate.channel != VersionChannel.Release) Badge(candidate.channel.name, tone = Tone.Warn)
-        candidate.size?.let { Meta(size(it)) }
+        candidate.size?.let { Meta(Fmt.bytes(context, it)) }
     }
 }
 
