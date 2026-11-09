@@ -39,6 +39,8 @@ class Downloads(private val graph: AppGraph) {
                 bytesPerSecond = progress.bytesPerSecond
             }
         }
+        // Files left queued when Cofre last closed carry on, as they would have.
+        if (graph.autoStartDownloads && queue.progress.value.items.any { it.state == DownloadItem.State.Queued }) start()
     }
 
     fun metered(): Boolean =
