@@ -207,6 +207,8 @@ data class ModJarMetadata(
                 name = name ?: first?.get("displayName") ?: ids.firstOrNull(); version = version ?: first?.get("version")
                 if (version == null) version = bytes("META-INF/MANIFEST.MF", 1_000_000)?.let { Manifest(ByteArrayInputStream(it)).mainAttributes.getValue("Implementation-Version") }
                 side = ModSide.from(first?.get("side") ?: toml.root["side"])
+                // A universal jar (Controlify) also carries fabric.mod.json: its Fabric dependencies don't apply here.
+                if (loader == Loader.NeoForge) dependencies.clear()
                 dependencies += toml.dependencies
                 if (modLoader?.lowercase() == "kotlinforforge") dependencies += JarDependency("kotlinforforge", name = "Kotlin for Forge")
                 val logo = first?.get("logoFile") ?: toml.root["logoFile"]

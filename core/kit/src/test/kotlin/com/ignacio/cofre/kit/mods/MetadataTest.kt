@@ -37,6 +37,16 @@ class MetadataTest {
         assertEquals("controlify", toml.dependencies.first().owner)
         assertEquals("[26.2,26.3)", toml.dependencies.first().versionRange)
     }
+    @Test fun universalJarOnNeoForgeUsesOnlyTheNeoForgeDependencies() {
+        // Controlify's universal jar ships both files; read on NeoForge, Fabric's list must not leak in.
+        val file = jar(mapOf(
+            "fabric.mod.json" to """{"id":"controlify","version":"3.5.3+mc26.2","depends":{"fabricloader":">=0.19","fabric-api":"*","yet_another_config_lib_v3":"*"}}""".toByteArray(),
+            "META-INF/neoforge.mods.toml" to "mods = [{modId = 'controlify', version = '3.5.3+mc26.2'}]\ndependencies.controlify = [{modId = 'yet_another_config_lib_v3', type = 'required', versionRange = '(,)'}]".toByteArray(),
+        ))
+        val metadata = ModJarMetadata.read(file)!!
+        assertEquals(listOf("yet_another_config_lib_v3"), metadata.dependencies.filter { it.required }.map { it.id })
+        assertEquals(listOf("controlify"), metadata.modIds)
+    }
     @Test fun legacyForgeMandatoryAndQuotedDependencyTable() {
         val toml = ModsToml("""modLoader='javafml'
             [[mods]]
