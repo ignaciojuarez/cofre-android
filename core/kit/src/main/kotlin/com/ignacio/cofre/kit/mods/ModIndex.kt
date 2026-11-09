@@ -47,6 +47,7 @@ class ModIndex(val instance: File) {
         } finally { ModInstaller.lock(instance).unlock() }
     }
 }
-internal fun safeFilename(name: String) {
+/** A single file name (no folders, no `..`): mod files from APIs and indexes go through this before touching disk. */
+fun safeFilename(name: String) {
     require(name.isNotBlank() && name != "." && name != ".." && name.none { it == '/' || it == '\\' || it == '\u0000' || it == ':' }) { "Unsafe mod filename" }
 }

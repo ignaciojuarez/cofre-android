@@ -1,6 +1,8 @@
 package com.ignacio.cofre.ui.mods
 
+import com.ignacio.cofre.kit.curseforge.CurseForge
 import com.ignacio.cofre.kit.instances.InstanceStore
+import com.ignacio.cofre.kit.modpacks.PackFile
 import com.ignacio.cofre.kit.modrinth.Modrinth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -9,6 +11,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import mockwebserver3.MockResponse
+import mockwebserver3.MockWebServer
 import org.junit.After
 import org.junit.Rule
 import org.junit.Test
@@ -17,6 +21,7 @@ import java.io.File
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -72,5 +77,21 @@ class ImportModelTest {
         val dir = store.directory(done.instance)
         assertTrue(File(dir, "config/sodium-options.json").isFile)
         assertEquals(listOf(done.instance.id), store.list().map { it.id }, "no stage left behind")
+    }
+
+    @Test fun curseForgeFilesGetAPlainNameAndTheirSha1() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            fun file(name: String) = """{"data":{"id":34,"modId":12,"fileName":"$name","fileLength":3,"downloadUrl":"https://edge.forgecdn.net/x.jar","hashes":[{"value":"${"a".repeat(32)}","algo":2},{"value":"${"b".repeat(40)}","algo":1}]}}"""
+            server.enqueue(MockResponse(body = file("../evil.jar")))
+            server.enqueue(MockResponse(body = file("sodium.jar")))
+            val import = ImportModel(scope, InstanceStore(temp.newFolder("instances")), Modrinth(), { CurseForge("key", baseUrl = server.url("/")) }, File(temp.root, "cache"), Dispatchers.IO)
+            val stage = temp.newFolder("stage")
+            val pack = PackFile("mods/curseforge-12-34.jar", projectID = 12, fileID = 34)
+            assertFailsWith<IllegalArgumentException> { import.download(pack, stage) }
+            val item = import.download(pack, stage)
+            assertEquals(File(stage, "mods/sodium.jar").path, item.destination)
+            assertEquals("b".repeat(40), item.sha1)
+        }
     }
 }

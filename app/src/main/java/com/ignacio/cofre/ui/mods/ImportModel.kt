@@ -9,10 +9,13 @@ import com.ignacio.cofre.kit.downloads.DownloadItem
 import com.ignacio.cofre.kit.downloads.DownloadQueue
 import com.ignacio.cofre.kit.instances.Instance
 import com.ignacio.cofre.kit.instances.InstanceStore
+import com.ignacio.cofre.kit.modpacks.FileOps
 import com.ignacio.cofre.kit.modpacks.Modpack
 import com.ignacio.cofre.kit.modpacks.ModpackInstallPlan
 import com.ignacio.cofre.kit.modpacks.Modpacks
+import com.ignacio.cofre.kit.modpacks.PackFile
 import com.ignacio.cofre.kit.modpacks.PackRejected
+import com.ignacio.cofre.kit.mods.safeFilename
 import com.ignacio.cofre.kit.modrinth.Modrinth
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -124,10 +127,7 @@ class ImportModel(
         val journal = File(cache, "imports/${UUID.randomUUID()}.json").apply { parentFile?.mkdirs() }
         try {
             val queue = DownloadQueue(journal)
-            for (file in plan.filesToFetch) {
-                val (url, path, size) = source(file)
-                queue.enqueue(DownloadItem(url, File(stage.directory, path).path, path.substringAfterLast('/'), size, file.hashes["sha1"], file.hashes["sha512"]))
-            }
+            for (file in plan.filesToFetch) queue.enqueue(download(file, stage.directory))
             val progress = launch {
                 queue.progress.collectLatest { p ->
                     val fraction = if (p.totalBytes > 0) p.bytes.toFloat() / p.totalBytes else null
@@ -149,14 +149,24 @@ class ImportModel(
         }
     }
 
-    /** Download URL, path in the instance and size for one pack file. CurseForge files need the key. */
-    private suspend fun source(file: com.ignacio.cofre.kit.modpacks.PackFile): Triple<String, String, Long?> {
-        file.downloads.firstOrNull()?.let { return Triple(it, file.path, file.fileSize.takeIf { s -> s > 0 }) }
+    /**
+     * The hash-checked download of one pack file into [stage]. CurseForge files need the key; their name is checked
+     * to be a plain file name and their SHA-1 comes from CurseForge's API.
+     */
+    internal suspend fun download(file: PackFile, stage: File): DownloadItem {
+        file.downloads.firstOrNull()?.let { url ->
+            return DownloadItem(url, FileOps.child(stage, file.path).path, file.path.substringAfterLast('/'), file.fileSize.takeIf { it > 0 }, file.hashes["sha1"], file.hashes["sha512"])
+        }
         val project = requireNotNull(file.projectID) { "A pack file has no download." }
         val client = curseForge() ?: throw IllegalStateException("This is a CurseForge pack. Add a CurseForge key in Settings first.")
         val cf = client.file(project, requireNotNull(file.fileID))
         return when (val download = client.download(cf, "https://www.curseforge.com/projects/$project")) {
-            is CurseForge.Download.Available -> Triple(download.url, "mods/${cf.fileName}", cf.fileLength)
+            is CurseForge.Download.Available -> {
+                safeFilename(cf.fileName)
+                val sha1 = cf.hashes.firstOrNull { it.algo == CF_SHA1 }?.value
+                require(sha1 == null || sha1.matches(Regex("[0-9a-fA-F]{40}"))) { "CurseForge sent a bad hash for ${cf.fileName}." }
+                DownloadItem(download.url, FileOps.child(stage, "mods/${cf.fileName}").path, cf.fileName, cf.fileLength.takeIf { it > 0 }, sha1)
+            }
             is CurseForge.Download.Disabled -> throw IllegalStateException("${cf.displayName} can only be downloaded on the CurseForge website.")
         }
     }
@@ -186,6 +196,9 @@ class ImportModel(
     }
 
     companion object {
+        /** CurseForge's `HashAlgo.Sha1`. */
+        private const val CF_SHA1 = 1
+
         fun describe(reason: PackRejected.Reason): String = when (reason) {
             is PackRejected.Reason.GameVersion -> "It's for Minecraft ${reason.actual ?: "an unknown version"}. Cofre runs ${Target.GAME_VERSION} only."
             is PackRejected.Reason.LoaderType -> "It's a ${reason.actual.displayName} pack. Cofre runs NeoForge only."
