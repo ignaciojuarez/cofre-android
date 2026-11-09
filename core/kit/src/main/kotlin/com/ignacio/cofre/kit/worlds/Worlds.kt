@@ -64,7 +64,8 @@ class WorldStore(val gameDirectory: File, private val isGameRunning: () -> Boole
     }
     fun trash(world: String): TrashToken {
         writable(); val source = existing(world); val token = TrashToken(world, UUID.randomUUID().toString())
-        FileOps.move(source, trashFolder(token)); return token
+        FileOps.move(source, trashFolder(token)); trashFolder(token).setLastModified(System.currentTimeMillis()) // the trash date, for purging
+        return token
     }
     fun undo(token: TrashToken) { writable(); FileOps.move(trashFolder(token), folder(token.world)) }
     private fun trashFolder(token: TrashToken): File { require(token.trashID.matches(Regex("[a-f0-9-]{36}"))); return FileOps.child(gameDirectory, ".cofre-trash/worlds/${token.trashID}") }

@@ -116,7 +116,16 @@ class InstanceStore(val root: File) {
         val instance = get(id)
         val token = TrashToken(UUID.randomUUID().toString())
         FileOps.move(directory(instance), trashFolder(token))
+        trashFolder(token).setLastModified(System.currentTimeMillis()) // the trash date, for purging
         return token
+    }
+
+    /** Empties Recently deleted (instances, and each instance's removed content and worlds) of what was trashed over [maxAgeDays] ago. */
+    fun purgeOldTrash(maxAgeDays: Long = 30, now: Instant = Instant.now()) {
+        val cutoff = now.minus(java.time.Duration.ofDays(maxAgeDays)).toEpochMilli()
+        val bins = listOf(FileOps.child(root, ".cofre-trash/instances")) +
+            list().flatMap { i -> listOf("content", "worlds").map { FileOps.child(directory(i), ".cofre-trash/$it") } }
+        for (bin in bins) bin.listFiles().orEmpty().filter { it.lastModified() < cutoff }.forEach(FileOps::delete)
     }
     fun recentlyDeleted(): List<Deleted> {
         val bin = FileOps.child(root, ".cofre-trash/instances")

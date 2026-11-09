@@ -51,7 +51,8 @@ class ContentStore(val gameDirectory: File) {
     fun trash(item: Item): TrashToken {
         val source = file(item)
         val token = TrashToken(source.relativeTo(gameDirectory.absoluteFile).invariantSeparatorsPath, UUID.randomUUID().toString())
-        FileOps.move(source, trashFile(token)); return token
+        FileOps.move(source, trashFile(token)); trashFile(token).setLastModified(System.currentTimeMillis()) // the trash date, for purging
+        return token
     }
     fun restore(token: TrashToken) { FileOps.move(trashFile(token), FileOps.child(gameDirectory, token.path)) }
     fun delete(item: Item) { trash(item) }

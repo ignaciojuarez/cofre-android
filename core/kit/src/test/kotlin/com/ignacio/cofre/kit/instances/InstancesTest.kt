@@ -108,4 +108,16 @@ class InstancesTest {
         assertSame(InstanceStore.lock(s.directory(a)), InstanceStore.lock(File(root, "./${a.id}")))
         assertNotSame(InstanceStore.lock(s.directory(a)), InstanceStore.lock(s.directory(b)))
     }
+    @Test fun oldTrashIsPurgedAndRecentTrashKept() {
+        val s = InstanceStore(root); val a = s.create("A"); val b = s.create("B"); val dir = s.directory(a)
+        val mod = File(dir, "mods/old.jar").apply { parentFile.mkdirs(); writeText("x"); setLastModified(0) }
+        val content = com.ignacio.cofre.kit.content.ContentStore(dir)
+        val recent = content.trash(content.list(com.ignacio.cofre.kit.common.ContentKind.Mods).single { it.file == mod.name })
+        val old = File(dir, ".cofre-trash/content/${java.util.UUID.randomUUID()}").apply { writeText("y"); setLastModified(0) }
+        val world = File(dir, ".cofre-trash/worlds/${java.util.UUID.randomUUID()}").apply { mkdirs(); File(this, "level.dat").writeText("z"); setLastModified(0) }
+        s.trash(b.id); val trashedLongAgo = File(root, ".cofre-trash/instances").listFiles()!!.single().apply { setLastModified(0) }
+        s.purgeOldTrash()
+        assertFalse(old.exists()); assertFalse(world.exists()); assertFalse(trashedLongAgo.exists())
+        content.restore(recent); assertTrue(mod.isFile, "a file trashed just now stays, however old the file itself")
+    }
 }
