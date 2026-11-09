@@ -14,13 +14,9 @@ import com.ignacio.cofre.kit.accounts.AccountError
 import com.ignacio.cofre.kit.accounts.AccountStore
 import com.ignacio.cofre.kit.accounts.MinecraftAccounts
 import com.ignacio.cofre.kit.accounts.Pkce
-import com.ignacio.cofre.kit.common.Kit
 import com.ignacio.cofre.onIo
 import com.ignacio.cofre.work
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
-import java.io.File
 import java.util.UUID
 
 /**
@@ -33,7 +29,6 @@ class Accounts(private val graph: AppGraph) {
         readSelected = { graph.settings.value.selectedAccount },
         writeSelected = { id -> graph.settings.update { it.copy(selectedAccount = id) } },
     )
-    private val directory get() = File(graph.home, "accounts")
 
     /** An account row: [signedOut] when its Microsoft refresh token is gone, so it needs signing in again. */
     data class Entry(val account: AccountStore.Account, val signedOut: Boolean) {
@@ -132,7 +127,7 @@ class Accounts(private val graph: AppGraph) {
     /** Debug builds only: an offline "Dev" account to exercise the launch pipeline without Microsoft. */
     fun addDevAccount() {
         check(BuildConfig.DEBUG)
-        writeSummary(DEV_ID, "Dev", microsoft = false, expiresAt = null)
+        store.save(DEV_ID, "Dev", microsoft = false)
         graph.settings.update { it.copy(selectedAccount = DEV_ID) }
         refresh()
     }
@@ -161,21 +156,10 @@ class Accounts(private val graph: AppGraph) {
     private fun save(session: MinecraftAccounts.Session) {
         val id = session.profile.id
         val expiresAt = System.currentTimeMillis() + session.minecraft.expiresIn * 1000
-        writeSummary(id, session.profile.name, microsoft = true, expiresAt = expiresAt)
+        store.save(id, session.profile.name, microsoft = true, expiresAt = expiresAt)
         graph.vault.set(accessKey(id), session.minecraft.accessToken)
         graph.vault.set(expiryKey(id), expiresAt.toString())
         session.msa.refreshToken?.let { graph.vault.set(refreshKey(id), it) }
-    }
-
-    private fun writeSummary(id: String, name: String, microsoft: Boolean, expiresAt: Long?) {
-        directory.mkdirs()
-        val json = buildJsonObject {
-            put("accountId", id)
-            put("username", name)
-            if (microsoft) put("xuid", "")
-            if (expiresAt != null) put("expiresAt", expiresAt)
-        }
-        File(directory, "${id.filter { it.isLetterOrDigit() || it == '-' }}.json").writeText(Kit.json.encodeToString(json))
     }
 
     private companion object {

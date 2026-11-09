@@ -1,6 +1,7 @@
 package com.ignacio.cofre.kit.accounts
 
 import com.ignacio.cofre.kit.common.Kit
+import com.ignacio.cofre.kit.modpacks.FileOps
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import java.io.File
@@ -30,6 +31,18 @@ class AccountStore(private val directory: File, private val readSelected: () -> 
         if (file != null && !file.delete()) error("Could not remove account")
         if (readSelected() == id) writeSelected(list().firstOrNull()?.id)
         return account
+    }
+    /** Writes [id]'s summary, the only account file: never a token. A Microsoft account carries its token [expiresAt]. */
+    fun save(id: String, name: String, microsoft: Boolean, expiresAt: Long? = null) {
+        val safe = id.filter { it.isLetterOrDigit() || it == '-' }
+        require(safe.isNotEmpty() && name.isNotBlank())
+        val summary = buildJsonObject {
+            put("accountId", id)
+            put("username", name)
+            if (microsoft) put("xuid", "")
+            if (expiresAt != null) put("expiresAt", expiresAt)
+        }
+        FileOps.atomic(File(accountsDirectory, "$safe.json"), Kit.json.encodeToString(summary).toByteArray())
     }
     fun select(id: String?) { if (id == null || list().any { it.id == id }) writeSelected(id) }
     private fun files(): List<File> = accountsDirectory.listFiles()?.filter { it.isFile && it.extension == "json" }.orEmpty()

@@ -102,4 +102,13 @@ class AccountsTest {
         store.select("missing"); assertEquals("demo", selected); store.select("ready"); assertEquals("ready", selected)
         assertNull(store.remove("../outside"))
     }
+    @Test fun savedSummariesListBackWithoutTokens() {
+        val store = AccountStore(root)
+        store.save("0123abcd", "Steve", microsoft = true, expiresAt = 1_800_000_000_000)
+        store.save("dev-offline", "Dev", microsoft = false)
+        assertEquals(listOf("Dev" to "Offline", "Steve" to "Microsoft"), store.list().map { it.name to it.kind })
+        store.save("0123abcd", "Alex", microsoft = true)
+        assertEquals("Alex", store.list().single { it.id == "0123abcd" }.name)
+        assertEquals(setOf("0123abcd.json", "dev-offline.json"), File(root, "accounts").list()!!.toSet())
+    }
 }
