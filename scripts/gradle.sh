@@ -9,11 +9,19 @@ mkdir -p "$ROOT/.work"
 LOCK="$ROOT/.work/.build-lock"
 waited=0
 until mkdir "$LOCK" 2>/dev/null; do
-  # A lock older than 45 minutes belongs to a dead build.
-  if [ -n "$(find "$LOCK" -maxdepth 0 -mmin +45 2>/dev/null)" ]; then rmdir "$LOCK" 2>/dev/null || true; continue; fi
-  [ $((waited % 60)) -eq 0 ] && echo "gradle.sh: waiting for another build ($LOCK)" >&2
+  # The lock holds its build's PID: stale once that process is gone. Without one (an older
+  # gradle.sh, or killed before writing it), it's stale after 45 minutes.
+  owner=$(cat "$LOCK/pid" 2>/dev/null || true)
+  if { [ -n "$owner" ] && ! kill -0 "$owner" 2>/dev/null; } ||
+     { [ -z "$owner" ] && [ -n "$(find "$LOCK" -maxdepth 0 -mmin +45 2>/dev/null)" ]; }; then
+    rm -rf "$LOCK"
+    continue
+  fi
+  [ $((waited % 60)) -eq 0 ] && echo "gradle.sh: waiting for another build ($LOCK${owner:+, pid $owner})" >&2
   sleep 5; waited=$((waited + 5))
 done
-trap 'rmdir "$LOCK" 2>/dev/null || true' EXIT INT TERM
+echo $$ > "$LOCK/pid"
+trap 'rm -rf "$LOCK"' EXIT
+trap 'exit 130' INT TERM
 cd "$ROOT"
 ./gradlew --console=plain "$@"
