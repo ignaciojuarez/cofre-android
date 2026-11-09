@@ -70,6 +70,10 @@ internal object GameBridge {
             add("-Dorg.lwjgl.librarypath=$nativeDir")
             add("-Dorg.lwjgl.vulkan.libname=libvulkan.so")
             add("-Dorg.lwjgl.system.allocator=system")
+            // Minecraft 26.2 loads LWJGL's OpenGL bindings at startup whatever the backend. Android has no GLX or
+            // libGL, so point LWJGL at the system EGL loader: symbols only, no context or surface is ever created.
+            add("-Dorg.lwjgl.opengl.contextAPI=EGL")
+            add("-Dorg.lwjgl.egl.libname=libEGL.so")
             add("-cp")
             add((classpathFirst + spec.classpath).joinToString(":"))
             add(spec.mainClass)
