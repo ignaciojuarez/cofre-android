@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Mods section: browse, mod page, Get sheet, Installed and Import pack. -->
+<resources>
+    <!-- Browse -->
+    <string name="mods_get_mods">Get mods</string>
+    <string name="mods_search">Search</string>
+    <string name="mods_for_instance">Instance</string>
+    <string name="mods_for_instance_named">For %1$s</string>
+    <string name="mods_search_label">Search %1$s</string>
+    <string name="mods_filters">Filters</string>
+    <string name="mods_filters_count">Filters · %1$d</string>
+    <string name="mods_filters_title">Filters · %1$s</string>
+    <string name="mods_import">Import</string>
+    <string name="mods_installed">Installed</string>
+    <string name="mods_installed_updates">Installed · %1$d</string>
+    <string name="mods_kind_mods">Mods</string>
+    <string name="mods_kind_resource">Resource</string>
+    <string name="mods_kind_data">Data</string>
+    <string name="mods_kind_packs">Packs</string>
+    <string name="mods_kind_shaders">Shaders</string>
+    <string name="mods_any_version">Any version</string>
+    <string name="mods_searching">Searching…</string>
+    <string name="mods_no_results">No results</string>
+    <string name="mods_no_results_message">Try another name.</string>
+    <string name="mods_clear_filters">Clear filters</string>
+    <string name="mods_offline">Can\'t reach %1$s</string>
+    <string name="mods_offline_message">Check your connection, then try again.</string>
+    <string name="mods_try_again">Try again</string>
+    <string name="mods_needs_key">Needs a CurseForge key</string>
+    <string name="mods_needs_key_message">Add your own key in Settings. It\'s never bundled.</string>
+    <string name="mods_add_key">Add key</string>
+    <string name="mods_no_instance">No instance yet</string>
+    <string name="mods_no_instance_message">Mods go into a NeoForge 26.2 instance. Make one to start.</string>
+    <string name="mods_make_instance">Make an instance</string>
+
+    <!-- Filters -->
+    <string name="mods_fits_instance">Fits this instance</string>
+    <string name="mods_fits_instance_detail">Minecraft %1$s · NeoForge</string>
+    <string name="mods_sort">Sort</string>
+    <string name="mods_sort_relevance">Relevance</string>
+    <string name="mods_sort_downloads">Downloads</string>
+    <string name="mods_sort_follows">Follows</string>
+    <string name="mods_sort_newest">Newest</string>
+    <string name="mods_sort_updated">Updated</string>
+    <string name="mods_categories">Categories</string>
+    <string name="mods_clear">Clear</string>
+    <string name="mods_done">Done</string>
+
+    <!-- Mod page -->
+    <string name="mods_tab_about">About</string>
+    <string name="mods_tab_gallery">Gallery %1$d</string>
+    <string name="mods_tab_versions">Versions</string>
+    <string name="mods_tab_changelog">Changelog</string>
+    <string name="mods_tab_links">Links</string>
+    <string name="mods_tab_previous">Previous tab</string>
+    <string name="mods_tab_next">Next tab</string>
+    <string name="mods_loading_page">Loading…</string>
+    <string name="mods_get">Get</string>
+    <string name="mods_get_anyway">Get anyway</string>
+    <string name="mods_update_to">Update to %1$s</string>
+    <string name="mods_remove">Remove</string>
+    <string name="mods_no_build">No 26.2 NeoForge build yet</string>
+    <string name="mods_installed_badge">Installed</string>
+    <string name="mods_off">Off</string>
+    <string name="mods_versions_fit">For this instance</string>
+    <string name="mods_versions_other">Other versions</string>
+    <string name="mods_versions_none">No build for NeoForge 26.2 yet.</string>
+    <string name="mods_versions_show_all">Other versions · %1$d</string>
+    <string name="mods_no_changelog">No changelog for this version.</string>
+    <string name="mods_open">Open</string>
+
+    <!-- Get sheet -->
+    <string name="mods_get_title">Get %1$s</string>
+    <string name="mods_planning">Checking what it needs…</string>
+    <string name="mods_cant_get">Can\'t get %1$s</string>
+    <string name="mods_download_website">Download on the website</string>
+    <string name="mods_close">Close</string>
+    <string name="mods_hide">Hide · keeps going</string>
+    <string name="mods_installed_in">Installed in %1$s</string>
+    <string name="mods_couldnt_install">Couldn\'t install %1$s</string>
+    <string name="mods_nothing_installed">Nothing was installed.</string>
+    <string name="mods_newest_channel">No release fits %1$s yet, so this is the newest %2$s.</string>
+    <string name="mods_also_installs">Also installs · needed to run</string>
+    <string name="mods_turns_on">Turns on</string>
+    <string name="mods_optional">Optional</string>
+    <string name="mods_already_has">Already has %1$s.</string>
+    <string name="mods_install">Install</string>
+    <string name="mods_install_count">Install %1$d</string>
+    <string name="mods_install_anyway">Install anyway</string>
+
+    <!-- Installed -->
+    <string name="mods_tab_packs">Packs</string>
+    <string name="mods_update_all">Update all · %1$d</string>
+    <string name="mods_update">Update</string>
+    <string name="mods_update_badge">→ %1$s</string>
+    <string name="mods_undo">Undo</string>
+    <string name="mods_ok">OK</string>
+    <string name="mods_none_yet">No mods yet</string>
+    <string name="mods_nothing_yet">Nothing here yet</string>
+    <string name="mods_get_hint">Get them in Get mods.</string>
+    <string name="mods_data_hint">Data packs live in each world\'s datapacks folder.</string>
+    <string name="mods_on_off">%1$d on · %2$d off</string>
+    <string name="mods_in_use">In use</string>
+    <string name="mods_remove_named">Remove %1$s</string>
+    <string name="mods_remove_question">Remove %1$s?</string>
+    <string name="mods_dependents">%1$s need it and will stop working.</string>
+    <string name="mods_also_remove">Also remove · only %1$s used them</string>
+    <string name="mods_keep">Keep</string>
+
+    <!-- Import pack -->
+    <string name="mods_import_title">Import pack</string>
+    <string name="mods_import_file">From a file</string>
+    <string name="mods_import_link">Link</string>
+    <string name="mods_import_link_hint">Modrinth pack page or .mrpack link</string>
+    <string name="mods_import_share_hint">You can also open a .mrpack from another app with Cofre.</string>
+    <string name="mods_import_preparing">Getting the pack\'s files</string>
+    <string name="mods_import_files">%1$d of %2$d files</string>
+    <string name="mods_import_done">Made %1$s</string>
+    <string name="mods_import_done_detail">It\'s a new instance; your others stay as they were.</string>
+    <string name="mods_open_instance">Open instance</string>
+    <string name="mods_import_another">Import another</string>
+    <string name="mods_import_failed">Couldn\'t import the pack</string>
+    <string name="mods_import_other_files">Other files</string>
+    <string name="mods_import_overrides">Configs</string>
+    <string name="mods_import_size">Unpacked</string>
+    <string name="mods_import_cant_run">This pack can\'t run in Cofre</string>
+    <string name="mods_import_new_instance">Packs make their own instance, so your others stay as they are.</string>
+    <string name="mods_import_install">Install into a new instance</string>
+    <plurals name="mods_downloading">
+        <item quantity="one">Downloading %1$d file</item>
+        <item quantity="other">Downloading %1$d files</item>
+    </plurals>
+    <plurals name="mods_more">
+        <item quantity="one">%1$d more file</item>
+        <item quantity="other">%1$d more files</item>
+    </plurals>
+</resources>
