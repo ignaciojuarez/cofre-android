@@ -11,7 +11,6 @@ import mockwebserver3.*
 import okio.Buffer
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
-import java.io.IOException
 import kotlin.test.*
 
 class InstallerTest {
@@ -59,10 +58,11 @@ class InstallerTest {
         MockWebServer().use { server ->
             server.start(); val old = modJar("a"); File(mods(), "a-1.jar").writeBytes(old)
             val index = ModIndex(root); val originalIndex = mapOf("a-1.jar" to ModIndex.Entry("a", "a-1", sha1 = Hashes.sha1(old))); index.write(originalIndex)
-            File(root, "cofre-mods.json.tmp").mkdir()
+            // The index becomes a link: reads follow it, the late write refuses it.
+            val real = File(root, "index-target.json"); assertTrue(index.file.renameTo(real)); java.nio.file.Files.createSymbolicLink(index.file.toPath(), real.toPath())
             val newJar = modJar("a", "# different version"); val libJar = modJar("lib")
             server.dispatcher = object : Dispatcher() { override fun dispatch(request: RecordedRequest): MockResponse = response(if (request.url.encodedPath == "/a.jar") newJar else libJar) }
-            assertFailsWith<IOException> { ModInstaller(root).install(ModInstallPlan(candidate(server, "a", newJar, "2"), required = listOf(candidate(server, "lib", libJar)))) }
+            assertFailsWith<IllegalArgumentException> { ModInstaller(root).install(ModInstallPlan(candidate(server, "a", newJar, "2"), required = listOf(candidate(server, "lib", libJar)))) }
             assertEquals(listOf("a-1.jar"), mods().listFiles()!!.map { it.name }); assertContentEquals(old, File(mods(), "a-1.jar").readBytes()); assertEquals(originalIndex, index.read())
         }
     }

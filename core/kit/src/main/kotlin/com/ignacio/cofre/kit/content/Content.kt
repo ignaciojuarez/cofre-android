@@ -5,6 +5,7 @@ import com.ignacio.cofre.kit.common.Kit
 import com.ignacio.cofre.kit.common.Loader
 import com.ignacio.cofre.kit.modpacks.FileOps
 import com.ignacio.cofre.kit.modpacks.Zip
+import com.ignacio.cofre.kit.mods.ModJarMetadata
 import kotlinx.serialization.json.*
 import java.io.File
 import java.nio.file.Files
@@ -74,35 +75,16 @@ class ContentStore(val gameDirectory: File) {
         return names.filter { it.startsWith("file/") }.map { it.removePrefix("file/") }.toSet()
     }
     private data class Metadata(val id: String?, val name: String?, val version: String?)
+    /** A jar's mod metadata (cached per file), else a pack's `pack.mcmeta`, from a folder or a zip. */
     private fun metadata(file: File): Metadata? = runCatching {
-        fun read(path: String): String? = if (file.isDirectory) FileOps.child(file, path).takeIf { it.isFile && it.length() <= 1 shl 20 }?.readText() else {
-            if (Zip.entries(file).none { it.path == path }) null else Zip.read(file, path, 1L shl 20).decodeToString()
-        }
-        read("fabric.mod.json")?.let { text ->
-            val obj = Kit.json.parseToJsonElement(text).jsonObject
-            return@runCatching Metadata(obj.text("id"), obj.text("name"), obj.text("version"))
-        }
-        read("quilt.mod.json")?.let { text ->
-            val q = Kit.json.parseToJsonElement(text).jsonObject.getValue("quilt_loader").jsonObject
-            return@runCatching Metadata(q.text("id"), q["metadata"]?.jsonObject?.text("name"), q.text("version"))
-        }
-        for (path in listOf("META-INF/neoforge.mods.toml", "META-INF/mods.toml")) {
-            val toml = read(path) ?: continue
-            val section = toml.substringAfter("[[mods]]", toml).substringBefore("[[")
-            fun value(key: String): String? = Regex("^\\s*${Regex.escape(key)}\\s*=\\s*[\"']([^\"']*)[\"']", RegexOption.MULTILINE).find(section)?.groupValues?.get(1)
-            var version = value("version")
-            if (version?.startsWith("\${") == true) version = read("META-INF/MANIFEST.MF")?.lineSequence()?.firstOrNull { it.startsWith("Implementation-Version:") }?.substringAfter(':')?.trim()
-            return@runCatching Metadata(value("modId"), value("displayName"), version)
-        }
-        read("pack.mcmeta")?.let { text ->
-            val pack = Kit.json.parseToJsonElement(text).jsonObject.getValue("pack").jsonObject
-            return@runCatching Metadata(null, pack["description"]?.let(::flatten), pack["pack_format"]?.jsonPrimitive?.contentOrNull)
-        }
-        null
+        if (file.name.removeSuffix(".disabled").endsWith(".jar", ignoreCase = true)) return@runCatching ModJarMetadata.read(file)?.let { Metadata(it.modIds.firstOrNull(), it.name, it.version) }
+        val text = if (file.isDirectory) FileOps.child(file, "pack.mcmeta").takeIf { it.isFile && it.length() <= 1 shl 20 }?.readText()
+            else Zip.read(file, "pack.mcmeta", 1L shl 20).decodeToString()
+        val pack = Kit.json.parseToJsonElement(text ?: return@runCatching null).jsonObject.getValue("pack").jsonObject
+        Metadata(null, pack["description"]?.let(::flatten), pack["pack_format"]?.jsonPrimitive?.contentOrNull)
     }.getOrNull()
     companion object {
         fun properties(text: String): Map<String, String> = Properties().apply { load(text.reader()) }.entries.associate { it.key.toString() to it.value.toString() }
-        private fun JsonObject.text(key: String): String? = this[key]?.jsonPrimitive?.contentOrNull
         private fun flatten(e: JsonElement): String = when (e) { is JsonPrimitive -> e.content; is JsonArray -> e.joinToString("") { flatten(it) }; is JsonObject -> (e["text"]?.let(::flatten) ?: "") + (e["extra"]?.let(::flatten) ?: "") }
     }
 }

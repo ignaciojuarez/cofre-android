@@ -14,10 +14,16 @@ import java.util.zip.ZipOutputStream
 
 /** Shared file boundary for the file-based domains. Never traverse links inside a supplied root. */
 object FileOps {
-    fun child(root: File, path: String): File {
+    /** The segments of a relative [path], checked as a string: no absolute path, `..`, `.` or empty segments, `\\`, `:` or NUL. */
+    fun segments(path: String): List<String> {
         require(path.isNotEmpty() && !path.startsWith('/') && '\\' !in path && ':' !in path && '\u0000' !in path) { "Unsafe path: $path" }
         val parts = path.removeSuffix("/").split('/')
         require(parts.none { it.isEmpty() || it == "." || it == ".." }) { "Unsafe path: $path" }
+        return parts
+    }
+
+    fun child(root: File, path: String): File {
+        val parts = segments(path)
         var target = root.absoluteFile
         require(!Files.isSymbolicLink(target.toPath())) { "Symbolic link: $target" }
         for (part in parts) {
@@ -34,12 +40,17 @@ object FileOps {
         val temp = File(file.absoluteFile.parentFile, ".cofre-write-${UUID.randomUUID()}")
         try {
             java.io.FileOutputStream(temp).use { it.write(bytes); it.fd.sync() }
-            try {
-                Files.move(temp.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
-            } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
-                Files.move(temp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
-            }
+            replace(temp, file)
         } finally { temp.delete() }
+    }
+
+    /** Renames [source] over [target], atomically where the file system can. */
+    fun replace(source: File, target: File) {
+        try {
+            Files.move(source.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+            Files.move(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
     }
 
     fun move(source: File, target: File) {
@@ -107,7 +118,7 @@ object Zip {
             val source = zip.entries()
             while (source.hasMoreElements()) {
                 val e = source.nextElement()
-                FileOps.child(File("/cofre-archive-boundary"), e.name)
+                FileOps.segments(e.name)
                 require(paths.add(e.name.removeSuffix("/"))) { "Duplicate ZIP path: ${e.name}" }
                 require(result.size < MAX_ENTRIES && e.size in 0..MAX_ENTRY_BYTES) { "ZIP size limit" }
                 total += e.size

@@ -138,6 +138,7 @@ data class ModJarMetadata(
     val modLoader: String? = null, val bundled: List<String> = emptyList(), val icon: ByteArray? = null,
 ) {
     companion object {
+        // ponytail: 128 jars; a bigger instance re-reads jars on each listing. Drop the unused icon, then raise it, if that shows.
         private val cache = linkedMapOf<String, ModJarMetadata>()
         fun read(jar: File, loader: Loader = Loader.NeoForge): ModJarMetadata? {
             val key = "${jar.canonicalPath}|${jar.length()}|${jar.lastModified()}|$loader"

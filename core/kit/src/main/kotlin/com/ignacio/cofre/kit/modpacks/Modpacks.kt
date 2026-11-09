@@ -86,14 +86,14 @@ object Modpacks {
         }
         val destinations = HashSet<String>()
         for (f in files) {
-            FileOps.child(File("/cofre-pack"), f.path)
+            FileOps.segments(f.path)
             require(destinations.add(f.path) && f.fileSize in 0..Zip.MAX_ENTRY_BYTES)
             require(f.downloads.all { it.toHttpUrlOrNull()?.let { u -> u.isHttps && u.username.isEmpty() && u.password.isEmpty() } == true }) { "Insecure download" }
             require(f.hashes.all { (kind, value) -> value.matches(Regex("[a-fA-F0-9]{${when (kind) { "sha512" -> 128; "sha256" -> 64; "sha1" -> 40; else -> throw IllegalArgumentException("Unknown hash: $kind") }}}")) })
             if (format == Modpack.Format.Modrinth) require(f.downloads.isNotEmpty() && ("sha512" in f.hashes || "sha1" in f.hashes)) { "Modrinth file needs a URL and hash" }
         }
         require(files.sumOf { it.fileSize } <= Zip.MAX_TOTAL_BYTES)
-        copies.forEach { FileOps.child(File("/cofre-pack"), it.path); require(it.path != "cofre.json" || format == Modpack.Format.Cofre) }
+        copies.forEach { FileOps.segments(it.path); require(it.path != "cofre.json" || format == Modpack.Format.Cofre) }
         return Modpack(format, name, game, loader, loaderVersion, files, copies, entries.sumOf { it.size })
     }
 

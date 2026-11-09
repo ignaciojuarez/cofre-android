@@ -15,9 +15,6 @@ import okhttp3.*
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
-import java.nio.file.AtomicMoveNotSupportedException
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicReference
 
@@ -179,7 +176,7 @@ class DownloadQueue(
                     verify(item.part, item)
                     synchronized(lock) {
                         if (item(id).state == DownloadItem.State.Cancelled) throw CancellationException()
-                        atomicMove(item.part, destination)
+                        FileOps.replace(item.part, destination)
                         update(id) { it.copy(state = DownloadItem.State.Finished, completedBytes = destination.length(), error = null) }
                     }
                 }
@@ -280,10 +277,6 @@ class DownloadQueue(
         const val METERED_ASK_BYTES: Long = 200L * 1024 * 1024
         private const val JOURNAL_MILLIS = 1_000L
         fun asksOnMetered(bytes: Long?, metered: Boolean, allowed: Boolean = false): Boolean = metered && !allowed && (bytes ?: 0) > METERED_ASK_BYTES
-        internal fun atomicMove(from: File, to: File) {
-            try { Files.move(from.toPath(), to.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING) }
-            catch (_: AtomicMoveNotSupportedException) { Files.move(from.toPath(), to.toPath(), StandardCopyOption.REPLACE_EXISTING) }
-        }
     }
 }
 

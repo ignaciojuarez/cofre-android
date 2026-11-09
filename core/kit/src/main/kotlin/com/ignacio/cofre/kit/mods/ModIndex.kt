@@ -2,14 +2,13 @@ package com.ignacio.cofre.kit.mods
 
 import com.ignacio.cofre.kit.common.Hashes
 import com.ignacio.cofre.kit.common.Kit
-import com.ignacio.cofre.kit.downloads.DownloadQueue
 import com.ignacio.cofre.kit.instances.InstanceStore
+import com.ignacio.cofre.kit.modpacks.FileOps
 import com.ignacio.cofre.kit.modrinth.Modrinth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import java.io.File
-import java.io.FileOutputStream
 
 /**
  * Instance-local identities. The files, including disabled jars, remain the source of truth. Entries are keyed by
@@ -20,10 +19,8 @@ class ModIndex(val instance: File) {
     val file: File get() = File(instance, "cofre-mods.json")
     fun read(): Map<String, Entry> = if (file.isFile) Kit.json.decodeFromString<Map<String, Entry>>(file.readText()).onEach { safeFilename(it.key) }.mapKeys { key(it.key) } else emptyMap()
     fun write(entries: Map<String, Entry>) {
-        entries.keys.forEach(::safeFilename); instance.mkdirs()
-        val temp = File(instance, "cofre-mods.json.tmp")
-        FileOutputStream(temp).use { it.write(Kit.json.encodeToString(entries).toByteArray()); it.fd.sync() }
-        DownloadQueue.atomicMove(temp, file)
+        entries.keys.forEach(::safeFilename)
+        FileOps.atomic(file, Kit.json.encodeToString(entries).toByteArray())
     }
     fun jars(): List<File> = File(instance, "mods").listFiles()?.filter { it.isFile && (it.name.endsWith(".jar") || it.name.endsWith(".jar.disabled")) }?.sortedBy { it.name }.orEmpty()
     fun installed(): List<InstalledMod> {

@@ -18,7 +18,7 @@ object InstallPlanner {
         val entries = index.files.mapNotNull { file ->
             if (file.path in overrides?.exclude.orEmpty() || file.env[environment] == "unsupported") return@mapNotNull null
             if (file.path.startsWith("mod:")) fail(Reason.InvalidCard, "Unresolved content identifier: ${file.path}")
-            try { FileOps.child(File("/cofre-card-plan"), file.path) } catch (_: IllegalArgumentException) { fail(Reason.PathTraversal, file.path) }
+            try { FileOps.segments(file.path) } catch (_: IllegalArgumentException) { fail(Reason.PathTraversal, file.path) }
             if (file.fileSize !in 0..(250L shl 20)) fail(Reason.SizeLimit)
             file.downloads.forEach { URLPolicy.validate(it, card.security.allowedHosts) }
             val manual = file.downloads.any { url -> val host = url.toHttpUrlOrNull()?.host; host == "curseforge.com" || host?.endsWith(".curseforge.com") == true } || "curseforge" in file.path.lowercase()
