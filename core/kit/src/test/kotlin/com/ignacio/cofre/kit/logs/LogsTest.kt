@@ -149,6 +149,9 @@ class LogsTest {
         val log = "[12:00] [main/WARN] [mixin/]: Error loading class: net.x.Y (java.lang.ClassNotFoundException: net.x.Y)\n[12:01] [Render thread/INFO]: Loaded 4 shaders"
         for (code in listOf(-9, 137)) assertEquals(ExitReason.SystemKilled, GameExitReport.diagnose(code, log = log).reason)
         assertEquals(ExitReason.MissingLibrary, GameExitReport.diagnose(1, log = log).reason)
+        // FML's missing-mods screen, swiped away: the missing mod is still the reason.
+        val missing = "\tMod ID: 'yet_another_config_lib_v3', Requested by: 'controlify', Expected range: '[3.9,)', Actual version: '[MISSING]'"
+        assertEquals(ExitReason.MissingDependency, GameExitReport.diagnose(-9, log = missing).reason)
     }
     @Test fun normalShutdownAndUnknownExitAreDistinguished() {
         assertEquals(ExitReason.Quit, GameExitReport.diagnose(0).reason); assertEquals(ExitReason.Unknown, GameExitReport.diagnose(1).reason)
