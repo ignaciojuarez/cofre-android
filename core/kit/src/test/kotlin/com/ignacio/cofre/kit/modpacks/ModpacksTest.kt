@@ -91,4 +91,14 @@ class ModpacksTest {
         val stage = Modpacks.plan(Modpacks.inspect(zip(mapOf("modrinth.index.json" to index())))).stage(root)
         stage.rollback(); assertFalse(stage.directory.exists()); assertEquals("old", File(keep, "a").readText())
     }
+    @Test fun manyOverridesStreamInOnePass() {
+        val files = (0 until 5000).associate { "overrides/config/f$it.txt" to "value $it" } + ("modrinth.index.json" to index())
+        val archive = zip(files)
+        val plan = Modpacks.plan(Modpacks.inspect(archive)); val stage = plan.stage(File(root, "instances").apply { mkdirs() })
+        val started = System.nanoTime()
+        plan.copyOverrides(archive, stage)
+        assertTrue(System.nanoTime() - started < 10_000_000_000L, "copying 5000 overrides took too long")
+        assertEquals("value 4999", File(stage.directory, "config/f4999.txt").readText())
+        assertEquals(5000, File(stage.directory, "config").list()!!.size) // no temp files left behind
+    }
 }

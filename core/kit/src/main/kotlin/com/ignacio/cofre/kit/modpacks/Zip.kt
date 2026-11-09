@@ -129,6 +129,26 @@ object Zip {
         }
     }
 
+    /**
+     * Streams each `entry → target` out of [archive], opened once: each through a temp file next to its target, then
+     * a rename, so a target is never half-written. Targets must not exist yet.
+     */
+    fun copyOut(archive: File, targets: List<Pair<String, File>>) {
+        entries(archive)
+        ZipFile(archive).use { zip ->
+            for ((path, target) in targets) {
+                val entry = requireNotNull(zip.getEntry(path)) { "Missing ZIP entry: $path" }
+                val dir = target.absoluteFile.parentFile
+                Files.createDirectories(dir.toPath())
+                val temp = File(dir, ".cofre-write-${UUID.randomUUID()}")
+                try {
+                    zip.getInputStream(entry).use { input -> temp.outputStream().buffered().use { transfer(input, it, entry, MAX_ENTRY_BYTES) } }
+                    Files.move(temp.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE)
+                } finally { temp.delete() }
+            }
+        }
+    }
+
     fun extract(archive: File, directory: File) {
         val entries = entries(archive)
         ZipFile(archive).use { zip ->

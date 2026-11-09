@@ -111,13 +111,12 @@ data class ModpackInstallPlan(val name: String, val gameVersion: String, val loa
     /** The caller fetches and verifies files into directory; commit only exposes a complete new instance. */
     fun stage(instancesRoot: File): PackStage = PackStage.create(instancesRoot)
     fun copyOverrides(archive: File, stage: PackStage) {
-        for (o in overridesToCopy) {
-            if (o.path == "cofre.json") continue
+        val targets = overridesToCopy.filter { it.path != "cofre.json" }.map { o ->
             val target = FileOps.child(stage.directory, o.path)
             require(!target.exists()) { "Override collision: ${o.path}" }
-            target.parentFile.mkdirs()
-            FileOps.atomic(target, Zip.read(archive, o.entry, Zip.MAX_ENTRY_BYTES))
+            o.entry to target
         }
+        Zip.copyOut(archive, targets)
     }
 }
 
