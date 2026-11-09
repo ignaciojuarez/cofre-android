@@ -259,7 +259,8 @@ private fun areaName(folder: String): String = when (folder) {
     "runtimes" -> stringResource(R.string.storage_java)
     "downloads" -> stringResource(R.string.storage_downloads)
     "logs" -> stringResource(R.string.settings_logs)
-    else -> folder
+    "accounts" -> stringResource(R.string.settings_accounts)
+    else -> folder.replaceFirstChar { it.uppercase() }
 }
 
 @Composable

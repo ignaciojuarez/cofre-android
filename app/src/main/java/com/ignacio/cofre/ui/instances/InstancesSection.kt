@@ -9,6 +9,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -73,14 +77,19 @@ private fun InstanceList(graph: AppGraph) {
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { library.import(it) { made -> nav.instance = made.id } }
     }
+    // Search stays out of the way (and out of first focus) until Y or the Search button asks for it.
+    var searching by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(searching) { if (searching) search.requestFocus() }
+    val startSearch: () -> Unit = { if (searching) search.requestFocus() else searching = true }
     val text = query.text.toString().trim()
     val shown = library.instances.filter { text.isEmpty() || it.name.contains(text, ignoreCase = true) }
-    Column(Modifier.controllerActions(ControllerAction(Pad.Y, stringResource(R.string.search)) { search.requestFocus() })) {
+    Column(Modifier.controllerActions(ControllerAction(Pad.Y, stringResource(R.string.search), startSearch))) {
         ColumnHeader(stringResource(R.string.section_instances)) {
+            BlockButton(stringResource(R.string.search), startSearch, size = ButtonSize.Small)
             BlockButton(stringResource(R.string.instances_new), { nav.newInstance = true }, Modifier.testTag("instances.new"), role = ButtonRole.Primary, size = ButtonSize.Small)
         }
         PaneScroll(spacing = 8.dp) {
-            Field(query, stringResource(R.string.search), Modifier.focusRequester(search), kind = FieldKind.Search)
+            if (searching || text.isNotEmpty()) Field(query, stringResource(R.string.search), Modifier.focusRequester(search), kind = FieldKind.Search)
             library.error?.let { Banner(it, PixelGlyph.Cross, tone = Tone.Danger) { BlockButton(stringResource(R.string.dismiss), library::clearError, size = ButtonSize.Small) } }
             library.undo?.let { undo ->
                 Banner(stringResource(R.string.instances_deleted, undo.name), PixelGlyph.Check, tone = Tone.Success) {

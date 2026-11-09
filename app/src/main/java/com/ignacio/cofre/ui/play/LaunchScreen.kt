@@ -111,6 +111,18 @@ private fun Stages(
 ) {
     val scroll = rememberScrollState()
     Column(modifier.padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Actions first: Cancel is where focus starts, above the log.
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            when {
+                run.error != null -> {
+                    BlockButton(stringResource(R.string.launch_try_again), onRetry, Modifier.weight(1f), role = ButtonRole.Primary)
+                    BlockButton(stringResource(R.string.close), onCancel, Modifier.weight(1f).testTag("launch.close"))
+                }
+                run.done -> BlockButton(stringResource(R.string.close), onCancel, Modifier.weight(1f), role = ButtonRole.Primary)
+                else -> BlockButton(stringResource(R.string.cancel), onCancel, Modifier.weight(1f).testTag("launch.cancel"))
+            }
+        }
+        if (run.error == null && !run.done) Note(stringResource(R.string.launch_keep_open))
         Column(Modifier.weight(1f).pageScroll(scroll).verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             ListSection(label = stringResource(R.string.launch_stages), spacing = 4.dp) {
                 Launcher.Stage.entries.forEach { stage ->
@@ -137,17 +149,6 @@ private fun Stages(
             run.error?.let { Banner(it, PixelGlyph.Cross, Modifier.testTag("launch.error"), tone = Tone.Danger) }
             ListSection(label = stringResource(R.string.launch_log)) {
                 LogView(run.log, Modifier.fillMaxWidth().height(180.dp))
-            }
-        }
-        if (run.error == null && !run.done) Note(stringResource(R.string.launch_keep_open))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            when {
-                run.error != null -> {
-                    BlockButton(stringResource(R.string.launch_try_again), onRetry, Modifier.weight(1f), role = ButtonRole.Primary)
-                    BlockButton(stringResource(R.string.close), onCancel, Modifier.weight(1f).testTag("launch.close"))
-                }
-                run.done -> BlockButton(stringResource(R.string.close), onCancel, Modifier.weight(1f), role = ButtonRole.Primary)
-                else -> BlockButton(stringResource(R.string.cancel), onCancel, Modifier.weight(1f).testTag("launch.cancel"))
             }
         }
     }

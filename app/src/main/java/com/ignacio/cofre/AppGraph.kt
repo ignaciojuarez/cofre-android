@@ -29,7 +29,7 @@ import javax.crypto.SecretKey
  * Add a `val` here when a screen needs a new long-lived object; keep construction cheap (lazy for anything heavy).
  *
  * The parameters after [context] are the device edges, replaced in tests: file root, IO dispatcher, the Vulkan
- * probe, server pings, the Microsoft client ID and the Keystore key.
+ * probe, server pings, the Microsoft client ID, the Keystore key and whether downloads start on their own.
  */
 class AppGraph(
     val context: Context,
@@ -39,6 +39,8 @@ class AppGraph(
     val ping: (MinecraftServerAddress) -> MinecraftServerStatus = { MinecraftServerPing.ping(it) },
     val microsoftClientId: String = BuildConfig.MICROSOFT_CLIENT_ID,
     secretKey: () -> SecretKey = SecretVault::keystoreKey,
+    /** False in tests: queued files wait instead of downloading. */
+    val autoStartDownloads: Boolean = true,
 ) {
     /** App-lifetime work (imports, sign-in, downloads): survives screens, not the process. */
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)

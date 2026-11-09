@@ -86,12 +86,12 @@ fun GameStoppedScreen(
                         verticalArrangement = Arrangement.Center,
                     ) {
                         Column(
-                            Modifier.widthIn(max = if (sideBySide) 760.dp else 500.dp).fillMaxWidth().block(lip = CofreBlock.buttonLip).padding(22.dp),
+                            Modifier.widthIn(max = if (sideBySide) 820.dp else 500.dp).fillMaxWidth().block(lip = CofreBlock.buttonLip).padding(22.dp),
                         ) {
                             if (sideBySide) {
                                 Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) { Message(stopped) }
-                                    Column(Modifier.width(260.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Column(Modifier.width(340.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         Actions(stopped, onPlayAgain, onTurnOffMod, onShare, onClose, onDetails = { details = true })
                                     }
                                 }
@@ -153,10 +153,8 @@ private fun Actions(
     val again = stopped.quickPlay?.let { stringResource(R.string.stopped_play_again_to, it.label) } ?: stringResource(R.string.stopped_play_again)
     BlockButton(again, onPlayAgain, Modifier.testTag("stopped.playAgain"), role = if (fixPending) ButtonRole.Secondary else ButtonRole.Primary, size = ButtonSize.Large, icon = PixelGlyph.Play)
     BlockButton(stringResource(R.string.close), onClose, role = ButtonRole.Ghost, size = ButtonSize.Large)
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        BlockButton(stringResource(R.string.stopped_share), onShare, Modifier.weight(1f), icon = PixelGlyph.Paper)
-        BlockButton(stringResource(R.string.stopped_details), onDetails, Modifier.weight(1f))
-    }
+    BlockButton(stringResource(R.string.stopped_share), onShare, icon = PixelGlyph.Paper)
+    BlockButton(stringResource(R.string.stopped_details), onDetails)
 }
 
 @Composable

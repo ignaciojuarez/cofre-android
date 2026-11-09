@@ -162,7 +162,7 @@ class Library(private val graph: AppGraph) {
             val item = DownloadItem(mod.url, File(dir, "mods/${mod.file}").path, title = mod.file, sha512 = mod.sha512)
             graph.downloads.enqueue(item, metered)
         }
-        graph.downloadsModel.start()
+        if (graph.autoStartDownloads) graph.downloadsModel.start()
     }
 
     private fun <T> edit(done: (T) -> Unit = {}, block: () -> T) {
