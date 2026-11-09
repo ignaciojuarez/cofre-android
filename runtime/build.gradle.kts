@@ -54,8 +54,8 @@ dependencies {
  * jre-25.version stamp (its SHA-256) that JreManager installs from. Binaries stay out of git.
  * The JRE and the game's .so files come from the pinned natives release (`cofre.natives` in
  * gradle.properties, fetched with scripts/natives/fetch.sh <tag>). -Pcofre.jre=<tar.xz> overrides
- * the JRE. Without one, the build still works; JreManager.bundledVersion() is then null and the
- * game can't start.
+ * the JRE. Without one, a debug build still works (JreManager.bundledVersion() is then null and the
+ * game can't start); a release build fails here, as it does without the natives' lib/.
  */
 abstract class RuntimeAssets : DefaultTask() {
     @get:InputFiles @get:PathSensitive(PathSensitivity.NAME_ONLY)
@@ -68,11 +68,22 @@ abstract class RuntimeAssets : DefaultTask() {
     @get:Input
     abstract val legal: MapProperty<String, String>
 
+    /** The natives release folder, `.work/natives/<tag>`. */
+    @get:Internal
+    abstract val natives: Property<File>
+
+    @get:Input
+    abstract val release: Property<Boolean>
+
     @get:OutputDirectory
     abstract val outputDir: DirectoryProperty
 
     @TaskAction
     fun run() {
+        val natives = natives.get()
+        if (release.get() && (jre.none { it.isFile } || !natives.resolve("lib").isDirectory)) {
+            throw GradleException("A release build needs the JRE and the game's natives: run scripts/natives/fetch.sh ${natives.name}")
+        }
         val legalOut = outputDir.get().asFile.resolve("legal")
         legalOut.deleteRecursively()
         legal.get().forEach { (name, path) ->
@@ -111,6 +122,8 @@ androidComponents {
             // The natives release's license texts, and its JRE's legal/ (the one release builds bundle).
             legal.set(mapOf("natives" to File(nativesDir, "legal"), "java" to File(nativesDir, "jre25/legal")).filterValues { it.isDirectory }.mapValues { it.value.path })
             jre.from(jreOverride.orElse(releaseJre)) // a missing file: no JRE asset
+            natives.set(nativesDir)
+            release.set(variant.buildType != "debug")
         }
         variant.sources.assets?.addGeneratedSourceDirectory(task, RuntimeAssets::outputDir)
         // LWJGL 3.4.1, OpenAL, shaderc, SPIRV-Cross, freetype and JNA, as lib/arm64-v8a/*.so.
