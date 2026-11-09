@@ -9,6 +9,7 @@ import android.provider.DocumentsContract.Root
 import android.provider.DocumentsProvider
 import android.webkit.MimeTypeMap
 import com.ignacio.cofre.R
+import com.ignacio.cofre.kit.instances.InstanceStore
 import java.io.File
 import java.io.FileNotFoundException
 
@@ -80,6 +81,8 @@ class InstancesProvider : DocumentsProvider() {
         if (id != ROOT_DOC && !id.startsWith("$ROOT_DOC/")) throw FileNotFoundException(id)
         val file = if (id == ROOT_DOC) base else File(base, id.removePrefix("$ROOT_DOC/")).canonicalFile
         if (file != base && !file.path.startsWith(base.path + File.separator)) throw FileNotFoundException(id)
+        // Cofre's own folders (trash, temp writes) stay private even when a caller knows the path.
+        if (file.relativeTo(base).invariantSeparatorsPath.split('/').any(InstanceStore::isPrivate)) throw FileNotFoundException(id)
         if (!file.exists()) throw FileNotFoundException(id)
         return file
     }

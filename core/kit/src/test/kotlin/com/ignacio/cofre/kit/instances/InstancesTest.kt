@@ -91,4 +91,16 @@ class InstancesTest {
         val b = s.create("B"); val token = s.trash(b.id); s.purge(token)
         assertTrue(s.recentlyDeleted().isEmpty()); assertFails { s.restore(token) }; assertFails { s.purge(token) }
     }
+    @Test fun exportAndDuplicateLeaveCofreFilesAndTokensBehind() {
+        val s = InstanceStore(File(root, "instances")); val i = s.create("A")
+        File(s.directory(i), ".cofre/launch.json").apply { parentFile.mkdirs(); writeText("""{"gameArgs":["--accessToken","eyJsecret"]}""") }
+        File(s.directory(i), ".cofre-write-x").writeText("partial")
+        val archive = s.export(i.id, File(root, "a.zip"))
+        val names = java.util.zip.ZipFile(archive).use { zip -> zip.entries().toList().map { it.name } }
+        assertTrue(names.none { it.startsWith(".cofre") }, names.toString())
+        assertFalse(java.util.zip.ZipInputStream(archive.inputStream()).use { zip ->
+            generateSequence { zip.nextEntry }.any { zip.readBytes().decodeToString().contains("accessToken") }
+        })
+        val copy = s.duplicate(i.id); assertTrue(s.directory(copy).list().orEmpty().none { it.startsWith(".cofre") })
+    }
 }

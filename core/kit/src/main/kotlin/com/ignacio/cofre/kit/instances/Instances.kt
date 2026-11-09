@@ -36,6 +36,11 @@ data class Instance(
 )
 
 class InstanceStore(val root: File) {
+    companion object {
+        /** Cofre's own files in an instance (trash, temp writes, legacy launch state): never exported, copied or shared. */
+        fun isPrivate(path: String): Boolean = path.startsWith(".cofre")
+    }
+
     data class TrashToken(val folder: String)
     data class Deleted(val token: TrashToken, val instance: Instance)
     init { require(!Files.isSymbolicLink(root.toPath())); Files.createDirectories(root.toPath()) }
@@ -87,7 +92,8 @@ class InstanceStore(val root: File) {
         val dest = directory(next)
         try {
             FileOps.copy(directory(old), dest)
-            FileOps.delete(File(dest, ".cofre-trash")) // Undo history stays with the source.
+            // Undo history and Cofre's own files stay with the source.
+            dest.listFiles().orEmpty().filter { isPrivate(it.name) }.forEach(FileOps::delete)
             if (!includeWorlds) File(dest, "saves").deleteRecursively()
             if (!includeOptions) listOf("options.txt", "optionsof.txt").forEach { File(dest, it).delete() }
             // The copied metadata still names the source; replace only after validating the copy.
@@ -127,7 +133,7 @@ class InstanceStore(val root: File) {
     fun remove(id: String) { FileOps.delete(directory(get(id))) }
 
     fun export(id: String, destination: File, includeWorlds: Boolean = true): File {
-        Zip.write(directory(get(id)), destination) { p -> !p.startsWith(".cofre-trash") && (includeWorlds || (p != "saves" && !p.startsWith("saves/"))) }
+        Zip.write(directory(get(id)), destination) { p -> !isPrivate(p) && (includeWorlds || (p != "saves" && !p.startsWith("saves/"))) }
         return destination
     }
     fun import(archive: File, name: String? = null): Instance {
