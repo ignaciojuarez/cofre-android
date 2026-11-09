@@ -60,8 +60,8 @@ class Launcher(private val graph: AppGraph) {
         Device(R.string.stage_device),
         Account(R.string.stage_account),
         Java(R.string.stage_java),
-        Files(R.string.stage_files),
         Loader(R.string.stage_loader),
+        Files(R.string.stage_files),
         Start(R.string.stage_start),
         InGame(R.string.stage_in_game),
     }
@@ -212,9 +212,8 @@ class Launcher(private val graph: AppGraph) {
         val session = graph.accounts.session()
         log(graph.context.getString(R.string.log_account_ready))
         stage(Stage.Java)
-        val jre = JreManager(graph.context)
-        if (jre.bundledVersion() == null) error(graph.context.getString(R.string.launch_no_java))
-        graph.onIo { jre.install() }
+        // Unpacked by GameLaunch.prepare (or the NeoForge install) when it's missing.
+        if (JreManager(graph.context).bundledVersion() == null) error(graph.context.getString(R.string.launch_no_java))
         log("Java ${Target.JAVA_MAJOR}", LogLevel.Success)
         val spec = prepareGame(instance, session, quickPlay)
         stage(Stage.Start)
@@ -229,7 +228,7 @@ class Launcher(private val graph: AppGraph) {
         graph.library.refresh()
     }
 
-    /** Game files, NeoForge, then the runtime's launch spec with this instance's heap, JVM arguments and quick play. */
+    /** NeoForge, then the runtime's launch spec (game files and Java installed on the way) with this instance's heap, JVM arguments and quick play. */
     private suspend fun prepareGame(instance: Instance, session: Accounts.Session, quickPlay: QuickPlay?): File = coroutineScope {
         val game = GameLaunch(graph.context)
         val progress = launch(graph.io) {
@@ -238,18 +237,17 @@ class Launcher(private val graph: AppGraph) {
             }
         }
         try {
-            stage(Stage.Files)
-            withContext(graph.io) { game.files.install(Target.GAME_VERSION) }
-            log(graph.context.getString(R.string.log_files_ready), LogLevel.Success)
             stage(Stage.Loader)
             val loader = instance.loaderVersion ?: NeoForgeInstaller.VERSION
             val version = withContext(graph.io) { NeoForgeInstaller(graph.context, game.files).install(loader) }
             log("NeoForge $loader", LogLevel.Success)
+            stage(Stage.Files)
             val dir = graph.instances.directory(instance)
             val account = GameAccount(session.name, session.uuid)
             val heap = heapMB(instance)
             val jvm = instance.jvmArguments.split(Regex("\\s+")).filter { it.isNotBlank() }
             val file = InstanceStore.lock(dir).withLock { withContext(graph.io) { game.prepare(version, dir, account, heap, jvm, quickPlay?.args.orEmpty()) } }
+            log(graph.context.getString(R.string.log_files_ready), LogLevel.Success)
             log(graph.context.getString(R.string.log_heap, heap))
             file
         } finally {
