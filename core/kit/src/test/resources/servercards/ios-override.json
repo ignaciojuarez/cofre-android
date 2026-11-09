@@ -1,0 +1,73 @@
+{
+  "id": "ios-override",
+  "server": {
+    "name": "Forge restricted",
+    "addresses": [
+      {
+        "host": "play.example.test",
+        "port": 25565
+      }
+    ],
+    "network": "direct"
+  },
+  "game": {
+    "version": "1.20.1",
+    "java_version": 21
+  },
+  "loader": {
+    "version": "47.3.0",
+    "type": "forge"
+  },
+  "pack": {
+    "type": "mrpack",
+    "url": "https://owner.test/forge.mrpack",
+    "sha512": "11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+    "version": "3.3.0",
+    "size_bytes": 300000000
+  },
+  "content": {
+    "resourcePacks": [],
+    "shaders": [],
+    "clientMods": [
+      {
+        "id": "cf:1234",
+        "name": "Voice",
+        "required": true,
+        "sizeBytes": 1000000
+      }
+    ]
+  },
+  "security": {
+    "trust": "tofu",
+    "origin": "https://play.example.test",
+    "allowed_hosts": [
+      "play.example.test",
+      "owner.test"
+    ],
+    "max_bytes": 2000000000
+  },
+  "changelog": "Removed A; upgraded B",
+  "schema_version": "1.0.0",
+  "recommended_ram_mb": 4096,
+  "min_launcher_version": "0.4.0",
+  "update_policy": "prompt",
+  "signing": {
+    "algorithm": "ed25519",
+    "key_id": "k1",
+    "public_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "signature": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+  },
+  "platform_overrides": {
+    "ios": {
+      "exclude": [
+        "mod:voicechat"
+      ],
+      "replace": [
+        {
+          "id": "mod:renderer",
+          "with": "mod:ios-renderer"
+        }
+      ]
+    }
+  }
+}

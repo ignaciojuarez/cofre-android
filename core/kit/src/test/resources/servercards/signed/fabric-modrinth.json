@@ -1,0 +1,51 @@
+{
+  "id": "example",
+  "server": {
+    "name": "Example",
+    "addresses": [
+      {
+        "host": "play.example.test",
+        "port": 25565
+      }
+    ],
+    "network": "direct"
+  },
+  "game": {
+    "version": "1.21.1",
+    "java_version": 21
+  },
+  "loader": {
+    "version": "0.16.9",
+    "type": "fabric"
+  },
+  "pack": {
+    "type": "mrpack",
+    "url": "https://example.test/packs/a.mrpack",
+    "sha512": "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "version": "1.0.0",
+    "size_bytes": 123456
+  },
+  "content": {
+    "resourcePacks": [],
+    "shaders": [],
+    "clientMods": []
+  },
+  "security": {
+    "trust": "tofu",
+    "origin": "https://example.test",
+    "allowed_hosts": [
+      "example.test"
+    ],
+    "max_bytes": 2000000000
+  },
+  "schema_version": "1.0.0",
+  "recommended_ram_mb": 4096,
+  "min_launcher_version": "0.4.0",
+  "update_policy": "prompt",
+  "signing": {
+    "algorithm": "ed25519",
+    "key_id": "k1",
+    "public_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "signature": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+  }
+}
