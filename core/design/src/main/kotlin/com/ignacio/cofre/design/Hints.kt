@@ -22,9 +22,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -170,7 +172,8 @@ public fun KeyCap(
 
 /**
  * The bottom strip of controller prompts ("Ⓐ Select  Ⓑ Back  LB RB Sections"), for where focus is now. Shown
- * only while the last input came from a controller; touch hides it.
+ * only while the last input came from a controller; touch hides it. Hints keep their order (Select and Back first)
+ * and stay on one line: on a narrow screen the trailing ones that don't fit are left out.
  */
 @Composable
 public fun ControllerHintBar(
@@ -184,20 +187,39 @@ public fun ControllerHintBar(
         if (last != null && last.second == hint.label) last.first += hint.pad else acc += mutableListOf(hint.pad) to hint.label
         acc
     }
-    Row(
-        modifier
+    Layout(
+        content = {
+            groups.forEach { (pads, label) ->
+                Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+                    pads.forEach { ControllerGlyph(it) }
+                    CofreText(label, CofreTheme.type.label, Modifier.padding(start = 2.dp), color = CofreTheme.colors.muted, maxLines = 1)
+                }
+            }
+        },
+        modifier = modifier
             .fillMaxWidth()
             .block(BlockKind.Well)
             .clearAndSetSemantics {}
             .padding(horizontal = 10.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        groups.forEach { (pads, label) ->
-            Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-                pads.forEach { ControllerGlyph(it) }
-                CofreText(label, CofreTheme.type.label, Modifier.padding(start = 2.dp), color = CofreTheme.colors.muted)
+    ) { measurables, constraints ->
+        val gap = 14.dp.roundToPx()
+        // Each hint at its natural width; the first that would overflow ends the line.
+        val placeables = measurables.map { it.measure(Constraints(maxHeight = constraints.maxHeight)) }
+        val shown = placeables.take(hintsThatFit(placeables.map { it.width }, gap, constraints.maxWidth))
+        val height = (shown.maxOfOrNull { it.height } ?: 0).coerceIn(constraints.minHeight, constraints.maxHeight)
+        val width = shown.sumOf { it.width } + gap * (shown.size - 1).coerceAtLeast(0)
+        layout(if (constraints.hasBoundedWidth) constraints.maxWidth else width, height) {
+            var left = 0
+            shown.forEach { p ->
+                p.placeRelative(left, (height - p.height) / 2)
+                left += p.width + gap
             }
         }
     }
+}
+
+/** How many hints, in order, fit on one line of [max] px with [gap] px between them. */
+internal fun hintsThatFit(widths: List<Int>, gap: Int, max: Int): Int {
+    var x = -gap
+    return widths.takeWhile { w -> (x + gap + w <= max).also { if (it) x += gap + w } }.size
 }
