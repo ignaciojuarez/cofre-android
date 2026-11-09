@@ -19,7 +19,7 @@ scripts/natives/fetch.sh natives-20261109-7
 
 To rerun only a failed piece, dispatch the workflow with `pieces` set to e.g. `["jdk"]` and `reuse_run` set to an earlier run whose other pieces are green; the release job takes the missing pieces (and their alignment reports) from that run and refuses to publish without all three tarballs.
 
-The fetcher verifies SHA256SUMS before extracting the complete JRE into `.work/natives/<tag>/jre25/` and the native files into `.work/natives/<tag>/lib/arm64-v8a/`. Keep JRE `conf`, `legal`, `release`, `lib/modules`, `lib/server/libjvm.so`, other libraries and launcher helpers together. Runtime launch paths and Android packaging are handled by the runtime module.
+The fetcher trusts the release's SHA256SUMS only when its own SHA-256 matches `cofre.natives.sums` in `gradle.properties` (a new release needs both `cofre.natives` and that hash updated), and verifies every asset against it before extracting the complete JRE into `.work/natives/<tag>/jre25/` and the native files into `.work/natives/<tag>/lib/arm64-v8a/`. Keep JRE `conf`, `legal`, `release`, `lib/modules`, `lib/server/libjvm.so`, other libraries and launcher helpers together. Runtime launch paths and Android packaging are handled by the runtime module.
 
 ## Exact Minecraft 26.2 native names
 
