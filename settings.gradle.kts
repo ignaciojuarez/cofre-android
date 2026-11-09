@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "cofre-android"
 
-include(":app", ":core:kit", ":core:design", ":runtime")
+include(":app", ":core:kit", ":core:design", ":runtime", ":runtime:glfw-shim")

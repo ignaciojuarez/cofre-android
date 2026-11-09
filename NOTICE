@@ -1,0 +1,14 @@
+Cofre for Android
+Copyright (C) 2026 Ignacio Juarez. Licensed under the GNU General Public License v3.0 (see LICENSE).
+
+This product includes or adapts work from the projects below.
+
+LWJGL 3 (https://github.com/LWJGL/lwjgl3), BSD-3-Clause, Copyright (c) 2012-present Lightweight Java Game Library.
+  runtime/glfw-shim: the org.lwjgl.glfw class names, method signatures and GLFW constants follow
+  LWJGL 3.4.1 so the shim can replace LWJGL's GLFW classes on the game classpath.
+
+PojavLauncher (https://github.com/PojavLauncherTeam/PojavLauncher), LGPL-3.0.
+  runtime/glfw-shim and runtime/src/main/cpp: the design of a Java-side GLFW replacement fed by a
+  native event queue shared with ART, and the JRE start-up sequence (library load order,
+  LD_LIBRARY_PATH update, JLI_Launch on our own thread), are modelled on jre_lwjgl3glfw,
+  jre_launcher.c, utils.c and JREUtils.java.
