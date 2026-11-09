@@ -99,6 +99,30 @@ class DownloadsTest {
             assertEquals(2, peak.get()); assertEquals(6, queue.progress.value.files)
         }
     }
+    @Test fun thousandsOfSmallFilesQueueAndFinishQuickly() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            server.dispatcher = object : Dispatcher() { override fun dispatch(request: RecordedRequest) = MockResponse(body = request.url.encodedPath) }
+            // Like a game's assets: 4,000 files in 256 folders.
+            val items = (0 until 4_000).map { i ->
+                val body = "/asset-$i"
+                DownloadItem(server.url(body).toString(), File(root, "objects/${"%02x".format(i % 256)}/$i").path, size = body.length.toLong(), sha1 = Hashes.sha1(body.toByteArray()))
+            }
+            val queue = DownloadQueue(File(root, "queue.json"), concurrency = 8)
+            val started = System.nanoTime()
+            assertEquals(4_000, queue.enqueue(items).size)
+            assertTrue(System.nanoTime() - started < 2_000_000_000L, "enqueue took ${(System.nanoTime() - started) / 1_000_000} ms")
+            assertEquals(DownloadQueue.Result.Completed, withTimeout(30_000) { queue.run() })
+            assertEquals(4_000, queue.progress.value.files)
+            assertEquals("/asset-3999", File(items.last().destination).readText())
+            // The journal ends with the final state, so a new queue sees everything finished.
+            assertTrue(DownloadQueue(File(root, "queue.json")).progress.value.items.all { it.state == DownloadItem.State.Finished })
+        }
+    }
+    @Test fun batchRejectsTheSameDestinationTwice() {
+        val a = DownloadItem("https://cdn/a", File(root, "a").path)
+        assertFailsWith<IllegalArgumentException> { queue().enqueue(listOf(a, a.copy(id = "other"))) }
+    }
     @Test fun processDeathRestoresRunningAsPausedAndUsesPartLength() {
         val item = DownloadItem("https://cdn/a", File(root, "a").path, state = DownloadItem.State.Running, completedBytes = 500)
         item.part.writeText("abc"); File(root, "queue.json").writeText(Kit.json.encodeToString(listOf(item)))

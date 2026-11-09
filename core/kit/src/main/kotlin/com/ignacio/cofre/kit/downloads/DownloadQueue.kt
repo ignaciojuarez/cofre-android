@@ -77,6 +77,8 @@ class DownloadQueue(
     val progress: StateFlow<DownloadProgress> = mutableProgress.asStateFlow()
     private var startedAt = 0L
     private var transferred = 0L
+    private var dirty = false
+    private var savedAt = 0L
 
     init {
         if (journal.isFile) {
@@ -88,14 +90,28 @@ class DownloadQueue(
             publish()
         }
     }
-    fun enqueue(item: DownloadItem, metered: Boolean = false): String = synchronized(lock) {
-        require(item.size == null || item.size >= 0)
-        require(items.values.none { it.id != item.id && File(it.destination).canonicalPath == File(item.destination).canonicalPath && it.state !in listOf(DownloadItem.State.Finished, DownloadItem.State.Cancelled) }) { "Destination is already queued" }
-        require(item.id !in jobs) { "Download is running" }
-        val check = DiskPreflight.check((item.size ?: 0) - item.part.length(), File(item.destination))
-        if (!check.hasRoom) throw DownloadFailure.NoDiskSpace(check.needBytes, check.freeBytes)
-        items[item.id] = item.copy(completedBytes = item.part.length(), state = if (asksOnMetered(item.size, metered, item.allowMetered)) DownloadItem.State.WaitingForWifi else DownloadItem.State.Queued, error = null)
-        save(); item.id
+    fun enqueue(item: DownloadItem, metered: Boolean = false): String = enqueue(listOf(item), metered).single()
+
+    /** Adds [batch] with one disk check and one journal write: game installs queue thousands of assets at once. */
+    fun enqueue(batch: List<DownloadItem>, metered: Boolean = false): List<String> = synchronized(lock) {
+        val queued = items.values.filter { it.state !in listOf(DownloadItem.State.Finished, DownloadItem.State.Cancelled) }
+            .associateTo(HashMap()) { File(it.destination).canonicalPath to it.id }
+        for (item in batch) {
+            require(item.size == null || item.size >= 0)
+            val other = queued.put(File(item.destination).canonicalPath, item.id)
+            require(other == null || other == item.id) { "Destination is already queued" }
+            require(item.id !in jobs) { "Download is running" }
+        }
+        val parts = batch.associate { it.id to it.part.length() }
+        val bytes = batch.sumOf { (it.size ?: 0) - parts.getValue(it.id) }
+        batch.map { File(it.destination).absoluteFile.parentFile }.distinct().forEach {
+            val check = DiskPreflight.check(bytes, it)
+            if (!check.hasRoom) throw DownloadFailure.NoDiskSpace(check.needBytes, check.freeBytes)
+        }
+        batch.forEach { item ->
+            items[item.id] = item.copy(completedBytes = parts.getValue(item.id), state = if (asksOnMetered(item.size, metered, item.allowMetered)) DownloadItem.State.WaitingForWifi else DownloadItem.State.Queued, error = null)
+        }
+        save(force = true); batch.map { it.id }
     }
     fun retry(id: String, allowMetered: Boolean = false) = update(id) { it.copy(state = DownloadItem.State.Queued, error = null, allowMetered = allowMetered || it.allowMetered) }
     fun cancel(id: String) {
@@ -119,8 +135,8 @@ class DownloadQueue(
                 }
                 if (pending.isEmpty()) break
                 val remaining = pending.sumOf { ((it.size ?: 0) - it.part.length()).coerceAtLeast(0) }
-                pending.forEach {
-                    val check = DiskPreflight.check(remaining, File(it.destination))
+                pending.map { File(it.destination).absoluteFile.parentFile }.distinct().forEach {
+                    val check = DiskPreflight.check(remaining, it)
                     if (!check.hasRoom) throw DownloadFailure.NoDiskSpace(check.needBytes, check.freeBytes)
                 }
                 coroutineScope {
@@ -143,7 +159,7 @@ class DownloadQueue(
             if (failed.isNotEmpty()) return Result.Failed(failed)
             val waiting = snapshot.filter { it.state == DownloadItem.State.WaitingForWifi }.map { it.id }
             return if (waiting.isNotEmpty()) Result.NeedsMeteredApproval(waiting) else Result.Completed
-        } finally { runLock.unlock() }
+        } finally { synchronized(lock) { if (dirty) save(force = true) }; runLock.unlock() }
     }
     private suspend fun download(id: String) {
         if (item(id).state == DownloadItem.State.Cancelled) return
@@ -239,17 +255,30 @@ class DownloadQueue(
     private fun item(id: String): DownloadItem = synchronized(lock) { items.getValue(id) }
     private fun update(id: String, persist: Boolean = true, transform: (DownloadItem) -> DownloadItem) = synchronized(lock) {
         items[id]?.let { items[id] = transform(it) }
-        if (persist) save() else publish()
+        if (persist) dirty = true
+        // Outside a run every change is written at once; during one, [save] spaces the writes out.
+        if (dirty) save(force = !runLock.isLocked) else publish()
     }
     private fun publish() {
         val elapsed = if (startedAt == 0L) 0 else System.nanoTime() - startedAt
         mutableProgress.value = DownloadProgress(items.values.toList(), if (elapsed <= 0) 0 else (transferred * 1e9 / elapsed).toLong())
     }
-    private fun save() {
-        FileOps.atomic(journal, Kit.json.encodeToString(items.values.toList()).toByteArray()); publish()
+    /**
+     * Writes the journal at most every [JOURNAL_MILLIS] while a run changes it ([run] writes the last state as
+     * it ends), so thousands of small files don't mean thousands of rewrites. A kill loses at most that window:
+     * those items are checked again on disk.
+     */
+    private fun save(force: Boolean = false) {
+        val now = System.nanoTime()
+        if (force || now - savedAt >= JOURNAL_MILLIS * 1_000_000) {
+            FileOps.atomic(journal, Kit.json.encodeToString(items.values.toList()).toByteArray())
+            savedAt = now; dirty = false
+        }
+        publish()
     }
     companion object {
         const val METERED_ASK_BYTES: Long = 200L * 1024 * 1024
+        private const val JOURNAL_MILLIS = 1_000L
         fun asksOnMetered(bytes: Long?, metered: Boolean, allowed: Boolean = false): Boolean = metered && !allowed && (bytes ?: 0) > METERED_ASK_BYTES
         internal fun atomicMove(from: File, to: File) {
             try { Files.move(from.toPath(), to.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING) }

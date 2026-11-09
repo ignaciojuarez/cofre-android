@@ -86,36 +86,24 @@ class GameFiles(val root: File, private val http: OkHttpClient = Kit.http) {
     fun classpath(version: VersionJson): List<File> =
         (select(version.libraries).map { File(libraries, it.downloads?.artifact?.path ?: mavenPath(it.name)) } + clientJar(version)).distinct()
 
-    /**
-     * Runs [items] through kit's queue. Files already on disk with the right size are skipped;
-     * the rest are fetched in chunks, because the queue rewrites its journal on every change.
-     */
+    /** Runs [items] through kit's queue in one batch. Files already on disk with the right size are skipped. */
     suspend fun download(step: String, items: List<DownloadItem>) {
         val missing = items.distinctBy { it.destination }.filter { item ->
             val file = File(item.destination)
             !file.isFile || (item.size != null && file.length() != item.size)
         }
         val totalBytes = missing.sumOf { it.size ?: 0 }
-        var doneFiles = 0
-        var doneBytes = 0L
         mutableProgress.value = Progress(step, 0, missing.size, 0, totalBytes)
-        val journal = File(root, ".downloads/queue.json")
-        for (chunk in missing.chunked(CHUNK)) {
-            journal.delete()
-            val queue = DownloadQueue(journal, http, concurrency = 8)
-            chunk.forEach { queue.enqueue(it) }
-            val result = coroutineScope {
-                val watcher = launch {
-                    queue.progress.collect { p -> mutableProgress.value = Progress(step, doneFiles + p.files, missing.size, doneBytes + p.bytes, totalBytes) }
-                }
-                queue.run().also { watcher.cancel() }
-            }
-            if (result !is DownloadQueue.Result.Completed) {
-                val failed = queue.progress.value.items.firstOrNull { it.state == DownloadItem.State.Failed }
-                throw IOException("Couldn't download ${failed?.title ?: "game files"}: ${failed?.error ?: result}")
-            }
-            doneFiles += chunk.size
-            doneBytes += chunk.sumOf { it.size ?: 0 }
+        val journal = File(root, ".downloads/queue.json").apply { delete() }
+        val queue = DownloadQueue(journal, http, concurrency = 8)
+        queue.enqueue(missing)
+        val result = coroutineScope {
+            val watcher = launch { queue.progress.collect { p -> mutableProgress.value = Progress(step, p.files, missing.size, p.bytes, totalBytes) } }
+            queue.run().also { watcher.cancel() }
+        }
+        if (result !is DownloadQueue.Result.Completed) {
+            val failed = queue.progress.value.items.firstOrNull { it.state == DownloadItem.State.Failed }
+            throw IOException("Couldn't download ${failed?.title ?: "game files"}: ${failed?.error ?: result}")
         }
         journal.delete()
         mutableProgress.value = Progress(step, missing.size, missing.size, totalBytes, totalBytes)
@@ -125,7 +113,6 @@ class GameFiles(val root: File, private val http: OkHttpClient = Kit.http) {
         /** Cofre is a Linux arm64 machine as far as Mojang's rules go. */
         val rules = RuleContext(osName = "linux", arch = "arm64")
         private const val MOJANG_LIBRARIES = "https://libraries.minecraft.net/"
-        private const val CHUNK = 256
 
         /** Libraries the rules allow, minus desktop natives (`natives-*`, x86 builds). */
         fun select(libraries: List<Library>): List<Library> = libraries.filter { library ->
