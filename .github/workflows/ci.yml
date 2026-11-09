@@ -3,6 +3,8 @@ on:
   push:
     branches: [main]
   pull_request:
+permissions:
+  contents: read
 jobs:
   test:
     # macOS, like local builds: Roborazzi baselines are recorded on a Mac, and Linux renders text differently.
@@ -14,5 +16,6 @@ jobs:
           distribution: temurin
           java-version: 25
       - uses: gradle/actions/setup-gradle@v4
+      # The GLFW shim test downloads Minecraft's client jar from Mojang.
       - name: Tests, screenshots, lint, debug APK
-        run: ./gradlew --console=plain :core:kit:test testDebugUnitTest verifyRoborazziDebug lintDebug assembleDebug
+        run: ./gradlew --console=plain :core:kit:test :runtime:glfw-shim:test testDebugUnitTest verifyRoborazziDebug lintDebug assembleDebug
