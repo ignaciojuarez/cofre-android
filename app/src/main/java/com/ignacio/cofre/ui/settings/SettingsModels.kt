@@ -72,11 +72,17 @@ class LogsModel(private val graph: AppGraph) {
         return LogStore(instance?.let(graph.instances::directory) ?: graph.home, graph.launcherLog)
     }
 
-    /** Re-reads the log; the screen calls it about once a second while it's visible. */
+    /** What [lines] came from: the file (path, size, time), the source and the query. */
+    private var shown: List<Any?>? = null
+
+    /** Re-reads the log; the screen calls it about once a second while it's visible, so an unchanged file is skipped. */
     suspend fun load(query: String) {
         val source = source
+        val store = store()
+        val key = graph.onIo { store.file(source).let { listOf(it?.path, it?.length(), it?.lastModified(), source, query) } }
+        if (key == shown) return
         lines = graph.onIo {
-            store().search(query, sources = setOf(source)).takeLast(MAX_LINES).map { entry ->
+            store.search(query, sources = setOf(source)).takeLast(MAX_LINES).map { entry ->
                 val level = when (entry.level) {
                     KitLevel.Error -> LogLevel.Error
                     KitLevel.Warning -> LogLevel.Warning
@@ -86,6 +92,7 @@ class LogsModel(private val graph: AppGraph) {
                 LogLine("", source.name, ReportBundle.redact(entry.text), level)
             }
         }
+        shown = key
     }
 
     fun share() = graph.work({}) {
