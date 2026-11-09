@@ -1,3 +1,316 @@
 <resources>
     <string name="app_name">Cofre</string>
+
+    <!-- Common -->
+    <string name="play">Play</string>
+    <string name="cancel">Cancel</string>
+    <string name="close">Close</string>
+    <string name="save">Save</string>
+    <string name="clear">Clear</string>
+    <string name="back">Back</string>
+    <string name="delete">Delete</string>
+    <string name="delete_forever">Delete forever</string>
+    <string name="remove">Remove</string>
+    <string name="restore">Restore</string>
+    <string name="undo">Undo</string>
+    <string name="dismiss">Dismiss</string>
+    <string name="search">Search</string>
+    <string name="section_play">Play</string>
+    <string name="section_instances">Instances</string>
+    <string name="section_settings">Settings</string>
+
+    <!-- Errors -->
+    <string name="error_generic">Something went wrong. Try again.</string>
+    <string name="error_name_empty">Give it a name first.</string>
+    <string name="error_open_file">Couldn\'t open that file.</string>
+    <string name="error_game_running">Close the game first; it\'s using these files.</string>
+    <string name="error_missing_world">That world isn\'t there anymore.</string>
+    <string name="error_bedrock_world">That\'s a Bedrock world. Cofre plays Java Edition worlds.</string>
+    <string name="error_invalid_archive">That zip doesn\'t contain a Minecraft world.</string>
+
+    <!-- Setup -->
+    <string name="setup_step_welcome">Welcome</string>
+    <string name="setup_step_device">Device</string>
+    <string name="setup_step_account">Account</string>
+    <string name="setup_step_ready">Ready</string>
+    <string name="setup_welcome_title">Welcome to Cofre</string>
+    <string name="setup_welcome_body">Minecraft: Java Edition 26.2 with NeoForge, on your device\'s own Vulkan driver. Made for handhelds with a controller; touch works too.</string>
+    <string name="setup_get_started">Get started</string>
+    <string name="setup_device_title">Checking your device</string>
+    <string name="setup_vulkan">Vulkan renderer</string>
+    <string name="setup_java">Java 25</string>
+    <string name="setup_java_ready">Included; installs on first play</string>
+    <string name="setup_java_missing">Not included in this build</string>
+    <string name="setup_storage">Storage</string>
+    <string name="setup_storage_free">%1$s free</string>
+    <string name="setup_storage_low">Minecraft, NeoForge and Java need about %1$s. Free up some space before your first game.</string>
+    <string name="setup_ok">Ready</string>
+    <string name="setup_check">Check</string>
+    <string name="setup_continue">Continue</string>
+    <string name="setup_skip">Skip for now</string>
+    <string name="setup_signin_title">Sign in</string>
+    <string name="setup_signin_body">Java Edition needs the Microsoft account that owns it. You can also do this later in Settings.</string>
+    <string name="setup_ready_title">You\'re set</string>
+    <string name="setup_ready_body">Make an instance, add mods, and press Play. Start plays from anywhere on Play.</string>
+    <string name="setup_account">Account</string>
+    <string name="setup_signed_in">Signed in</string>
+    <string name="setup_signed_out">Not signed in yet</string>
+    <string name="setup_vulkan_no">Not supported here</string>
+    <string name="setup_open">Open Cofre</string>
+
+    <!-- Vulkan unsuitable -->
+    <string name="unsuitable_title">This device can\'t run Minecraft 26.2\'s Vulkan renderer</string>
+    <string name="unsuitable_body">Minecraft 26.2 draws everything with Vulkan 1.2 and a few newer features. This device\'s graphics driver doesn\'t have all of them, so the game can\'t start here.</string>
+    <string name="unsuitable_missing">What\'s missing</string>
+    <string name="unsuitable_can_do">What you can still do</string>
+    <string name="unsuitable_can_instances">Make, organise and back up instances</string>
+    <string name="unsuitable_can_mods">Browse and install mods and resource packs</string>
+    <string name="unsuitable_can_worlds">Manage worlds and servers</string>
+    <string name="unsuitable_device">This device</string>
+    <string name="unsuitable_continue">Continue without playing</string>
+    <string name="vk_none">Vulkan isn\'t available at all</string>
+    <string name="vk_version">Vulkan 1.2 (this driver is older)</string>
+    <string name="vk_dynamic_rendering">Dynamic rendering</string>
+    <string name="vk_push_descriptor">Push descriptors</string>
+    <string name="vk_synchronization2">Modern GPU synchronisation</string>
+    <string name="vk_divisor">Instanced vertex attributes</string>
+    <string name="vk_swapchain">Showing frames on the screen</string>
+    <string name="vk_multidraw">Batched drawing (multi-draw indirect)</string>
+    <string name="vk_wireframe">Wireframe drawing</string>
+    <string name="vk_anisotropy">Anisotropic texture filtering</string>
+    <string name="vk_draw_parameters">Shader draw parameters</string>
+    <string name="vk_timeline">Timeline semaphores</string>
+
+    <!-- Accounts -->
+    <string name="signin_not_configured">Sign-in isn\'t set up in this build.</string>
+    <string name="signin_cancelled">Sign-in was cancelled.</string>
+    <string name="signin_state_mismatch">That sign-in didn\'t come from Cofre. Try again.</string>
+    <string name="signin_waiting">Finish signing in in the browser…</string>
+    <string name="signin_working">Signing in…</string>
+    <string name="accounts_sign_in">Sign in with Microsoft</string>
+    <string name="accounts_sign_in_again">Sign in again</string>
+    <string name="accounts_signed_out">Signed out. Sign in again to play.</string>
+    <string name="accounts_microsoft">Microsoft account</string>
+    <string name="accounts_offline">Offline · debug builds only</string>
+    <string name="accounts_active">Active</string>
+    <string name="accounts_dev">Dev (offline)</string>
+    <string name="accounts_demo">This account doesn\'t own Java Edition · demo only</string>
+    <string name="accounts_remove_title">Remove %1$s?</string>
+    <string name="accounts_remove_body">Cofre forgets this account and its sign-in. Your instances and worlds stay.</string>
+
+    <!-- Play -->
+    <string name="play_side_title">Worlds &amp; servers</string>
+    <string name="play_instance">Instance</string>
+    <string name="play_memory">Memory</string>
+    <string name="play_version">Minecraft</string>
+    <string name="play_manage">Manage instance</string>
+    <string name="play_jump_back_in">Jump back in</string>
+    <string name="play_sign_in">Sign in to play Java Edition</string>
+    <string name="play_signed_out">Your account was signed out. Sign in again to play.</string>
+    <string name="play_need_account">Sign in first: Settings › Accounts.</string>
+
+    <!-- Launch -->
+    <string name="stage_device">Check the device</string>
+    <string name="stage_account">Account</string>
+    <string name="stage_java">Java 25</string>
+    <string name="stage_files">Game files</string>
+    <string name="stage_loader">NeoForge</string>
+    <string name="stage_start">Start Minecraft</string>
+    <string name="stage_in_game">In game</string>
+    <string name="launch_launching">Launching…</string>
+    <string name="launch_failed">Launch failed</string>
+    <string name="launch_step">Step %1$d of %2$d · %3$s</string>
+    <string name="launch_stages">Stages</string>
+    <string name="launch_log">Log</string>
+    <string name="launch_keep_open">Keep Cofre open while it loads.</string>
+    <string name="launch_try_again">Try again</string>
+    <string name="launch_vulkan_unsuitable">This device can\'t run Minecraft 26.2\'s Vulkan renderer. Missing: %1$s</string>
+    <string name="launch_no_java">This build doesn\'t include Java 25.</string>
+    <string name="launch_not_wired">Starting the game isn\'t connected in this build yet: game files and NeoForge come next.</string>
+    <string name="log_launch_start">Launching %1$s</string>
+    <string name="log_account_ready">Account ready</string>
+    <string name="log_heap">Memory limit %1$d MB</string>
+
+    <!-- Game stopped -->
+    <string name="stopped_next_step">Next step</string>
+    <string name="stopped_turn_off">Turn off %1$s</string>
+    <string name="stopped_turn_off_next">Turn off %1$s, then play again.</string>
+    <string name="stopped_mod_off">%1$s is off. Play again to try without it.</string>
+    <string name="stopped_play_again">Play again</string>
+    <string name="stopped_play_again_to">Play again · %1$s</string>
+    <string name="stopped_share">Share report</string>
+    <string name="stopped_details">Details</string>
+    <string name="stopped_exit_code">Exit code</string>
+    <string name="stopped_reason">Reason</string>
+
+    <!-- Servers -->
+    <string name="servers_title">Servers</string>
+    <string name="servers_empty">No servers yet. Add one, or join one in game.</string>
+    <string name="servers_join">Join</string>
+    <string name="servers_add">Add server</string>
+    <string name="servers_name">Name</string>
+    <string name="servers_address">Address</string>
+    <string name="servers_save">Save server</string>
+    <string name="servers_add_note">Saved in this instance\'s server list, so it shows in game too.</string>
+    <string name="servers_bad_address">That doesn\'t look like a server address.</string>
+    <string name="servers_offline">Can\'t reach it right now</string>
+    <string name="servers_players">%1$s online</string>
+    <string name="servers_remove_title">Remove %1$s?</string>
+    <string name="servers_remove_body">It leaves this instance\'s server list. You can add it again any time.</string>
+
+    <!-- Downloads -->
+    <string name="downloads_title">Downloads</string>
+    <string name="downloads_pause">Pause</string>
+    <string name="downloads_resume">Resume</string>
+    <string name="downloads_retry">Retry</string>
+    <string name="downloads_metered">%1$s download on mobile data</string>
+    <string name="downloads_wait">Wait for Wi‑Fi</string>
+    <string name="downloads_now">Download now</string>
+    <string name="downloads_empty_title">Nothing downloading</string>
+    <string name="downloads_empty_body">Mods and game files show up here while they download.</string>
+    <string name="downloads_speed">%1$s/s</string>
+    <string name="downloads_queued">Queued</string>
+    <string name="downloads_running">Downloading</string>
+    <string name="downloads_waiting">Waiting for Wi‑Fi</string>
+    <string name="downloads_paused">Paused</string>
+    <string name="downloads_failed">Failed</string>
+    <string name="downloads_finished">Done</string>
+    <string name="downloads_cancelled">Cancelled</string>
+
+    <!-- Instances -->
+    <string name="instances_new">+ New</string>
+    <string name="instances_new_long">New instance</string>
+    <string name="instances_loading">Loading instances…</string>
+    <string name="instances_empty_title">No instances yet</string>
+    <string name="instances_empty_body">Make one for Minecraft 26.2 with NeoForge, or import a zip.</string>
+    <string name="instances_no_match">No matches</string>
+    <string name="instances_no_match_body">Try another name.</string>
+    <string name="instances_favorites">★ Favourites</string>
+    <string name="instances_other">Other</string>
+    <string name="instances_recently_deleted">Recently deleted</string>
+    <string name="instances_deleted">%1$s moved to Recently deleted</string>
+    <string name="instances_import">Import instance (.zip)</string>
+    <string name="instances_pick_title">Pick an instance</string>
+    <string name="instances_pick_body">Its worlds, settings and actions show here.</string>
+    <string name="instance_overview">Overview</string>
+    <string name="instance_worlds">Worlds</string>
+    <string name="instance_settings">Settings</string>
+    <string name="instance_mods">Mods</string>
+    <string name="instance_size">Size</string>
+    <string name="instance_played">Played</string>
+    <string name="instance_never">Never</string>
+    <string name="instance_section">Instance</string>
+    <string name="instance_favorite">Favourite</string>
+    <string name="instance_duplicate">Duplicate</string>
+    <string name="instance_export">Export (.zip)</string>
+    <string name="instance_delete">Delete instance</string>
+    <string name="instance_delete_note">Deleted instances wait in Recently deleted until you delete them for good.</string>
+    <string name="instance_copy_name">%1$s copy</string>
+    <string name="instance_about">About</string>
+    <string name="instance_name">Name</string>
+    <string name="instance_group">Group</string>
+    <string name="instance_group_hint">None</string>
+    <string name="instance_notes">Notes</string>
+    <string name="instance_auto_memory_note">Uses %1$s, the launcher default</string>
+    <string name="instance_apply_memory">Use this limit</string>
+    <string name="instance_jvm">JVM arguments</string>
+    <string name="instance_jvm_note">Added after Cofre\'s own. If the game stops starting, Restore last working puts back the set that launched cleanly.</string>
+    <string name="instance_rollback">Restore last working</string>
+    <string name="instance_loader">Loader</string>
+    <string name="instance_neoforge">NeoForge version</string>
+    <string name="instance_loader_note">Minecraft 26.2 only. The new build installs the next time you play.</string>
+    <string name="new_title">New instance</string>
+    <string name="new_default_name">Survival</string>
+    <string name="new_preset">Recommended</string>
+    <string name="new_preset_note">%1$s Includes %2$d mods.</string>
+    <string name="new_only_target">Minecraft 26.2 with NeoForge, on Vulkan. That\'s the only setup Cofre for Android plays.</string>
+    <string name="new_create">Create</string>
+
+    <!-- Worlds -->
+    <string name="worlds_empty_title">No worlds yet</string>
+    <string name="worlds_empty_body">Play once and your worlds show up here, or import one.</string>
+    <string name="worlds_import">Import world (.zip)</string>
+    <string name="worlds_note">New worlds are made in game.</string>
+    <string name="worlds_more">More</string>
+    <string name="worlds_backup">Back up</string>
+    <string name="worlds_restore">Restore from a backup</string>
+    <string name="worlds_export">Export (.zip)</string>
+    <string name="worlds_copy">Copy to another instance</string>
+    <string name="worlds_copy_to">Copy to</string>
+    <string name="worlds_backups">Backups</string>
+    <string name="worlds_no_backups">No backups yet. Back up makes one.</string>
+    <string name="worlds_no_other">There\'s no other instance to copy to.</string>
+    <string name="worlds_restore_note">Restoring backs up the world as it is now first.</string>
+    <string name="worlds_deleted">%1$s deleted</string>
+    <string name="worlds_backed_up">%1$s backed up</string>
+    <string name="worlds_restored">%1$s restored</string>
+    <string name="worlds_copied">%1$s copied to %2$s</string>
+
+    <!-- Settings -->
+    <string name="settings_group_game">Game</string>
+    <string name="settings_group_account">Account</string>
+    <string name="settings_group_app">Cofre</string>
+    <string name="settings_game">Game defaults</string>
+    <string name="settings_controller">Controller</string>
+    <string name="settings_accounts">Accounts</string>
+    <string name="settings_curseforge">CurseForge key</string>
+    <string name="settings_storage">Storage</string>
+    <string name="settings_logs">Logs</string>
+    <string name="settings_about">About</string>
+    <string name="settings_licenses">Licenses</string>
+    <string name="settings_gallery">Design gallery</string>
+    <string name="game_memory">Memory</string>
+    <string name="game_auto_memory">Automatic memory</string>
+    <string name="game_auto_memory_note">%1$s on this device (%2$s RAM)</string>
+    <string name="game_memory_limit">Memory limit</string>
+    <string name="game_memory_note">Too much and Android may close the game without warning.</string>
+    <string name="game_display">Display</string>
+    <string name="game_immersive">Immersive mode</string>
+    <string name="game_immersive_note">Hide the status and navigation bars in Cofre. Swipe from the edge to show them.</string>
+    <string name="game_downloads">Downloads</string>
+    <string name="game_metered">Big downloads on mobile data</string>
+    <string name="game_metered_note">Off: downloads over 200 MB ask first.</string>
+    <string name="game_in_game_note">Render distance, FPS and video settings are in the game: Options › Video Settings.</string>
+    <string name="controller_swap">Swap A and B</string>
+    <string name="controller_swap_note">For pads (like the Odin in some modes) that report A where B is.</string>
+    <string name="controller_buttons">Buttons in Cofre</string>
+    <string name="controller_a">A selects</string>
+    <string name="controller_b">B goes back</string>
+    <string name="controller_shoulders">L1 / R1 switch sections</string>
+    <string name="controller_triggers">L2 / R2 page through long lists</string>
+    <string name="controller_y">Y searches</string>
+    <string name="controller_start">Start plays</string>
+    <string name="controller_in_game">In game, Controlify handles the controller; Cofre\'s own mapping takes over without it.</string>
+    <string name="curseforge_key">API key</string>
+    <string name="curseforge_placeholder">Paste your CurseForge key</string>
+    <string name="curseforge_note">Your own key from console.curseforge.com. It\'s stored encrypted on this device and never bundled with Cofre.</string>
+    <string name="curseforge_saved">Key saved</string>
+    <string name="curseforge_none">No key: Mods searches Modrinth only.</string>
+    <string name="storage_used">Space used</string>
+    <string name="storage_free">Free on device</string>
+    <string name="storage_cleanup">Clean up</string>
+    <string name="storage_reclaimable">Can be freed</string>
+    <string name="storage_cleanup_note">Old logs, crash reports and temporary downloads. Current logs and your game files stay.</string>
+    <string name="storage_clear">Free up space</string>
+    <string name="storage_freed">Freed %1$s</string>
+    <string name="storage_instances">Instances</string>
+    <string name="storage_game">Game files</string>
+    <string name="storage_java">Java</string>
+    <string name="storage_downloads">Downloads</string>
+    <string name="logs_launcher">Launcher</string>
+    <string name="logs_game">Game</string>
+    <string name="logs_crash">Crash report</string>
+    <string name="logs_empty">Nothing logged yet.</string>
+    <string name="logs_share">Share redacted report</string>
+    <string name="about_version">Version</string>
+    <string name="about_target">Plays</string>
+    <string name="about_source">Source code</string>
+    <string name="about_author">Made by</string>
+    <string name="about_note">Cofre is free software under the GPL-3.0. Not an official Minecraft product; not approved by or associated with Mojang or Microsoft.</string>
+    <string name="licenses_show_ofl">Show the font license (OFL 1.1)</string>
+    <string name="licenses_hide_ofl">Hide the font license</string>
+
+    <!-- Files provider -->
+    <string name="files_root_summary">Instances: mods, worlds, packs</string>
+    <string name="files_root_title">Instances</string>
 </resources>

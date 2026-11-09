@@ -1,9 +1,19 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.roborazzi)
 }
+
+// The Microsoft (Azure) client ID: an untracked secrets.properties at the repo root, or -Pcofre.microsoftClientId.
+// Empty means the build shows "Sign-in isn't set up" instead of failing.
+val secrets = Properties().apply {
+    rootProject.file("secrets.properties").takeIf { it.isFile }?.reader()?.use { load(it) }
+}
+val microsoftClientId: String = providers.gradleProperty("cofre.microsoftClientId").orNull
+    ?: secrets.getProperty("microsoftClientId").orEmpty()
 
 android {
     namespace = "com.ignacio.cofre"
@@ -15,6 +25,8 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         ndk { abiFilters += "arm64-v8a" }
+        buildConfigField("String", "MICROSOFT_CLIENT_ID", "\"${microsoftClientId.replace("\"", "")}\"")
+        buildConfigField("String", "MICROSOFT_REDIRECT_URI", "\"cofre://auth\"")
     }
     buildTypes {
         release {
@@ -43,6 +55,43 @@ kotlin {
     }
 }
 
+// Robolectric's SDK 36 sandbox reaches into JDK internals; the build JDK (25) only allows it when asked.
+tasks.withType<Test>().configureEach {
+    jvmArgs(
+        "--add-exports=java.base/jdk.internal.access=ALL-UNNAMED",
+        "--add-opens=java.base/jdk.internal.access=ALL-UNNAMED",
+        "--enable-native-access=ALL-UNNAMED",
+    )
+}
+
+// Baselines live next to the tests so they're reviewed and committed with the change.
+roborazzi {
+    outputDir.set(file("src/test/screenshots"))
+}
+
+/** The repo's NOTICE as an asset, so the licenses screen shows exactly what ships. */
+abstract class NoticeAsset : DefaultTask() {
+    @get:InputFile @get:PathSensitive(PathSensitivity.NONE)
+    abstract val notice: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun run() {
+        notice.get().asFile.copyTo(outputDir.get().asFile.resolve("NOTICE.txt"), overwrite = true)
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        val task = tasks.register<NoticeAsset>("${variant.name}NoticeAsset") {
+            notice.set(rootProject.layout.projectDirectory.file("NOTICE"))
+        }
+        variant.sources.assets?.addGeneratedSourceDirectory(task, NoticeAsset::outputDir)
+    }
+}
+
 dependencies {
     implementation(project(":core:kit"))
     implementation(project(":core:design"))
@@ -55,6 +104,7 @@ dependencies {
     implementation(libs.androidx.navigation3.runtime)
     implementation(libs.androidx.navigation3.ui)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.browser)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
@@ -68,6 +118,8 @@ dependencies {
     testImplementation(libs.roborazzi.compose)
     testImplementation(libs.roborazzi.junit)
     testImplementation(libs.compose.ui.test.junit4)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.okhttp.mockwebserver)
     debugImplementation(libs.compose.ui.test.manifest)
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(platform(libs.compose.bom))
