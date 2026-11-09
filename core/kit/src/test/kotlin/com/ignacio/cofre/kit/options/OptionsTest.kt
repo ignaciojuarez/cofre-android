@@ -38,7 +38,9 @@ class OptionsTest {
     }
     @Test fun fmlCreatesMissingFile() { FMLConfig.disableEarlyWindow(root); assertEquals("earlyWindowControl = false\n", File(root, "config/fml.toml").readText()) }
     @Test fun heapFollowsAndroidRAMTiers() {
-        for ((ram, expected) in listOf(8192 to 4096, 12288 to 6144, 16384 to 8192, 32768 to 8192, 6144 to 3072, 4096 to 2048, 2048 to 2048)) assertEquals(expected, JavaHeap.autoMB(ram))
+        for ((ram, expected) in listOf(8192 to 4096, 12288 to 6144, 16384 to 8192, 32768 to 8192, 4096 to 2048, 2048 to 2048,
+            // What Android reports for 16/12/8/6 GB phones (OnePlus 5, 6 GB: 5,714 MiB).
+            15_200 to 8192, 11_400 to 6144, 7_600 to 4096, 5_714 to 2857)) assertEquals(expected, JavaHeap.autoMB(ram))
         assertFails { JavaHeap.autoMB(0) }
     }
     @Test fun bundledPresetPinsEveryModAndTheLibrariesTheyRequire() {

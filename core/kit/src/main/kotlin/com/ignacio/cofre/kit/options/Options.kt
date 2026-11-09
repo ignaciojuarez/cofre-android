@@ -47,13 +47,16 @@ object FMLConfig {
 }
 
 object JavaHeap {
-    /** RAM and result in MiB, using marketed 8/12/16 GB tiers. */
+    /**
+     * RAM and result in MiB: 8/12/16 GB devices get a 4/6/8 GB heap (PLAN.md). Android's `totalMem` is ~93% of the
+     * marketed size (the kernel and carve-outs take the rest), so each tier starts at 90% of it.
+     */
     fun autoMB(physicalMB: Int): Int {
         require(physicalMB > 0)
         return when {
-            physicalMB >= 16 * 1024 -> 8192
-            physicalMB >= 12 * 1024 -> 6144
-            physicalMB >= 8 * 1024 -> 4096
+            physicalMB >= 16 * 1024 * 9 / 10 -> 8192
+            physicalMB >= 12 * 1024 * 9 / 10 -> 6144
+            physicalMB >= 8 * 1024 * 9 / 10 -> 4096
             else -> maxOf(2048, physicalMB / 2)
         }
     }
