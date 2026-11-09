@@ -59,6 +59,7 @@ import java.time.format.DateTimeFormatter
  */
 class Launcher(private val graph: AppGraph) {
     enum class Stage(@param:StringRes val title: Int) {
+        Mods(R.string.stage_mods),
         Device(R.string.stage_device),
         Account(R.string.stage_account),
         Java(R.string.stage_java),
@@ -136,12 +137,14 @@ class Launcher(private val graph: AppGraph) {
     val gameRunning: Boolean get() = pendingFile.isFile && gameProcessAlive()
 
     /**
-     * Checks the instance's mods first (cached per jar, so it's quick once the Installed tab has seen them): a missing
-     * requirement, or a mod that will or likely will crash on Vulkan, opens "Before you play". "May not work" doesn't.
+     * Checks the instance's mods first: a missing requirement, or a mod that will or likely will crash on Vulkan, opens
+     * "Before you play". "May not work" doesn't. Jars the Installed tab hasn't graded yet are scanned here, which takes
+     * a while on a big new pack, so the launch screen shows this as its first stage.
      */
     fun play(instance: Instance, quickPlay: QuickPlay? = null) {
         if (job?.isActive == true || preflight != null || refusedWhileRunning(instance, quickPlay)) return
         graph.library.select(instance.id)
+        run = Run(instance, quickPlay, stage = Stage.Mods)
         job = graph.work({ start(instance, quickPlay) }) {
             val dir = graph.instances.directory(instance)
             val mods = File(dir, "mods")
@@ -154,6 +157,7 @@ class Launcher(private val graph: AppGraph) {
                     graph.context.getString(R.string.mods_needs, by, req.name)
                 }
             }
+            run = null
             preflight = Preflight(instance, quickPlay, missing, lines, issues)
         }
     }

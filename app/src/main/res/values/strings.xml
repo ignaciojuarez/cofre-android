@@ -110,6 +110,7 @@
     <string name="play_need_account">Sign in first: Settings › Accounts.</string>
 
     <!-- Launch -->
+    <string name="stage_mods">Check the mods</string>
     <string name="stage_device">Check the device</string>
     <string name="stage_account">Account</string>
     <string name="stage_java">Java 25</string>
