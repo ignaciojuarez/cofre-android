@@ -5,7 +5,9 @@ import android.security.keystore.KeyProperties
 import com.ignacio.cofre.kit.common.Kit
 import com.ignacio.cofre.kit.modpacks.FileOps
 import java.io.File
+import java.security.GeneralSecurityException
 import java.security.KeyStore
+import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -13,14 +15,18 @@ import javax.crypto.spec.GCMParameterSpec
 
 /**
  * Small secrets (account tokens, the CurseForge key) as one AES-GCM-encrypted JSON map in [file]. The key lives in
- * Android Keystore and never leaves it. A file the key can't open (restored on another device, key wiped) reads as
- * empty: accounts then show "signed out" instead of crashing.
+ * Android Keystore and never leaves it. A file the key definitely can't open (restored on another device, key wiped)
+ * is moved aside to `secrets.bin.bad-<time>` and the vault starts empty: accounts then show "signed out". Any other
+ * failure (Keystore not ready after boot) is not cached: [get] reads as missing, and writes fail rather than
+ * overwrite secrets that may still be readable later.
  */
 class SecretVault(private val file: File, private val key: () -> SecretKey = ::keystoreKey) {
     private val lock = Any()
     private var cache: MutableMap<String, String>? = null
 
-    fun get(name: String): String? = synchronized(lock) { load()[name] }
+    fun get(name: String): String? = synchronized(lock) {
+        try { load()[name] } catch (_: GeneralSecurityException) { null } // transient: try again next time
+    }
 
     fun set(name: String, value: String?) = synchronized(lock) {
         val map = load()
@@ -35,8 +41,13 @@ class SecretVault(private val file: File, private val key: () -> SecretKey = ::k
     }
 
     private fun load(): MutableMap<String, String> = cache ?: run {
-        val read = if (file.isFile) runCatching { decrypt(file.readBytes()) }.getOrNull() else null
-        (read ?: mutableMapOf()).also { cache = it }
+        val read = if (!file.isFile) mutableMapOf() else try {
+            decrypt(file.readBytes())
+        } catch (_: AEADBadTagException) {
+            file.renameTo(File(file.parentFile, "${file.name}.bad-${System.currentTimeMillis()}"))
+            mutableMapOf()
+        }
+        read.also { cache = it }
     }
 
     private fun write(map: Map<String, String>) {

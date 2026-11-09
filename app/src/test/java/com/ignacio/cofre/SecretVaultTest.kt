@@ -2,8 +2,11 @@ package com.ignacio.cofre
 
 import org.junit.Test
 import java.nio.file.Files
+import java.security.KeyStoreException
 import javax.crypto.KeyGenerator
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 
@@ -25,9 +28,29 @@ class SecretVaultTest {
         assertEquals("cf-key", SecretVault(file) { key }.get("curseforge.key"))
     }
 
-    @Test fun aFileTheKeyCannotOpenReadsAsEmpty() {
+    @Test fun aFileTheKeyCannotOpenIsMovedAsideNotOverwritten() {
         val file = Files.createTempDirectory("vault").resolve("secrets.bin").toFile()
         SecretVault(file) { key() }.set("token", "x")
-        assertNull(SecretVault(file) { key() }.get("token"))
+        val old = file.readBytes()
+        val vault = SecretVault(file) { key() }
+        assertNull(vault.get("token"))
+        val aside = file.parentFile!!.listFiles().orEmpty().single { it.name.startsWith("secrets.bin.bad-") }
+        assertContentEquals(old, aside.readBytes())
+        vault.set("token", "y")
+        assertEquals("y", vault.get("token"))
+    }
+
+    @Test fun aTransientKeystoreFailureNeitherCachesNorOverwrites() {
+        val file = Files.createTempDirectory("vault").resolve("secrets.bin").toFile()
+        val key = key()
+        SecretVault(file) { key }.set("token", "x")
+        val old = file.readBytes()
+        var ready = false
+        val vault = SecretVault(file) { if (ready) key else throw KeyStoreException("not unlocked yet") }
+        assertNull(vault.get("token"))
+        assertFailsWith<KeyStoreException> { vault.set("other", "y") }
+        assertContentEquals(old, file.readBytes())
+        ready = true
+        assertEquals("x", vault.get("token"))
     }
 }
