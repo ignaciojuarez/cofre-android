@@ -24,7 +24,7 @@ class GameOptions(gameDirectory: File) {
     fun seedPreset(preset: CofrePreset, physicalMB: Int): Boolean = seed(preset.options(physicalMB))
     private fun text(): String = if (file.exists()) file.readText() else ""
     companion object {
-        fun distances(physicalMB: Int): Map<String, String> = if (physicalMB >= 6000) mapOf("renderDistance" to "10", "simulationDistance" to "8") else mapOf("renderDistance" to "6", "simulationDistance" to "5")
+        fun distances(physicalMB: Int): Map<String, String> = if (physicalMB >= 6 * 1024 * 9 / 10) mapOf("renderDistance" to "10", "simulationDistance" to "8") else mapOf("renderDistance" to "6", "simulationDistance" to "5")
         internal fun append(text: String, line: String): String {
             val newline = if (text.contains("\r\n")) "\r\n" else "\n"
             return if (text.isEmpty()) line else if (text.endsWith('\n')) text + line + newline else text + newline + line

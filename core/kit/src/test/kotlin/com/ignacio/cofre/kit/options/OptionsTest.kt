@@ -48,6 +48,7 @@ class OptionsTest {
         assertEquals(listOf("mc26.2-0.9.2-neoforge", "3.5.3+mc26.2", "3.9.7+26.2-neoforge", "1.16.5+26.2-neoforge", "1.11.3", "9.0.0-neoforge", "5.27.21+mc26.2"), p.pinnedMods.map { it.version })
         assertTrue(p.pinnedMods.all { it.url.startsWith("https://cdn.modrinth.com/") && it.sha512.length == 128 })
         assertEquals("6", p.options(4096)["renderDistance"]); assertEquals("10", p.options(8192)["renderDistance"])
+        assertEquals("10", p.options(5_714)["renderDistance"]) // a 6 GB phone reports ~5.7 GB
     }
     @Test fun presetSeedsOnlyMissingSettings() {
         val o = GameOptions(root); o.file.writeText("renderDistance:16\nmaxFps:30\n"); assertTrue(o.seedPreset(PresetCatalog.presets.single(), 12000))

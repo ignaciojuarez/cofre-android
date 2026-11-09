@@ -12,7 +12,7 @@ import java.io.File
 data class CofrePreset(val id: String, val name: String, val pitch: String, val gameVersion: String, val loader: Loader, val loaderVersion: String, val renderer: String, val status: String, val pinnedMods: List<Mod>, val firstCreateOptions: Map<String, Map<String, String>>, val sourceDate: String) {
     @Serializable
     data class Mod(val project: String, val slug: String, val version: String, val file: String, val sha512: String, val license: String, val url: String)
-    fun options(physicalMB: Int): Map<String, String> = firstCreateOptions.getValue(if (physicalMB >= 6000) "high" else "low")
+    fun options(physicalMB: Int): Map<String, String> = firstCreateOptions.getValue(if (physicalMB >= 6 * 1024 * 9 / 10) "high" else "low")
     fun validate() {
         require(id.isNotBlank() && name.isNotBlank() && pitch.isNotBlank())
         require(gameVersion == Target.GAME_VERSION && loader == Target.LOADER && renderer == "vulkan" && loaderVersion.isNotBlank())
