@@ -18,9 +18,11 @@ class WorldStore(val gameDirectory: File, private val isGameRunning: () -> Boole
     private val saves: File get() = FileOps.child(gameDirectory, "saves")
     private val backups: File get() = FileOps.child(gameDirectory, "backups")
     fun list(): List<World> = saves.listFiles().orEmpty().filter { !it.name.startsWith('.') && !Files.isSymbolicLink(it.toPath()) && isWorld(it) }.map(::read).sortedByDescending { it.lastPlayed }
+    /** [backup]'s own files for [world]: `<world>-<instant>[-<8 hex>].zip`, so "survival-hardcore"'s stay out of "survival"'s. */
     fun backups(world: String): List<WorldBackup> {
         existing(world)
-        return backups.listFiles().orEmpty().filter { it.name.startsWith("$world-") && it.extension == "zip" && !Files.isSymbolicLink(it.toPath()) }.map { WorldBackup(it, Instant.ofEpochMilli(it.lastModified()), it.length()) }.sortedByDescending { it.date }
+        val name = Regex(Regex.escape(world) + "-\\d{4}-\\d{2}-\\d{2}T\\d{2}-\\d{2}-\\d{2}(?:\\.\\d+)?Z(?:-[0-9a-f]{8})?\\.zip")
+        return backups.listFiles().orEmpty().filter { name.matches(it.name) && !Files.isSymbolicLink(it.toPath()) }.map { WorldBackup(it, Instant.ofEpochMilli(it.lastModified()), it.length()) }.sortedByDescending { it.date }
     }
     fun backup(world: String, date: Instant = Instant.now()): File {
         writable(); val source = existing(world)

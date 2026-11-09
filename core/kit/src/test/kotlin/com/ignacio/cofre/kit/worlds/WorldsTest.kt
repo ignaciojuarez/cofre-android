@@ -62,6 +62,11 @@ class WorldsTest {
         assertEquals("old", File(dir, "marker").readText()); assertEquals(2, s.backups("Main").size)
         val savedCurrent = s.backups("Main").first { it.file != backup }; assertEquals("new", Zip.read(savedCurrent.file, "marker").decodeToString())
     }
+    @Test fun backupsBelongOnlyToTheirOwnWorld() {
+        world("survival"); world("survival-hardcore"); val s = WorldStore(root); val at = Instant.parse("2026-11-08T12:34:56.789Z")
+        val mine = s.backup("survival", at); val again = s.backup("survival", at); val other = s.backup("survival-hardcore", at)
+        assertEquals(setOf(mine, again), s.backups("survival").map { it.file }.toSet()); assertEquals(listOf(other), s.backups("survival-hardcore").map { it.file })
+    }
     @Test fun invalidRestoreLeavesWorldAndNoSpuriousBackup() {
         world("Main"); val s = WorldStore(root); val bad = File(root, "bad.zip").apply { writeText("bad") }
         assertFails { s.restore(bad, "Main") }; assertEquals("MAIN", s.list().single().name); assertTrue(s.backups("Main").isEmpty())
