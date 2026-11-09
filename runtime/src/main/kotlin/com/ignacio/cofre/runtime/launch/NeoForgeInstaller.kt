@@ -84,7 +84,6 @@ class NeoForgeInstaller(private val context: Context, private val files: GameFil
                 gameDir = work.path,
                 logFile = log.path,
                 exitFile = File(work, "processor-${i + 1}.exit.json").path,
-                builtInController = false,
             )
             val code = InstallerService.run(context, spec, File(work, "processor-${i + 1}.json"), "Installing NeoForge $version", "Step ${i + 1} of ${steps.size}")
             Log.i(TAG, "[Cofre] neoforge processor ${i + 1}/${steps.size} exited code=$code")

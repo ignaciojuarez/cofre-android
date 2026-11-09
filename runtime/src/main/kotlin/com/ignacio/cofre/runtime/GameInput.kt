@@ -70,9 +70,6 @@ internal object GlfwKeys {
  *   A → jump (Space)           B / Start → Escape           X → drop (Q)               Y → inventory (E)
  *   L1 / R1 → hotbar left/right (scroll)                    L3 → sprint (Ctrl)         R3 → sneak (Shift)
  *   D-pad up → perspective (F5), down → swap hands (F), left/right → hotbar            Select → player list (Tab)
- *
- * Controlify seam: when Controlify reads the controller itself through SDL3, LaunchSpec.builtInController
- * is false and GameActivity never creates this class.
  */
 internal class GamepadMapper {
     private val held = HashSet<Int>() // GLFW keys / mouse buttons (as -1 - button) we've pressed

@@ -7,7 +7,7 @@ The game side of Cofre: Vulkan check, JRE install, the `:game` process, the GLFW
 |---|---|
 | `VulkanSupport.check(): VulkanReport` | Driver vs 26.2's needs: `suitable`, `missing`, per-extension/feature maps. Logs `[Cofre] vulkan check suitable=… missing=[…]` |
 | `JreManager(context).install(): File` | Unpacks the bundled JRE into `filesDir/runtimes/jre-25` (atomic, version-stamped). `isInstalled()`, `bundledVersion()` |
-| `LaunchSpec(...).write(file)` | javaHome, classpath, jvmArgs, mainClass, gameArgs, gameDir, env, logFile, exitFile, builtInController. Never holds the access token: args carry `LaunchSpec.TOKEN` |
+| `LaunchSpec(...).write(file)` | javaHome, classpath, jvmArgs, mainClass, gameArgs, gameDir, logFile, exitFile. Never holds the access token: args carry `LaunchSpec.TOKEN` |
 | `startActivity(GameActivity.intent(context, specFile, accessToken))` | Runs the game in `:game`. Puts the token in place of `LaunchSpec.TOKEN` in memory; adds the GLFW shim first on the classpath and the LWJGL/java.home properties |
 | `ExitRecord.read(exitFile)` | `code` + `timeMillis` when the JVM ended; `null` after a crash or kill |
 | `GameFiles(filesDir/minecraft)` | Shared store (`versions/`, `libraries/`, `assets/`). `install(id)` downloads client, libraries (Linux arm64 rules, no desktop natives) and assets through kit's queue, hash-checked; `progress: StateFlow<Progress>` |

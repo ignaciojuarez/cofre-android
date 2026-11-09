@@ -22,16 +22,10 @@ data class LaunchSpec(
     val gameArgs: List<String>,
     /** Working directory of the game (the instance folder). */
     val gameDir: String,
-    val env: Map<String, String> = emptyMap(),
     /** The JVM's stdout and stderr go here (and to logcat in debuggable builds). */
     val logFile: String,
     /** Where the :game process writes its [ExitRecord] as it ends. */
     val exitFile: String,
-    /**
-     * Our gamepad → keyboard/mouse mapping. Set false when Controlify drives the controller
-     * itself through SDL3; then GameActivity leaves gamepad events alone.
-     */
-    val builtInController: Boolean = true,
 ) {
     /** This spec with the account's token in place of [TOKEN]. */
     fun withToken(token: String): LaunchSpec = copy(gameArgs = gameArgs.map { it.replace(TOKEN, token) })

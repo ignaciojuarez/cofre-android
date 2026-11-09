@@ -58,7 +58,7 @@ internal object GameBridge {
             "HOME" to spec.gameDir,
             "TMPDIR" to context.cacheDir.path,
             "LD_LIBRARY_PATH" to "${spec.javaHome}/lib/server:${spec.javaHome}/lib:$nativeDir",
-        ) + spec.env
+        )
         env.forEach { (key, value) -> Os.setenv(key, value, true) }
         val args = command(spec, nativeDir, context.cacheDir, classpathFirst, extraJvmArgs)
         Log.i(TAG, "[Cofre] launching ${spec.mainClass} java.home=${spec.javaHome}")

@@ -15,7 +15,7 @@
             android:process=":game"
             android:exported="false"
             android:screenOrientation="sensorLandscape"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|fontScale|locale|layoutDirection|touchscreen|colorMode"
+            android:configChanges="mcc|mnc|orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|fontScale|fontWeightAdjustment|locale|layoutDirection|touchscreen|colorMode|grammaticalGender|assetsPaths"
             android:enableOnBackInvokedCallback="true"
             android:resizeableActivity="false"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen" />

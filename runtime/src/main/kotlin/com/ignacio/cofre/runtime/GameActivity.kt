@@ -36,14 +36,16 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
         fun intent(context: Context, spec: File, accessToken: String? = null): Intent =
             Intent(context, GameActivity::class.java).putExtra(EXTRA_SPEC, spec.absolutePath).putExtra(EXTRA_TOKEN, accessToken)
 
+        // The game's state, per process: an activity recreated in place (theme or bold-text change,
+        // "Don't keep activities") finds the same JVM.
         private var started = false // one JVM per process
+        private var wantCapture = false // the game captured the cursor (mouse-look)
         private var activity: GameActivity? = null
     }
 
     private lateinit var view: SurfaceView
     private lateinit var nativeDir: File
-    private var gamepad: GamepadMapper? = null
-    private var wantCapture = false
+    private val gamepad = GamepadMapper()
     private var hasSurface = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -72,7 +74,6 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
         if (started || path == null) return
         started = true
         val spec = LaunchSpec.read(File(path)).let { s -> intent.getStringExtra(EXTRA_TOKEN)?.let(s::withToken) ?: s }
-        if (spec.builtInController) gamepad = GamepadMapper()
         thread(name = "cofre-requests", isDaemon = true) { serveRequests() }
         start(spec)
     }
@@ -140,7 +141,7 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
     // its next glfwCreateWindowSurface waits for the new surface; it has to rebuild its swapchain.
     override fun surfaceDestroyed(holder: SurfaceHolder) {
         hasSurface = false
-        gamepad?.releaseAll()
+        gamepad.releaseAll()
         GameBridge.iconify(true)
         GameBridge.focus(false)
         GameBridge.setSurface(null, 0, 0)
@@ -153,7 +154,7 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
             hideSystemBars()
             if (wantCapture) view.requestPointerCapture()
         } else {
-            gamepad?.releaseAll()
+            gamepad.releaseAll()
         }
         if (hasSurface) GameBridge.focus(hasFocus)
     }
@@ -168,7 +169,7 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
     // ---- Input ---------------------------------------------------------------------------------
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        gamepad?.let { if (it.handles(event) && it.onKey(event)) return true }
+        if (gamepad.handles(event) && gamepad.onKey(event)) return true
         if (event.keyCode == KeyEvent.KEYCODE_BACK) {
             if (event.action == KeyEvent.ACTION_UP) tapEscape()
             return true
@@ -192,11 +193,9 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
     }
 
     private fun onGenericMotion(event: MotionEvent): Boolean {
-        gamepad?.let {
-            if (it.handles(event)) {
-                it.onMotion(event)
-                return true
-            }
+        if (gamepad.handles(event)) {
+            gamepad.onMotion(event)
+            return true
         }
         if (!event.isFromSource(InputDevice.SOURCE_CLASS_POINTER)) return false
         when (event.actionMasked) {
