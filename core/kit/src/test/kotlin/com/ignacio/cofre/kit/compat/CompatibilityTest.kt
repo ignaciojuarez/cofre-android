@@ -52,6 +52,11 @@ class CompatibilityTest {
         val j = jar("a.jar", mapOf("example/A.class" to clazz("org/lwjgl/opengl/GL11C"), "example/B.class" to clazz("java/lang/Object")))
         val r = GlUsageScanner.scan(j); assertEquals("example/A", r.usages.single().className); assertTrue(r.excluded.isEmpty())
     }
+    @Test fun scannerFindsOpenGLInNeoForgeJarInJar() {
+        val inner = jar("inner.jar", mapOf("lib/Gl.class" to clazz("org/lwjgl/opengl/GL11C"))).readBytes()
+        val outer = jar("outer.jar", mapOf("META-INF/jarjar/inner.jar" to inner, "example/B.class" to clazz("java/lang/Object"), "assets/other.jar" to inner))
+        assertEquals(listOf("inner.jar!/lib/Gl"), GlUsageScanner.scan(outer).usages.map { it.className })
+    }
     @Test fun malformedClassesFailInsteadOfLookingCompatible() {
         val c = clazz("java/lang/Object"); for (n in listOf(0, 9, c.size - 1)) assertFails { GlUsageScanner.references(c.copyOf(n)) }
         val bad = c.copyOf(); bad[10] = 99; assertFails { GlUsageScanner.references(bad) }
