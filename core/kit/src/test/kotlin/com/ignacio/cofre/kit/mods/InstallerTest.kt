@@ -1,8 +1,10 @@
 package com.ignacio.cofre.kit.mods
 
+import com.ignacio.cofre.kit.common.ContentKind
 import com.ignacio.cofre.kit.common.Hashes
 import com.ignacio.cofre.kit.common.Kit
 import com.ignacio.cofre.kit.common.Loader
+import com.ignacio.cofre.kit.downloads.DownloadProgress
 import com.ignacio.cofre.kit.modrinth.Modrinth
 import kotlinx.coroutines.*
 import mockwebserver3.*
@@ -22,10 +24,25 @@ class InstallerTest {
             server.start(); val aJar = modJar("a", "[[dependencies.a]]\nmodId='lib'\nrequired=true"); val libJar = modJar("lib")
             server.dispatcher = object : Dispatcher() { override fun dispatch(request: RecordedRequest): MockResponse = response(if (request.url.encodedPath == "/a.jar") aJar else libJar) }
             val lib = candidate(server, "lib", libJar); val a = candidate(server, "a", aJar)
-            val installed = ModInstaller(root).install(ModInstallPlan(a, required = listOf(lib)))
+            val seen = mutableListOf<DownloadProgress>()
+            val installed = ModInstaller(root).install(ModInstallPlan(a, required = listOf(lib)), onProgress = { seen += it })
             assertEquals(setOf("a", "lib"), installed.map { it.projectId }.toSet())
+            val last = seen.last(); assertEquals(2, last.files); assertEquals(2, last.totalFiles); assertEquals(aJar.size.toLong() + libJar.size, last.bytes); assertEquals(last.bytes, last.totalBytes)
             val index = ModIndex(root).read(); assertTrue(index.getValue("a-1.jar").installedDirectly); assertFalse(index.getValue("lib-1.jar").installedDirectly)
             assertTrue(File(root, "cofre-mods.json").isFile); assertTrue(File(root, ".cofre-mods-staging").listFiles()!!.isEmpty())
+        }
+    }
+    @Test fun packsDownloadIntoTheirFolderWithProgress() = runBlocking {
+        MockWebServer().use { server ->
+            server.start(); val bytes = "pack".toByteArray(); server.dispatcher = object : Dispatcher() { override fun dispatch(request: RecordedRequest): MockResponse = response(bytes) }
+            val pack = candidate(server, "faithful", bytes).copy(filename = "Faithful.zip")
+            var last: DownloadProgress? = null
+            ModInstaller(root).install(pack, ContentKind.ResourcePacks) { last = it }
+            assertContentEquals(bytes, File(root, "resourcepacks/Faithful.zip").readBytes()); assertEquals(1, last?.files); assertEquals(bytes.size.toLong(), last?.bytes)
+            ModInstaller(root).install(pack, ContentKind.DataPacks, world = "New World")
+            assertTrue(File(root, "saves/New World/datapacks/Faithful.zip").isFile); assertTrue(File(root, ".cofre-mods-staging").listFiles()!!.isEmpty())
+            assertFails { ModInstaller(root).install(pack, ContentKind.DataPacks, world = "../x") }; assertFails { ModInstaller(root).install(pack, ContentKind.DataPacks) }
+            assertFails { ModInstaller(root).install(pack.copy(filename = "../evil.zip"), ContentKind.ResourcePacks) }
         }
     }
     @Test fun failedDependencyInstallsNothing() = runBlocking {

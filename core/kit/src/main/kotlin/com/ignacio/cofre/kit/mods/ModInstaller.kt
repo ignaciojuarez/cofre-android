@@ -1,17 +1,21 @@
 package com.ignacio.cofre.kit.mods
 
+import com.ignacio.cofre.kit.common.ContentKind
 import com.ignacio.cofre.kit.common.Hashes
 import com.ignacio.cofre.kit.common.Kit
 import com.ignacio.cofre.kit.downloads.DownloadItem
+import com.ignacio.cofre.kit.downloads.DownloadProgress
 import com.ignacio.cofre.kit.downloads.DownloadQueue
 import com.ignacio.cofre.kit.modrinth.HttpFailure
 import com.ignacio.cofre.kit.modrinth.Modrinth
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -23,13 +27,37 @@ sealed class ModInstallFailure(message: String) : IOException(message) {
     data class Rollback(val recoveryDirectory: String, override val cause: Throwable) : ModInstallFailure("Could not restore the previous mods; backup preserved")
 }
 
-/** Serializes installs per instance, stages every download, and reverses every move if commit fails. */
+/**
+ * Serializes installs per instance, stages every download, and reverses every move if commit fails. [onProgress]
+ * gets the bytes and files of everything downloaded so far, including requirements found along the way.
+ */
 class ModInstaller(
     private val instance: File,
     private val http: OkHttpClient = Kit.http,
     private val modrinth: Modrinth = Modrinth(http),
 ) {
-    suspend fun install(plan: ModInstallPlan, metered: Boolean = false, allowMetered: Boolean = false): List<InstalledMod> = withContext(Dispatchers.IO) {
+    /** A resource, shader or data pack: one verified download moved into its folder. Data packs go to [world]. */
+    suspend fun install(candidate: ModCandidate, kind: ContentKind, world: String? = null, metered: Boolean = false, allowMetered: Boolean = false, onProgress: (DownloadProgress) -> Unit = {}) = withContext(Dispatchers.IO) {
+        val folder = when (kind) {
+            ContentKind.DataPacks -> { require(!world.isNullOrBlank() && !world.startsWith('.')) { "Pick a world" }; safeFilename(world); File(instance, "saves/$world/datapacks") }
+            ContentKind.Mods, ContentKind.Modpacks -> throw IllegalArgumentException("Not a single-file pack")
+            else -> File(instance, requireNotNull(kind.folderName))
+        }
+        val name = requireNotNull(candidate.filename) { "No file to download" }; safeFilename(name)
+        lock(instance).withLock {
+            val stage = File(instance, ".cofre-mods-staging/${UUID.randomUUID()}")
+            try {
+                val download = File(stage, name)
+                val queue = DownloadQueue(File(stage, "queue.json"), http)
+                queue.enqueue(DownloadItem(requireNotNull(candidate.url) { "No download link" }, download.path, candidate.title, candidate.size, candidate.sha1, candidate.sha512, allowMetered = allowMetered), metered)
+                download(queue, metered, emptyList(), onProgress)
+                folder.mkdirs()
+                Files.move(download.toPath(), File(folder, name).toPath(), StandardCopyOption.REPLACE_EXISTING)
+            } finally { stage.deleteRecursively() }
+        }
+    }
+
+    suspend fun install(plan: ModInstallPlan, metered: Boolean = false, allowMetered: Boolean = false, onProgress: (DownloadProgress) -> Unit = {}): List<InstalledMod> = withContext(Dispatchers.IO) {
         if (plan.blocked != null || plan.target == null) throw ModInstallFailure.Blocked(plan.blocked)
         val mutex = lock(instance); mutex.lock()
         val stage = File(instance, ".cofre-mods-staging/${UUID.randomUUID()}")
@@ -50,6 +78,7 @@ class ModInstaller(
             }
             plan.downloads.forEach(::add)
             val attemptedRequirements = mutableSetOf<String>()
+            var downloaded = emptyList<DownloadItem>()
             while (true) {
                 val queue = DownloadQueue(File(stage, "queue-${all.size}.json"), http)
                 for ((id, candidate) in all) {
@@ -66,11 +95,7 @@ class ModInstaller(
                     queue.enqueue(DownloadItem(requireNotNull(candidate.url) { "Mod has no download URL" }, destination.path, candidate.title, candidate.size, candidate.sha1, candidate.sha512, allowMetered = allowMetered), metered)
                     staged[id] = destination
                 }
-                when (val result = queue.run(metered)) {
-                    DownloadQueue.Result.Completed -> Unit
-                    is DownloadQueue.Result.Failed -> throw ModInstallFailure.Download(result.ids)
-                    is DownloadQueue.Result.NeedsMeteredApproval -> throw ModInstallFailure.MeteredApproval(result.ids)
-                }
+                downloaded = download(queue, metered, downloaded, onProgress)
                 val active = before.filter { (it.enabled || it.file in turnOn) && it.projectId !in staged }
                 val jarFiles = active.map { File(mods, it.file) } + staged.values
                 val metadata = jarFiles.mapNotNull { jar -> ModJarMetadata.read(jar)?.let { jar.name to it } }.toMap()
@@ -104,6 +129,18 @@ class ModInstaller(
         } finally {
             if (ownsStage && !preserveBackup) stage.deleteRecursively()
             mutex.unlock()
+        }
+    }
+    /** Runs [queue], reporting its items after [earlier] ones; returns them all. */
+    private suspend fun download(queue: DownloadQueue, metered: Boolean, earlier: List<DownloadItem>, onProgress: (DownloadProgress) -> Unit): List<DownloadItem> = coroutineScope {
+        val watch = launch { queue.progress.collect { onProgress(DownloadProgress(earlier + it.items, it.bytesPerSecond)) } }
+        val result = try { queue.run(metered) } finally { watch.cancel() }
+        val all = earlier + queue.progress.value.items
+        onProgress(DownloadProgress(all))
+        when (result) {
+            DownloadQueue.Result.Completed -> all
+            is DownloadQueue.Result.Failed -> throw ModInstallFailure.Download(result.ids)
+            is DownloadQueue.Result.NeedsMeteredApproval -> throw ModInstallFailure.MeteredApproval(result.ids)
         }
     }
     private fun commit(rootId: String, all: Map<String, ModCandidate>, staged: Map<String, File>, turningOn: List<InstalledMod>, index: ModIndex, stage: File) {

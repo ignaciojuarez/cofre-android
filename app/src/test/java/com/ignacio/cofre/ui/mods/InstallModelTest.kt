@@ -3,11 +3,14 @@ package com.ignacio.cofre.ui.mods
 import com.ignacio.cofre.kit.common.ContentKind
 import com.ignacio.cofre.kit.common.Loader
 import com.ignacio.cofre.kit.compat.CompatibilityIssue
+import com.ignacio.cofre.kit.downloads.DownloadItem
+import com.ignacio.cofre.kit.downloads.DownloadProgress
 import com.ignacio.cofre.kit.mods.ModCandidate
 import com.ignacio.cofre.kit.mods.ModInstallFailure
 import com.ignacio.cofre.kit.mods.ModInstallPlan
 import com.ignacio.cofre.kit.mods.PlanBlock
 import com.ignacio.cofre.kit.pages.ProjectPage
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -30,12 +33,12 @@ class InstallModelTest {
     private fun TestScope.model(
         issue: CompatibilityIssue? = null,
         plan: suspend (Set<String>) -> ModInstallPlan,
-        install: suspend (ModInstallPlan) -> Unit = {},
+        install: suspend (ModInstallPlan, (DownloadProgress) -> Unit) -> Unit = { _, _ -> },
     ) = InstallModel(CoroutineScope(StandardTestDispatcher(testScheduler) + Job()), project, issue, plan, install)
 
     @Test fun aLoneModInstallsWithoutAsking() = runTest {
         val installed = mutableListOf<ModInstallPlan>()
-        val get = model(plan = { ModInstallPlan(mod("sodium")) }, install = { installed += it })
+        val get = model(plan = { ModInstallPlan(mod("sodium")) }, install = { p, _ -> installed += p })
         advanceUntilIdle()
         assertEquals(InstallPhase.Done(listOf("sodium")), get.phase.value)
         assertEquals(1, installed.size)
@@ -87,7 +90,7 @@ class InstallModelTest {
 
     @Test fun aFailedInstallSaysWhyAndCanRetry() = runTest {
         var attempts = 0
-        val get = model(plan = { ModInstallPlan(mod("sodium")) }, install = {
+        val get = model(plan = { ModInstallPlan(mod("sodium")) }, install = { _, _ ->
             attempts++
             if (attempts == 1) throw ModInstallFailure.Download(listOf("sodium"))
         })
@@ -100,8 +103,22 @@ class InstallModelTest {
         assertEquals(2, attempts)
     }
 
+    @Test fun installingShowsBytesAndFiles() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val get = model(plan = { ModInstallPlan(mod("sodium")) }, install = { _, report ->
+            fun item(done: Long, state: DownloadItem.State) = DownloadItem("u", "d", size = 1000, completedBytes = done, state = state)
+            report(DownloadProgress(listOf(item(1000, DownloadItem.State.Finished), item(500, DownloadItem.State.Running))))
+            gate.await()
+        })
+        advanceUntilIdle()
+        assertEquals(InstallPhase.Installing(listOf("sodium"), done = 1, total = 2, fraction = 0.75f), get.phase.value)
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertIs<InstallPhase.Done>(get.phase.value)
+    }
+
     @Test fun blockedDuringInstallBecomesBlocked() = runTest {
-        val get = model(plan = { ModInstallPlan(mod("a")) }, install = { throw ModInstallFailure.Blocked(PlanBlock.Incompatible("A", "B")) })
+        val get = model(plan = { ModInstallPlan(mod("a")) }, install = { _, _ -> throw ModInstallFailure.Blocked(PlanBlock.Incompatible("A", "B")) })
         advanceUntilIdle()
         assertEquals("A doesn't work with B.", assertIs<InstallPhase.Blocked>(get.phase.value).block.describe("A"))
     }

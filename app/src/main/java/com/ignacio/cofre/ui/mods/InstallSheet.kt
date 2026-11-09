@@ -95,7 +95,10 @@ internal fun InstallContent(
                     BlockButton(stringResource(R.string.mods_close), onClose)
                 }
                 is InstallPhase.Installing -> {
-                    ProgressBar(null, label = pluralStringResource(R.plurals.mods_downloading, phase.files.size, phase.files.size))
+                    ProgressBar(phase.fraction, label = pluralStringResource(R.plurals.mods_downloading, phase.total, phase.total))
+                    if (phase.fraction != null) {
+                        CofreText(stringResource(R.string.mods_import_files, phase.done, phase.total), CofreTheme.type.label, color = CofreTheme.colors.muted)
+                    }
                     Files(phase.files, done = false)
                     BlockButton(stringResource(R.string.mods_hide), onClose)
                 }

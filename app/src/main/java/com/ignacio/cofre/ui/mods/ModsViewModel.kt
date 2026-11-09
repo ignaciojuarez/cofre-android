@@ -107,11 +107,11 @@ class ModsViewModel(private val graph: AppGraph) : ViewModel() {
                 val mods = withContext(Dispatchers.IO) { ModIndex(dir).installed() }
                 catalog.value.resolver(project, mods).plan(project.id, versionId, optional)
             },
-            install = { plan ->
-                val target = requireNotNull(plan.target)
+            install = { plan, onProgress ->
+                val installer = ModInstaller(dir, modrinth = graph.modrinth)
                 when (project.kind) {
-                    ContentKind.Mods -> ModInstaller(dir, modrinth = graph.modrinth).install(plan)
-                    else -> installFile(target, contentFolder(dir, project.kind, newestWorld(dir)), File(dir, ".cofre-staging"))
+                    ContentKind.Mods -> installer.install(plan, onProgress = onProgress)
+                    else -> installer.install(requireNotNull(plan.target), project.kind, newestWorld(dir), onProgress = onProgress)
                 }
                 installed.value?.reload()
                 projects[project.route]?.refreshInstalled()

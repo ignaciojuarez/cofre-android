@@ -1,28 +1,20 @@
 package com.ignacio.cofre.ui.mods
 
 import androidx.compose.runtime.Immutable
-import com.ignacio.cofre.kit.common.ContentKind
 import com.ignacio.cofre.kit.compat.CompatibilityIssue
-import com.ignacio.cofre.kit.downloads.DownloadItem
-import com.ignacio.cofre.kit.downloads.DownloadQueue
+import com.ignacio.cofre.kit.downloads.DownloadProgress
 import com.ignacio.cofre.kit.mods.ModCandidate
 import com.ignacio.cofre.kit.mods.ModInstallFailure
 import com.ignacio.cofre.kit.mods.ModInstallPlan
 import com.ignacio.cofre.kit.mods.PlanBlock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.File
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
-import java.util.UUID
 
 /** Where a Get is. The sheet draws one phase at a time. */
 sealed interface InstallPhase {
@@ -45,7 +37,8 @@ sealed interface InstallPhase {
     /** It can't be installed as asked; [block] says why. A disabled CurseForge download carries the website. */
     data class Blocked(val block: PlanBlock?) : InstallPhase
 
-    data class Installing(val files: List<String>) : InstallPhase
+    /** [fraction] is null until sizes are known; [total] grows when a requirement turns up mid-install. */
+    data class Installing(val files: List<String>, val done: Int = 0, val total: Int = files.size, val fraction: Float? = null) : InstallPhase
 
     data class Done(val files: List<String>) : InstallPhase
 
@@ -62,7 +55,7 @@ class InstallModel(
     /** A Vulkan or loader warning that must be read before Get. */
     val issue: CompatibilityIssue?,
     private val plan: suspend (optional: Set<String>) -> ModInstallPlan,
-    private val install: suspend (ModInstallPlan) -> Unit,
+    private val install: suspend (ModInstallPlan, onProgress: (DownloadProgress) -> Unit) -> Unit,
 ) {
     private val mutable = MutableStateFlow<InstallPhase>(InstallPhase.Planning)
     val phase: StateFlow<InstallPhase> = mutable.asStateFlow()
@@ -115,7 +108,12 @@ class InstallModel(
     private suspend fun run(plan: ModInstallPlan) {
         val files = plan.downloads.map { it.title }
         mutable.value = InstallPhase.Installing(files)
-        attempt { install(plan) } ?: return
+        attempt {
+            install(plan) { p ->
+                val fraction = if (p.totalBytes > 0) p.bytes.toFloat() / p.totalBytes else null
+                mutable.update { s -> if (s is InstallPhase.Installing) s.copy(done = p.files, total = maxOf(p.totalFiles, s.files.size), fraction = fraction) else s }
+            }
+        } ?: return
         mutable.value = InstallPhase.Done(files)
     }
 
@@ -151,38 +149,4 @@ fun PlanBlock?.describe(title: String): String = when (this) {
     is PlanBlock.VersionConflict -> "Two mods need different versions of $projectId."
     is PlanBlock.DownloadDisabled -> "The author turned off downloads outside CurseForge. Get $title on the website."
     null -> "No NeoForge 26.2 build of $title yet."
-}
-
-/**
- * Gets one resource pack, shader pack or data pack into [folder]: download and verify in a stage beside it, then
- * move it in. Jars go through ModInstaller instead.
- */
-suspend fun installFile(candidate: ModCandidate, folder: File, staging: File) = withContext(Dispatchers.IO) {
-    val name = requireNotNull(candidate.filename) { "No file to download" }
-    require(name.isNotBlank() && '/' !in name && '\\' !in name && name != "." && name != "..") { "Unsafe file name" }
-    val url = requireNotNull(candidate.url) { "No download link" }
-    val stage = File(staging, UUID.randomUUID().toString()).apply { mkdirs() }
-    try {
-        val download = File(stage, name)
-        val queue = DownloadQueue(File(stage, "queue.json"))
-        queue.enqueue(DownloadItem(url, download.path, candidate.title, candidate.size, candidate.sha1, candidate.sha512))
-        when (val result = queue.run()) {
-            DownloadQueue.Result.Completed -> Unit
-            is DownloadQueue.Result.Failed -> throw ModInstallFailure.Download(result.ids)
-            is DownloadQueue.Result.NeedsMeteredApproval -> throw ModInstallFailure.MeteredApproval(result.ids)
-        }
-        folder.mkdirs()
-        Files.move(download.toPath(), File(folder, name).toPath(), StandardCopyOption.REPLACE_EXISTING)
-    } finally {
-        stage.deleteRecursively()
-    }
-}
-
-/** The content folder a Get lands in, for kinds that aren't jars. */
-fun contentFolder(instance: File, kind: ContentKind, world: String?): File = when (kind) {
-    ContentKind.DataPacks -> {
-        require(!world.isNullOrBlank() && '/' !in world && !world.startsWith('.')) { "Pick a world" }
-        File(instance, "saves/$world/datapacks")
-    }
-    else -> File(instance, requireNotNull(kind.folderName))
 }
