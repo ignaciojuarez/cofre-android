@@ -1,6 +1,13 @@
 name: Android natives
 on:
   workflow_dispatch:
+    inputs:
+      pieces:
+        description: 'Pieces to build, as a JSON list. Pieces left out come from reuse_run.'
+        default: '["jdk","lwjgl","jna"]'
+      reuse_run:
+        description: 'Run ID whose green artifacts supply the pieces not built here (empty: build everything)'
+        default: ''
 permissions:
   contents: read
 concurrency:
@@ -11,12 +18,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        piece: [jdk, lwjgl, jna]
+        piece: ${{ fromJSON(inputs.pieces) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25'
@@ -38,7 +45,7 @@ jobs:
             lwjgl) scripts/natives/lwjgl/build.sh ;;
             jna) scripts/natives/jna.sh ;;
           esac
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: natives-${{ matrix.piece }}
           path: .work/natives/dist/*
@@ -49,20 +56,38 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      actions: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v7
         with:
           pattern: natives-*
           path: dist
           merge-multiple: true
+      - if: inputs.reuse_run != ''
+        uses: actions/download-artifact@v7
+        with:
+          pattern: natives-*
+          path: reused
+          merge-multiple: true
+          run-id: ${{ inputs.reuse_run }}
+          github-token: ${{ github.token }}
+      - name: Fill pieces from the reused run and require every asset
+        run: |
+          for f in reused/*; do [[ ! -e "$f" || -e "dist/${f##*/}" ]] || cp "$f" dist/; done
+          for asset in jre25-android-arm64.tar.xz lwjgl-3.4.1-android-arm64.tar.xz jna-5.17.0-android-arm64.tar.xz \
+              jre25-alignment.tsv; do
+            test -s "dist/$asset" || { echo "::error::missing $asset"; exit 1; }
+          done
+          ls -l dist
       - name: Publish verified natives and corresponding sources
         env:
           GH_TOKEN: ${{ github.token }}
+          REUSE_RUN: ${{ inputs.reuse_run }}
         run: |
           tag="natives-$(date -u +%Y%m%d)-${GITHUB_RUN_NUMBER}"
           cd dist
           sha256sum *.tar.xz *-alignment.tsv > SHA256SUMS
-          printf 'Android arm64, API 28, NDK r28c, 16 KB LOAD alignment.\n\nSource revision: %s\n\nSee runtime/NATIVES.md and the source archives for pins, licenses, patches and build instructions. Alignment and per-library hashes are in the TSV assets. Device execution is verified separately.\n' "$GITHUB_SHA" > release-notes.md
+          printf 'Android arm64, API 28, NDK r28c, 16 KB LOAD alignment.\n\nSource revision: %s\nReused pieces from run: %s\n\nSee runtime/NATIVES.md and the source archives for pins, licenses, patches and build instructions. Alignment and per-library hashes are in the TSV assets. Device execution is verified separately.\n' "$GITHUB_SHA" "${REUSE_RUN:-none}" > release-notes.md
           gh release create "$tag" *.tar.xz *-alignment.tsv SHA256SUMS --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$tag" --notes-file release-notes.md
           echo "### Released [$tag](https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag)" >> "$GITHUB_STEP_SUMMARY"

@@ -41,6 +41,12 @@ Verified against Mojang's [manifest](https://piston-meta.mojang.com/mc/game/vers
 
 **Startup integration requirement:** `javap -c -p` on `com.mojang.blaze3d.platform.NativeLibrariesBootstrap` shows `loadLibraries()` unconditionally enqueues OpenGL and tinyfd before the Vulkan conditional. `loadTinyFD()` invokes `tinyfd_getGlobalChar("tinyfd_version")`; `loadOpenGL()` invokes `GL.getFunctionProvider()`. Omitting either JNI binary makes stock bootstrap fail. Android's Vulkan runtime must also bypass the desktop OpenGL provider probe: shipping `liblwjgl_opengl.so` supplies JNI, not a desktop libGL. `OPENGL_EXPLICIT_INIT=true` alone leaves a null provider and does not satisfy `requireNonNull`. No OpenGL/ES driver, EGL context, GLFW or jemalloc is built here. Tinyfd desktop dialogs are not Android UI; fatal errors should be surfaced by the launcher.
 
+**Exported-symbol check against Mojang's 3.4.1 linux-arm64 jars** (`llvm-nm -D --defined-only`, run on a local NDK r28c build): every `Java_org_lwjgl_*`, `FT_*`, `shaderc_*`, `spvc_*` and `al*`/`alc*` symbol the upstream libraries export is present. The deliberate differences are:
+- `liblwjgl.so`: no `JAWTFunctions` JNI. There is no AWT on Android, and these are only called by LWJGL's AWT interop.
+- `libfreetype.so`: upstream also bundles and exports HarfBuzz, libpng and zlib. Minecraft 26.2 does not ship lwjgl-harfbuzz, and its fonts are plain TTF/OTF, so this build disables those modules. FreeType's gzip/bzip2 entry points remain as "unimplemented" stubs.
+- `libshaderc.so`: no glslang C API and no spirv-fuzz/reduce entry points. LWJGL only binds `shaderc_*`.
+- C++ internals differ (libc++ vs libstdc++). Neither set is part of any LWJGL binding.
+
 ## Source pins and licenses
 
 Authoritative machine-readable pins: [`scripts/natives/pins.tsv`](../scripts/natives/pins.tsv). The shaderc/spvc/freetype commits below are read directly from the 3.4.1 ARM64 jars' embedded `.so.git` metadata.
@@ -64,7 +70,7 @@ Shaderc's committed DEPS pins glslang `f0bd0257c308b9a26562c1a30c4748a0219cc951`
 
 [PojavLauncherTeam/android-openjdk-build-multiarch](https://github.com/PojavLauncherTeam/android-openjdk-build-multiarch), checked at `04b90441da7e9649cb6508a037423f08d1fc531f`, has **no repository LICENSE** (GitHub license endpoint returns 404). The same is true of Mojo's builder. Public visibility is not permission to copy those build scripts. None are copied.
 
-Mojo's Android diffs modify OpenJDK source files whose own license headers grant GPL-2.0 rights, with the Classpath Exception on designated Java library files; HotSpot is GPL-2.0. We reuse that OpenJDK-derived patch lineage under those source licenses, preserving existing headers and attributing the exact origin. The added bionic iconv/getloadavg/ifaddrs code has explicit AOSP BSD notices; the posix_spawn compatibility files have Roy Marples' BSD-2-Clause notices. These notices remain in the patch and binary distribution (`legal/cofre-port`). Unneeded ARM32/x86 portions, including glibc LGPL FPU headers, are excluded. We do not claim the whole builder repository is GPL or copy its unlicensed scripts. Cofre's newly written orchestration is GPL-3.0; it builds and distributes OpenJDK as a separate GPL-2.0 artifact with corresponding source, not by relicensing HotSpot GPL-3.0.
+Mojo's Android diffs modify OpenJDK source files whose own license headers grant GPL-2.0 rights, with the Classpath Exception on designated Java library files; HotSpot is GPL-2.0. We reuse that OpenJDK-derived patch lineage under those source licenses, preserving existing headers and attributing the exact origin. The one remaining added bionic snippet (`getloadavg` via `sysinfo`) keeps its AOSP BSD-2-Clause notice. These notices remain in the patch and binary distribution (`legal/cofre-port`). Unneeded ARM32/x86 portions, including glibc LGPL FPU headers, are excluded. We do not claim the whole builder repository is GPL or copy its unlicensed scripts. Cofre's newly written orchestration is GPL-3.0; it builds and distributes OpenJDK as a separate GPL-2.0 artifact with corresponding source, not by relicensing HotSpot GPL-3.0.
 
 `MojoLauncher/unilwjgl3-builder` also has no license: read for porting ideas only; no code/patches copied. Our generated-code syscall edits are independently written. LWJGL 3.4.1 core has already removed the X11 includes; zstd is outside Minecraft's module set, so its qsort workaround is unnecessary.
 
@@ -72,10 +78,12 @@ Mojo's Android diffs modify OpenJDK source files whose own license headers grant
 
 | File | Effect |
 |---|---|
-| jdk/patches/0001-android-bionic.patch | OpenJDK bionic port: libc/TLS/dynamic-loader differences, Android properties and networking, iconv and spawn compatibility, headless desktop linkage; excludes ARM32/x86-only changes |
+| jdk/patches/0001-android-bionic.patch | OpenJDK bionic port for API 28: treat `*-android` as Linux in autoconf/make, sysv hash style, PIC everywhere, no libjsound/libsaproc/splashscreen, headless fontmanager; HotSpot: SYS_gettid, no glibc version probe, Android temp dir, libjvm path from `/proc/self/maps`, `RTLD_DI_LINKMAP` guard, getcpu warning instead of exit, `getloadavg` via `sysinfo` (bionic adds it only at API 29), no utmpx, fork/exec in error reporting, `Thread::current()` instead of the TLS asm helper; libjli exec path from `JAVA_HOME`; `/etc/resolv.conf` override (`ext.net.resolvPath`); awt path lookup from maps |
 | jdk/patches/0002-android-ipv6.patch | Skip Android-incompatible proc/network availability probe |
 | jdk/patches/0003-statx-fallback.patch | Fall back when statx exists in libc but is blocked/missing in the kernel |
 | lwjgl/patch.py | Use direct process_vm_readv/writev syscalls at API 28; use NDK UAPI structs instead of liburing compatibility duplicates; no ENOSYS success stubs |
+
+Deliberately removed from the inherited lineage because bionic provides them at API 28 and the copies either shadow libc with incompatible layouts or are broken: `dlvsym` (API 24), `getifaddrs` (API 24; the copied version `memset`s an uninitialised pointer), `nl_langinfo` (API 26) and the hard-coded `"ASCII"` codeset, `getgrgid_r`/`getgrnam_r` (API 24), `iconv` (API 28, so no `libtinyiconv`), and `posix_spawn` (API 28; the dhcpcd copy ignored file actions). This also drops the matching AOSP/dhcpcd notices.
 
 The upstream "ignore chmod failures" patch is deliberately **not** applied: permission errors must propagate. No upstream branding patch is applied.
 
