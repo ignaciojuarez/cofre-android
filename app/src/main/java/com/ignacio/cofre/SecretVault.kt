@@ -3,6 +3,7 @@ package com.ignacio.cofre
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import com.ignacio.cofre.kit.common.Kit
+import com.ignacio.cofre.kit.modpacks.FileOps
 import java.io.File
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -40,10 +41,7 @@ class SecretVault(private val file: File, private val key: () -> SecretKey = ::k
 
     private fun write(map: Map<String, String>) {
         cache = map.toMutableMap()
-        file.parentFile?.mkdirs()
-        val temp = File(file.path + ".tmp")
-        temp.writeBytes(encrypt(Kit.json.encodeToString(map).toByteArray()))
-        check(temp.renameTo(file)) { "Could not save secrets" }
+        FileOps.atomic(file, encrypt(Kit.json.encodeToString(map).toByteArray()))
     }
 
     private fun encrypt(plain: ByteArray): ByteArray {

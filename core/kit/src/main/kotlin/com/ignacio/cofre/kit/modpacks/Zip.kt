@@ -13,7 +13,7 @@ import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
 
 /** Shared file boundary for the file-based domains. Never traverse links inside a supplied root. */
-internal object FileOps {
+object FileOps {
     fun child(root: File, path: String): File {
         require(path.isNotEmpty() && !path.startsWith('/') && '\\' !in path && ':' !in path && '\u0000' !in path) { "Unsafe path: $path" }
         val parts = path.removeSuffix("/").split('/')
@@ -27,12 +27,13 @@ internal object FileOps {
         return target
     }
 
+    /** Writes [bytes] to [file] through a synced temp file and a rename: readers see the old file or the new one. */
     fun atomic(file: File, bytes: ByteArray) {
         require(!Files.isSymbolicLink(file.toPath()))
         Files.createDirectories(file.absoluteFile.parentFile.toPath())
         val temp = File(file.absoluteFile.parentFile, ".cofre-write-${UUID.randomUUID()}")
         try {
-            temp.outputStream().use { it.write(bytes) }
+            java.io.FileOutputStream(temp).use { it.write(bytes); it.fd.sync() }
             try {
                 Files.move(temp.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
             } catch (_: java.nio.file.AtomicMoveNotSupportedException) {

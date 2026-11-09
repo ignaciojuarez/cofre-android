@@ -5,6 +5,7 @@ import android.util.Log
 import com.ignacio.cofre.kit.common.Hashes
 import com.ignacio.cofre.kit.common.Kit
 import com.ignacio.cofre.kit.downloads.DownloadItem
+import com.ignacio.cofre.kit.modpacks.FileOps
 import com.ignacio.cofre.kit.versions.InstallProfile
 import com.ignacio.cofre.kit.versions.NeoForgeVersion
 import com.ignacio.cofre.kit.versions.VersionJson
@@ -95,8 +96,7 @@ class NeoForgeInstaller(private val context: Context, private val files: GameFil
             }
         }
         // The libraries the game needs at launch were downloaded above; the version JSON goes last.
-        val target = files.versionJson(profileId).apply { parentFile?.mkdirs() }
-        File("${target.path}.tmp").apply { writeText(versionText) }.renameTo(target) || throw IOException("Couldn't write $target")
+        FileOps.atomic(files.versionJson(profileId), versionText.toByteArray())
         work.deleteRecursively()
         Log.i(TAG, "[Cofre] neoforge installed ${files.versionJson(profileId)}")
         files.step("Ready")

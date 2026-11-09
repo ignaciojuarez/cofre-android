@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.ignacio.cofre.kit.common.Kit
+import com.ignacio.cofre.kit.modpacks.FileOps
 import kotlinx.serialization.Serializable
 import java.io.File
 
@@ -32,10 +33,7 @@ class SettingsStore(private val file: File) {
         val next = transform(value)
         if (next == value) return
         value = next
-        file.parentFile?.mkdirs()
-        val temp = File(file.path + ".tmp")
-        temp.writeText(Kit.json.encodeToString(next))
-        temp.renameTo(file)
+        FileOps.atomic(file, Kit.json.encodeToString(next).toByteArray())
     }
 
     private fun read(): Settings =

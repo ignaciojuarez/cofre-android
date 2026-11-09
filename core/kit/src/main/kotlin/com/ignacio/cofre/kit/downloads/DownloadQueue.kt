@@ -2,6 +2,7 @@ package com.ignacio.cofre.kit.downloads
 
 import com.ignacio.cofre.kit.common.Hashes
 import com.ignacio.cofre.kit.common.Kit
+import com.ignacio.cofre.kit.modpacks.FileOps
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -245,10 +246,7 @@ class DownloadQueue(
         mutableProgress.value = DownloadProgress(items.values.toList(), if (elapsed <= 0) 0 else (transferred * 1e9 / elapsed).toLong())
     }
     private fun save() {
-        journal.parentFile?.mkdirs()
-        val temp = File("${journal.path}.tmp")
-        FileOutputStream(temp).use { it.write(Kit.json.encodeToString(items.values.toList()).toByteArray()); it.fd.sync() }
-        atomicMove(temp, journal); publish()
+        FileOps.atomic(journal, Kit.json.encodeToString(items.values.toList()).toByteArray()); publish()
     }
     companion object {
         const val METERED_ASK_BYTES: Long = 200L * 1024 * 1024
