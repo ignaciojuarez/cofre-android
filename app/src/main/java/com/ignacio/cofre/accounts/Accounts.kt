@@ -54,7 +54,7 @@ class Accounts(private val graph: AppGraph) {
     /** False when this build has no Microsoft client ID: the UI says so instead of failing. */
     val configured: Boolean get() = graph.microsoftClientId.isNotBlank()
 
-    val ready: Boolean get() = entries.any { !it.signedOut && it.account.state == AccountStore.State.Ready }
+    val ready: Boolean get() = entries.any { !it.signedOut }
     val selected: Entry? get() = entries.firstOrNull { it.account.active } ?: entries.firstOrNull()
 
     init {

@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -33,6 +34,7 @@ import com.ignacio.cofre.design.Spinner
 import com.ignacio.cofre.design.Stat
 import com.ignacio.cofre.design.Tone
 import com.ignacio.cofre.design.ValueRow
+import com.ignacio.cofre.ui.common.Fmt
 
 /** M03 wired to its model. */
 @Composable
@@ -122,7 +124,7 @@ private fun Ready(phase: ImportPhase.Ready, onInstall: () -> Unit, onReset: () -
         Stat("${phase.mods}", stringResource(R.string.mods_kind_mods), Modifier.weight(1f))
         Stat("${phase.other}", stringResource(R.string.mods_import_other_files), Modifier.weight(1f))
         Stat("${pack.overrides.size}", stringResource(R.string.mods_import_overrides), Modifier.weight(1f))
-        Stat(size(pack.unpackedBytes), stringResource(R.string.mods_import_size), Modifier.weight(1f))
+        Stat(Fmt.bytes(LocalContext.current, pack.unpackedBytes), stringResource(R.string.mods_import_size), Modifier.weight(1f))
     }
     if (phase.rejected != null) {
         Banner(stringResource(R.string.mods_import_cant_run), PixelGlyph.Cross, tone = Tone.Danger)

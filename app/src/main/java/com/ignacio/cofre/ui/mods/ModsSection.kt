@@ -2,7 +2,6 @@ package com.ignacio.cofre.ui.mods
 
 import android.content.Intent
 import android.net.Uri
-import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -50,6 +49,7 @@ import com.ignacio.cofre.design.PixelGlyph
 import com.ignacio.cofre.design.WidthClass
 import com.ignacio.cofre.design.CofreTheme
 import com.ignacio.cofre.design.controllerActions
+import com.ignacio.cofre.ui.common.displayName
 
 /**
  * The Mods section: browse on the left, a mod page, Installed or Import on the right (pushed on compact). Y searches
@@ -80,7 +80,7 @@ fun ModsSection(
 
     fun importUri(uri: Uri) {
         model.select(ModsRoutes.IMPORT)
-        val name = displayName(context, uri) ?: "pack.mrpack"
+        val name = context.displayName(uri) ?: uri.lastPathSegment ?: "pack.mrpack"
         model.import.open(name) { graph.copyToCache(uri, if (name.endsWith(".mrpack", true)) "mrpack" else "zip") }
     }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { picked -> picked?.let(::importUri) }
@@ -223,9 +223,3 @@ fun modpackUri(intent: Intent): Uri? = when (intent.action) {
     Intent.ACTION_SEND -> IntentCompat.getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
     else -> null
 }
-
-private fun displayName(context: android.content.Context, uri: Uri): String? = runCatching {
-    context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
-        if (c.moveToFirst()) c.getString(0) else null
-    }
-}.getOrNull() ?: uri.lastPathSegment

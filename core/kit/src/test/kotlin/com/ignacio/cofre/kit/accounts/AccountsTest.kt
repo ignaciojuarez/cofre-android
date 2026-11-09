@@ -96,7 +96,7 @@ class AccountsTest {
         File(dir, "other.json").writeText("""{"accountId":"other","username":"Other"}""")
         var selected: String? = "old"
         val store = AccountStore(root, { selected }, { selected = it })
-        assertEquals(AccountStore.State.Ready, store.list().first { it.id == "old" }.state)
+        assertEquals("Microsoft", store.list().first { it.id == "old" }.kind) // an expired token still means signed in
         store.remove("old"); assertEquals("other", selected); assertFalse(File(dir, "old.json").exists())
         store.select("missing"); assertEquals("other", selected); store.select("ready"); assertEquals("ready", selected)
         assertNull(store.remove("../outside"))

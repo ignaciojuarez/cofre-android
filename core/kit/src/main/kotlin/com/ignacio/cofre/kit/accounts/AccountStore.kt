@@ -8,8 +8,7 @@ import java.io.File
 
 /** Non-secret account summaries only. Tokens belong in the platform's encrypted store. */
 class AccountStore(private val directory: File, private val readSelected: () -> String? = { null }, private val writeSelected: (String?) -> Unit = {}) {
-    @Serializable enum class State { Ready }
-    data class Account(val id: String, val name: String, val kind: String, val active: Boolean, val expiresAt: Long?, val state: State) {
+    data class Account(val id: String, val name: String, val kind: String, val active: Boolean, val expiresAt: Long?) {
         override fun toString(): String = "Account(redacted)"
     }
     private val accountsDirectory: File get() = File(directory, "accounts")
@@ -21,7 +20,7 @@ class AccountStore(private val directory: File, private val readSelected: () -> 
             val expiry = obj["expiresAt"]?.jsonPrimitive?.longOrNull
             val microsoft = "xuid" in obj || "xboxGamertag" in obj || expiry != null
             // Access-token expiry does not sign the account out: the refresh token renews it at launch.
-            Account(id, name, if (microsoft) "Microsoft" else "Offline", id == readSelected(), expiry, State.Ready)
+            Account(id, name, if (microsoft) "Microsoft" else "Offline", id == readSelected(), expiry)
         }.getOrNull()
     }.sortedBy { it.name.lowercase() }
     fun remove(id: String): Account? {

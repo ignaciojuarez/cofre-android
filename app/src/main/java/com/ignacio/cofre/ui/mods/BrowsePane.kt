@@ -346,11 +346,3 @@ internal fun count(n: Long): String = when {
     n >= 1_000 -> String.format(Locale.ROOT, "%.1fK", n / 1e3)
     else -> "$n"
 }.replace(".0", "")
-
-/** Bytes as "4.2 MB". */
-internal fun size(bytes: Long): String = when {
-    bytes >= 1L shl 30 -> String.format(Locale.ROOT, "%.1f GB", bytes / (1024.0 * 1024 * 1024))
-    bytes >= 1L shl 20 -> String.format(Locale.ROOT, "%.1f MB", bytes / (1024.0 * 1024))
-    bytes >= 1L shl 10 -> String.format(Locale.ROOT, "%.0f KB", bytes / 1024.0)
-    else -> "$bytes B"
-}
