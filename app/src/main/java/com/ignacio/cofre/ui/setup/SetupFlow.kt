@@ -76,9 +76,9 @@ fun SetupFlow(
     graph: AppGraph,
     modifier: Modifier = Modifier,
     start: SetupStep = SetupStep.Welcome,
+    readiness: DeviceReadiness = remember { DeviceReadiness.of(graph) },
 ) {
     var step by rememberSaveable { mutableStateOf(start) }
-    val readiness = remember { DeviceReadiness.of(graph) }
     val done = { graph.settings.update { it.copy(setupDone = true) } }
     BackHandler(step != SetupStep.Welcome) { step = SetupStep.entries[step.ordinal - 1] }
     Column(modifier.fillMaxSize()) {

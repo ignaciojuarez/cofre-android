@@ -76,8 +76,12 @@ class MainActivity : ComponentActivity() {
         graph.launcher.onResume()
     }
 
-    /** Debug builds: `--es cofre.demoExit OpenGLMod` shows the game-stopped screen for a sample report. */
+    /**
+     * Debug builds: `--es cofre.demoExit OpenGLMod` shows the game-stopped screen for a sample report;
+     * `--ez cofre.skipVulkanCheck true` lets Play run past the Vulkan check.
+     */
     private fun handle(intent: Intent?) {
+        if (BuildConfig.DEBUG && intent?.getBooleanExtra("cofre.skipVulkanCheck", false) == true) graph.launcher.skipVulkanCheck = true
         val demo = intent?.getStringExtra("cofre.demoExit") ?: return
         if (!BuildConfig.DEBUG) return
         val reason = ExitReason.entries.firstOrNull { it.name == demo } ?: ExitReason.Unknown

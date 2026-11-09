@@ -26,7 +26,6 @@ import com.ignacio.cofre.kit.logs.ReportContext
 import com.ignacio.cofre.kit.logs.ReportInstance
 import com.ignacio.cofre.kit.options.JavaHeap
 import com.ignacio.cofre.onIo
-import com.ignacio.cofre.runtime.ExitRecord
 import com.ignacio.cofre.runtime.GameActivity
 import com.ignacio.cofre.runtime.JreManager
 import com.ignacio.cofre.runtime.LaunchSpec
@@ -34,10 +33,16 @@ import com.ignacio.cofre.scratch
 import com.ignacio.cofre.share
 import com.ignacio.cofre.ui.setup.plainVulkan
 import com.ignacio.cofre.work
+import com.ignacio.cofre.runtime.launch.GameAccount
+import com.ignacio.cofre.runtime.launch.GameLaunch
+import com.ignacio.cofre.runtime.launch.NeoForgeInstaller
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import java.io.File
-import java.time.Instant
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
@@ -80,19 +85,21 @@ class Launcher(private val graph: AppGraph) {
     )
 
     @Serializable
-    private data class Pending(
-        val instance: String,
-        val exitFile: String,
-        val logFile: String,
-        val startedAt: Long,
-        val quickPlay: QuickPlay? = null,
-    )
+    private data class Pending(val instance: String, val spec: String, val quickPlay: QuickPlay? = null)
 
     var run by mutableStateOf<Run?>(null)
         private set
+
+    /** Debug builds (`--ez cofre.skipVulkanCheck true`): run the pipeline on a device that fails the check. */
+    var skipVulkanCheck = false
+        set(value) {
+            check(!value || BuildConfig.DEBUG)
+            field = value
+        }
     var stopped by mutableStateOf<Stopped?>(null)
         private set
     private var job: Job? = null
+    private var watching: Job? = null
     private val pendingFile get() = File(graph.home, "launch/pending.json")
 
     /** True while a game started by Cofre is still running: worlds and servers are read-only then. */
@@ -121,7 +128,7 @@ class Launcher(private val graph: AppGraph) {
         log(graph.context.getString(R.string.log_launch_start, instance.name))
         stage(Stage.Device)
         val vulkan = graph.onIo { graph.vulkan }
-        if (!vulkan.suitable) error(graph.context.getString(R.string.launch_vulkan_unsuitable, vulkan.missing.joinToString { plainVulkan(graph.context.resources, it) }))
+        if (!vulkan.suitable && !skipVulkanCheck) error(graph.context.getString(R.string.launch_vulkan_unsuitable, vulkan.missing.joinToString { plainVulkan(graph.context.resources, it) }))
         log("Vulkan ${vulkan.apiVersion} · ${vulkan.deviceName}", LogLevel.Success)
         stage(Stage.Account)
         val session = graph.accounts.session()
@@ -129,16 +136,13 @@ class Launcher(private val graph: AppGraph) {
         stage(Stage.Java)
         val jre = JreManager(graph.context)
         if (jre.bundledVersion() == null) error(graph.context.getString(R.string.launch_no_java))
-        val javaHome = graph.onIo { jre.install() }
+        graph.onIo { jre.install() }
         log("Java ${Target.JAVA_MAJOR}", LogLevel.Success)
-        stage(Stage.Files)
-        val spec = prepareGame(instance, session, javaHome, quickPlay)
+        val spec = prepareGame(instance, session, quickPlay)
         stage(Stage.Start)
-        val specData = graph.onIo { LaunchSpec.read(spec) }
         graph.onIo {
-            File(specData.exitFile).delete()
             pendingFile.parentFile?.mkdirs()
-            pendingFile.writeText(Kit.json.encodeToString(Pending(instance.id, specData.exitFile, specData.logFile, System.currentTimeMillis(), quickPlay)))
+            pendingFile.writeText(Kit.json.encodeToString(Pending(instance.id, spec.path, quickPlay)))
             graph.instances.markPlayed(instance.id)
         }
         graph.context.startActivity(GameActivity.intent(graph.context, spec).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -148,14 +152,42 @@ class Launcher(private val graph: AppGraph) {
     }
 
     /**
-     * Game files, NeoForge and the launch arguments → a [LaunchSpec] file. This is the one place Play reaches the
-     * runtime's launch builder (`com.ignacio.cofre.runtime.launch`); until it lands, Play stops here and says so.
+     * Game files, NeoForge and the launch arguments → a [LaunchSpec] file, through the runtime's launch builder.
+     * Cofre's own heap, the instance's JVM arguments and quick play go into the spec afterwards: [GameLaunch]
+     * picks the RAM-tier heap and takes no game arguments yet.
      */
-    @Suppress("UNUSED_PARAMETER", "RedundantSuspendModifier")
-    private suspend fun prepareGame(instance: Instance, session: Accounts.Session, javaHome: File, quickPlay: QuickPlay?): File {
-        val heap = heapMB(instance)
-        log(graph.context.getString(R.string.log_heap, heap))
-        error(graph.context.getString(R.string.launch_not_wired))
+    private suspend fun prepareGame(instance: Instance, session: Accounts.Session, quickPlay: QuickPlay?): File = coroutineScope {
+        val game = GameLaunch(graph.context)
+        val progress = launch(graph.io) {
+            game.files.progress.collect { p ->
+                if (p.totalBytes > 0) run = run?.copy(fraction = (p.bytes.toFloat() / p.totalBytes).coerceIn(0f, 1f))
+            }
+        }
+        try {
+            stage(Stage.Files)
+            withContext(graph.io) { game.files.install(Target.GAME_VERSION) }
+            log(graph.context.getString(R.string.log_files_ready), LogLevel.Success)
+            stage(Stage.Loader)
+            val loader = instance.loaderVersion ?: NeoForgeInstaller.VERSION
+            val version = withContext(graph.io) { NeoForgeInstaller(graph.context, game.files).install(loader) }
+            log("NeoForge $loader", LogLevel.Success)
+            val dir = graph.instances.directory(instance)
+            val account = GameAccount(session.name, session.uuid, session.accessToken)
+            val file = withContext(graph.io) { game.prepare(version, dir, account) }
+            val heap = heapMB(instance)
+            log(graph.context.getString(R.string.log_heap, heap))
+            graph.onIo {
+                val spec = LaunchSpec.read(file)
+                val extra = instance.jvmArguments.split(Regex("\\s+")).filter { it.isNotBlank() }
+                spec.copy(
+                    jvmArgs = spec.jvmArgs.filterNot { it.startsWith("-Xmx") } + "-Xmx${heap}m" + extra,
+                    gameArgs = spec.gameArgs + quickPlay?.args.orEmpty(),
+                ).write(file)
+            }
+            file
+        } finally {
+            progress.cancel()
+        }
     }
 
     /** The instance's own heap, else the launcher default, else the RAM tier. */
@@ -165,10 +197,14 @@ class Launcher(private val graph: AppGraph) {
         else -> JavaHeap.autoMB(graph.physicalMB)
     }
 
-    /** Back from the game (or Cofre restarted while it ran): show why it stopped, unless the player quit. */
+    /**
+     * Back from the game (or Cofre restarted while it ran): once the `:game` process is gone, show why it stopped,
+     * unless the player quit. Cofre often resumes a moment before that process dies, so this waits for it.
+     */
     fun onResume() {
-        if (!pendingFile.isFile || gameProcessAlive()) return
-        graph.work({}) {
+        if (!pendingFile.isFile || watching?.isActive == true) return
+        watching = graph.work({}) {
+            while (gameProcessAlive()) delay(500)
             val pending = graph.onIo { runCatching { Kit.json.decodeFromString<Pending>(pendingFile.readText()) }.getOrNull().also { pendingFile.delete() } }
                 ?: return@work
             run = null
@@ -179,17 +215,14 @@ class Launcher(private val graph: AppGraph) {
 
     private fun diagnose(pending: Pending): Stopped? {
         val instance = runCatching { graph.instances.get(pending.instance) }.getOrNull() ?: return null
-        val dir = graph.instances.directory(instance)
-        // No exit record: the process was killed (low memory, swiped away) before it could write one.
-        val code = ExitRecord.read(File(pending.exitFile))?.code ?: 137
-        val log = File(pending.logFile).takeIf { it.isFile }?.readText()?.takeLast(2_000_000)
-        val crash = LogStore(dir, graph.launcherLog).newestCrashReport(Instant.ofEpochMilli(pending.startedAt))?.readText()
-        val report = GameExitReport.diagnose(code, crash, log, instance.name)
+        val exit = GameLaunch(graph.context).exit(File(pending.spec))
+        val report = exit.report.copy(instance = instance.name)
         if (report.reason == ExitReason.Quit) {
+            // A clean run: these memory and JVM settings become the ones "Restore last working" goes back to.
             graph.instances.markLastGood(instance.id)
             return null
         }
-        return Stopped(report, instance, modFor(report, dir), quickPlay = pending.quickPlay)
+        return Stopped(report, instance, modFor(report, graph.instances.directory(instance)), quickPlay = pending.quickPlay)
     }
 
     private fun modFor(report: GameExitReport, dir: File): ContentStore.Item? {
@@ -259,7 +292,7 @@ class Launcher(private val graph: AppGraph) {
         run = run?.copy(log = run?.log.orEmpty() + line)
         runCatching {
             graph.launcherLog.parentFile?.mkdirs()
-            graph.launcherLog.appendText("${line.time} [${level.name}] ${ReportBundle.redact(text)}\n")
+            graph.launcherLog.appendText("${line.time} [${level.name}] $text\n")
         }
     }
 

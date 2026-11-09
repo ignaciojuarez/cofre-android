@@ -126,8 +126,8 @@
     <string name="launch_try_again">Try again</string>
     <string name="launch_vulkan_unsuitable">This device can\'t run Minecraft 26.2\'s Vulkan renderer. Missing: %1$s</string>
     <string name="launch_no_java">This build doesn\'t include Java 25.</string>
-    <string name="launch_not_wired">Starting the game isn\'t connected in this build yet: game files and NeoForge come next.</string>
     <string name="log_launch_start">Launching %1$s</string>
+    <string name="log_files_ready">Game files ready</string>
     <string name="log_account_ready">Account ready</string>
     <string name="log_heap">Memory limit %1$d MB</string>
 

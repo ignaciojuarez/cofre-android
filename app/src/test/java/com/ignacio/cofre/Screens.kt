@@ -70,7 +70,11 @@ abstract class ScreenTest(private val device: String) {
     }
 
     @Test fun setupDevice() = screen("setup_device") {
-        SetupFlow(Samples.graph(setupDone = false, seeded = false), start = SetupStep.Device)
+        SetupFlow(
+            Samples.graph(setupDone = false, seeded = false),
+            start = SetupStep.Device,
+            readiness = DeviceReadiness(Samples.suitable, javaBundled = true, freeBytes = 24L shl 30),
+        )
     }
 
     @Test fun deviceUnsuitable() = screen("device_unsuitable") {
@@ -99,7 +103,7 @@ abstract class ScreenTest(private val device: String) {
 
     @Test fun settingsGame() = app("settings_game") { nav.openSettings(SettingsPane.Game) }
 
-    @Test fun settingsStorage() = app("settings_storage") { nav.openSettings(SettingsPane.Storage) }
+    @Test fun settingsController() = app("settings_controller") { nav.openSettings(SettingsPane.Controller) }
 
     @Test fun downloads() = app("downloads") {
         val dir = instances.directory(instances.get("survival"))
