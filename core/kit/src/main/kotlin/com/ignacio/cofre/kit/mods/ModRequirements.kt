@@ -13,10 +13,11 @@ object ModRequirements {
         val key = id.lowercase()
         return ModRequirement(key, when (key) { "kotlinforforge" -> "Kotlin for Forge"; "terrablender" -> "TerraBlender"; "glitchcore" -> "GlitchCore"; else -> key }, if (key == "kotlinforforge") "ordsPcFz" else null, reason, neededBy)
     }
+    /** Exact mod ids from each jar's metadata and bundled jars; a file name counts only for [otherFiles], jars without metadata. */
     fun missing(jars: Map<String, ModJarMetadata>, otherFiles: List<String> = emptyList()): List<ModRequirement> {
-        val ids = jars.values.flatMap { it.modIds }.map { it.lowercase() }.toSet()
-        val files = (jars.keys + otherFiles + jars.values.flatMap { it.bundled }).map(::modKey)
-        fun present(id: String): Boolean = id.lowercase() in builtIn || id.lowercase() in ids || files.any { it.startsWith(modKey(id)) }
+        val ids = jars.values.flatMap { it.modIds + it.bundled }.map(::modKey).toSet()
+        val files = otherFiles.map(::modKey)
+        fun present(id: String): Boolean = id.lowercase() in builtIn || modKey(id) in ids || files.any { it.startsWith(modKey(id)) }
         return buildList {
             for ((file, jar) in jars) {
                 if (jar.modLoader?.lowercase() == "kotlinforforge" && !present("kotlinforforge")) add(requirement("kotlinforforge", "modLoader:kotlinforforge", file))

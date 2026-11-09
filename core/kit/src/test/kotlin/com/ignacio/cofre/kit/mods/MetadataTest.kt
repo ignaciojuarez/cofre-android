@@ -112,6 +112,11 @@ class MetadataTest {
         val missing = ModRequirements.missing(mapOf("biomes.jar" to ModJarMetadata(toml.modIds, dependencies = toml.dependencies)))
         assertEquals(listOf("GlitchCore", "TerraBlender"), missing.map { it.name })
     }
+    @Test fun anAddonsFileNameDoesNotProvideTheModItExtends() {
+        val addon = ModJarMetadata(listOf("createaddition"), dependencies = listOf(JarDependency("create")))
+        assertEquals(listOf("create"), ModRequirements.missing(mapOf("createaddition-1.2.jar" to addon)).map { it.modId })
+        assertTrue(ModRequirements.missing(mapOf("createaddition-1.2.jar" to addon), listOf("create-6.0.jar")).isEmpty(), "a jar without metadata still counts by name")
+    }
     @Test fun requirementsKnowKotlinForForgeAndLibrarySlugs() {
         assertEquals("ordsPcFz", ModRequirements.requirement("kotlinforforge", "modLoader").projectId)
         assertEquals(listOf("sophisticated-core", "sophisticatedcore"), ModRequirements.requirement("sophisticatedcore", "dependency").slugs)
