@@ -47,6 +47,15 @@ internal object FileOps {
         Files.move(source.toPath(), target.toPath())
     }
 
+    /** Deletes a file or folder without following links: a link inside is removed, never its target. */
+    fun delete(root: File) {
+        if (!Files.exists(root.toPath(), NOFOLLOW_LINKS)) return
+        Files.walkFileTree(root.toPath(), object : java.nio.file.SimpleFileVisitor<java.nio.file.Path>() {
+            override fun visitFile(file: java.nio.file.Path, attrs: java.nio.file.attribute.BasicFileAttributes): java.nio.file.FileVisitResult { Files.delete(file); return java.nio.file.FileVisitResult.CONTINUE }
+            override fun postVisitDirectory(dir: java.nio.file.Path, exc: java.io.IOException?): java.nio.file.FileVisitResult { if (exc != null) throw exc; Files.delete(dir); return java.nio.file.FileVisitResult.CONTINUE }
+        })
+    }
+
     fun tree(root: File): List<File> {
         if (!root.exists()) return emptyList()
         require(!Files.isSymbolicLink(root.toPath()))

@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
 import java.nio.file.Files
+import java.time.Instant
 import kotlin.test.*
 
 class InstancesTest {
@@ -73,5 +74,21 @@ class InstancesTest {
         val s = InstanceStore(File(root, "instances")); val i = s.create("A"); File(s.directory(i), "saves").mkdir(); File(s.directory(i), "saves/x").writeText("a")
         val archive = s.export(i.id, File(root, "a.zip"), includeWorlds = false)
         val b = s.import(archive, "B"); assertFalse(File(s.directory(b), "saves").exists()); assertTrue(File(s.directory(i), "saves/x").exists())
+    }
+    @Test fun lastPlayedPicksNewestAndCopiesStartFresh() {
+        val s = InstanceStore(root); val a = s.create("A"); val b = s.create("B"); assertNull(s.lastPlayed())
+        s.markPlayed(a.id, Instant.ofEpochMilli(2000)); s.markPlayed(b.id, Instant.ofEpochMilli(1000))
+        assertEquals(a.id, InstanceStore(root).lastPlayed()?.id); assertNull(s.duplicate(a.id, "C").lastPlayedAt)
+    }
+    @Test fun duplicateLeavesContentTrashWithTheSource() {
+        val s = InstanceStore(root); val i = s.create("A"); File(s.directory(i), ".cofre-trash/content/x").apply { parentFile.mkdirs(); writeText("old") }
+        val copy = s.duplicate(i.id); assertFalse(File(s.directory(copy), ".cofre-trash").exists()); assertTrue(File(s.directory(i), ".cofre-trash/content/x").exists())
+    }
+    @Test fun purgeAndRemoveDeletePermanentlyWithoutFollowingLinks() {
+        val s = InstanceStore(File(root, "instances")); val outside = File(root, "outside").apply { mkdir(); File(this, "keep").writeText("keep") }
+        val a = s.create("A"); Files.createSymbolicLink(File(s.directory(a), "link").toPath(), outside.toPath())
+        s.remove(a.id); assertTrue(s.list().isEmpty()); assertTrue(File(outside, "keep").isFile); assertFails { s.get(a.id) }
+        val b = s.create("B"); val token = s.trash(b.id); s.purge(token)
+        assertTrue(s.recentlyDeleted().isEmpty()); assertFails { s.restore(token) }; assertFails { s.purge(token) }
     }
 }

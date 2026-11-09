@@ -8,6 +8,7 @@ import com.ignacio.cofre.kit.modpacks.Zip
 import kotlinx.serialization.Serializable
 import java.io.File
 import java.nio.file.Files
+import java.time.Instant
 import java.util.UUID
 
 /** cofre.json schema 1: gameDirectory is always relative to InstanceStore.root. */
@@ -30,6 +31,8 @@ data class Instance(
     val group: String? = null,
     val favorite: Boolean = false,
     val icon: String? = null,
+    /** Epoch milliseconds of the last launch, for "continue playing". */
+    val lastPlayedAt: Long? = null,
 )
 
 class InstanceStore(val root: File) {
@@ -66,6 +69,8 @@ class InstanceStore(val root: File) {
     fun notes(id: String, value: String): Instance = save(get(id).copy(notes = value))
     fun loaderVersion(id: String, value: String): Instance = save(get(id).copy(loaderVersion = value))
     fun groups(): List<String> = list().mapNotNull { it.group }.distinct().sorted()
+    fun markPlayed(id: String, at: Instant = Instant.now()): Instance = save(get(id).copy(lastPlayedAt = at.toEpochMilli()))
+    fun lastPlayed(): Instance? = list().filter { it.lastPlayedAt != null }.maxByOrNull { it.lastPlayedAt!! }
 
     fun runtime(id: String, memoryMB: Int?, jvmArguments: String, autoMemory: Boolean = memoryMB == null): Instance {
         val old = get(id)
@@ -78,10 +83,11 @@ class InstanceStore(val root: File) {
         require(list().none { it.name == name }) { "Duplicate name" }
         val old = get(id)
         val nextID = newID(name)
-        val next = old.copy(id = nextID, gameDirectory = nextID, name = name, favorite = false)
+        val next = old.copy(id = nextID, gameDirectory = nextID, name = name, favorite = false, lastPlayedAt = null)
         val dest = directory(next)
         try {
             FileOps.copy(directory(old), dest)
+            FileOps.delete(File(dest, ".cofre-trash")) // Undo history stays with the source.
             if (!includeWorlds) File(dest, "saves").deleteRecursively()
             if (!includeOptions) listOf("options.txt", "optionsof.txt").forEach { File(dest, it).delete() }
             // The copied metadata still names the source; replace only after validating the copy.
@@ -115,6 +121,11 @@ class InstanceStore(val root: File) {
         return instance
     }
 
+    /** Permanently deletes a trashed instance. */
+    fun purge(token: TrashToken) { val folder = trashFolder(token); require(folder.isDirectory) { "Not in Recently deleted" }; FileOps.delete(folder) }
+    /** Permanently deletes an instance, skipping the trash. Used to roll back failed installs and imports. */
+    fun remove(id: String) { FileOps.delete(directory(get(id))) }
+
     fun export(id: String, destination: File, includeWorlds: Boolean = true): File {
         Zip.write(directory(get(id)), destination) { p -> !p.startsWith(".cofre-trash") && (includeWorlds || (p != "saves" && !p.startsWith("saves/"))) }
         return destination
@@ -129,7 +140,7 @@ class InstanceStore(val root: File) {
             val newName = name ?: old.name
             require(list().none { it.name == newName }) { "Duplicate name" }
             val id = newID(newName)
-            val next = old.copy(id = id, gameDirectory = id, name = newName, favorite = false)
+            val next = old.copy(id = id, gameDirectory = id, name = newName, favorite = false, lastPlayedAt = null)
             FileOps.atomic(File(source, "cofre.json"), Kit.json.encodeToString(next).toByteArray())
             FileOps.move(source, directory(next))
             return next
