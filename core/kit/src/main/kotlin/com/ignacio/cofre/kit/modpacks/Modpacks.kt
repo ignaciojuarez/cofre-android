@@ -128,7 +128,7 @@ class PackStage private constructor(val directory: File) {
         FileOps.move(directory, destination)
         Files.delete(File(destination, MARKER).toPath())
     }
-    fun rollback() { directory.deleteRecursively() }
+    fun rollback() { FileOps.delete(directory) }
     companion object {
         private const val MARKER = ".cofre-import-in-progress"
         internal fun create(root: File): PackStage {
@@ -137,7 +137,7 @@ class PackStage private constructor(val directory: File) {
             return PackStage(dir)
         }
         fun cleanupAbandoned(root: File) {
-            root.listFiles().orEmpty().filter { it.name.startsWith(".cofre-import-") && !Files.isSymbolicLink(it.toPath()) && File(it, MARKER).isFile }.forEach { it.deleteRecursively() }
+            root.listFiles().orEmpty().filter { it.name.startsWith(".cofre-import-") && !Files.isSymbolicLink(it.toPath()) && File(it, MARKER).isFile }.forEach(FileOps::delete)
         }
     }
 }

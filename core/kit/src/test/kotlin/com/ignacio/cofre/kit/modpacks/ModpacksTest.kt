@@ -101,4 +101,12 @@ class ModpacksTest {
         assertEquals("value 4999", File(stage.directory, "config/f4999.txt").readText())
         assertEquals(5000, File(stage.directory, "config").list()!!.size) // no temp files left behind
     }
+    @Test fun rollbackAndCleanupNeverFollowLinks() {
+        val outside = File(root, "outside").apply { mkdirs(); File(this, "keep").writeText("keep") }
+        val instances = File(root, "instances").apply { mkdirs() }
+        val plan = Modpacks.plan(Modpacks.inspect(zip(mapOf("modrinth.index.json" to index()))))
+        val a = plan.stage(instances); Files.createSymbolicLink(File(a.directory, "link").toPath(), outside.toPath()); a.rollback()
+        val b = plan.stage(instances); Files.createSymbolicLink(File(b.directory, "link").toPath(), outside.toPath()); PackStage.cleanupAbandoned(instances)
+        assertFalse(a.directory.exists()); assertFalse(b.directory.exists()); assertTrue(File(outside, "keep").isFile)
+    }
 }

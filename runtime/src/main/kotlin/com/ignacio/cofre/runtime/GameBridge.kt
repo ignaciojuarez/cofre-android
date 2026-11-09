@@ -4,6 +4,7 @@ import android.content.Context
 import android.system.Os
 import android.util.Log
 import android.view.Surface
+import com.ignacio.cofre.kit.modpacks.FileOps
 import java.io.File
 import java.util.zip.ZipFile
 
@@ -26,7 +27,7 @@ internal object GameBridge {
             val id = "${apk.length()}-${apk.lastModified()}"
             if (stamp.isFile && stamp.readText() == id) return@also
             dir.listFiles()?.forEach { it.setWritable(true) }
-            dir.deleteRecursively()
+            FileOps.delete(dir)
             dir.mkdirs()
             ZipFile(apk).use { zip ->
                 for (entry in zip.entries()) {

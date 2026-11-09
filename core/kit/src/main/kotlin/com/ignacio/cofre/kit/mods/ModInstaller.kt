@@ -7,6 +7,7 @@ import com.ignacio.cofre.kit.downloads.DownloadItem
 import com.ignacio.cofre.kit.downloads.DownloadProgress
 import com.ignacio.cofre.kit.downloads.DownloadQueue
 import com.ignacio.cofre.kit.instances.InstanceStore
+import com.ignacio.cofre.kit.modpacks.FileOps
 import com.ignacio.cofre.kit.modrinth.HttpFailure
 import com.ignacio.cofre.kit.modrinth.Modrinth
 import kotlinx.coroutines.*
@@ -52,7 +53,7 @@ class ModInstaller(
                 download(queue, metered, emptyList(), onProgress)
                 folder.mkdirs()
                 Files.move(download.toPath(), File(folder, name).toPath(), StandardCopyOption.REPLACE_EXISTING)
-            } finally { stage.deleteRecursively() }
+            } finally { FileOps.delete(stage) }
         }
     }
 
@@ -118,7 +119,7 @@ class ModInstaller(
             catch (failure: ModInstallFailure.Rollback) { preserveBackup = true; throw failure }
             index.installed()
         } finally {
-            if (ownsStage && !preserveBackup) stage.deleteRecursively()
+            if (ownsStage && !preserveBackup) FileOps.delete(stage)
             mutex.unlock()
         }
     }

@@ -10,6 +10,7 @@ import android.provider.DocumentsProvider
 import android.webkit.MimeTypeMap
 import com.ignacio.cofre.R
 import com.ignacio.cofre.kit.instances.InstanceStore
+import com.ignacio.cofre.kit.modpacks.FileOps
 import java.io.File
 import java.io.FileNotFoundException
 
@@ -67,7 +68,8 @@ class InstancesProvider : DocumentsProvider() {
     override fun deleteDocument(documentId: String) {
         val file = file(documentId)
         require(file != root) { "The instances folder can't be deleted" }
-        if (!file.deleteRecursively()) throw FileNotFoundException(documentId)
+        // Never follows a link out of the instances folder.
+        try { FileOps.delete(file) } catch (e: java.io.IOException) { throw FileNotFoundException("$documentId: $e") }
     }
 
     override fun isChildDocument(parentDocumentId: String, documentId: String): Boolean =

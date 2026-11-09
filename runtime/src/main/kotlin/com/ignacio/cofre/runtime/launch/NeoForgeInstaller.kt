@@ -46,7 +46,7 @@ class NeoForgeInstaller(private val context: Context, private val files: GameFil
         check(profile.minecraft == MINECRAFT && versionJson.id == profileId) { "Unexpected installer: ${profile.version} for ${profile.minecraft}" }
         files.download("NeoForge libraries", files.libraryDownloads(profile.libraries + versionJson.libraries))
 
-        val work = File(files.root, ".neoforge/$version").apply { deleteRecursively(); mkdirs() }
+        val work = File(files.root, ".neoforge/$version").apply { FileOps.delete(this); mkdirs() }
         val base = mapOf(
             "SIDE" to SIDE,
             "MINECRAFT_JAR" to files.clientJar(vanilla).path,
@@ -97,7 +97,7 @@ class NeoForgeInstaller(private val context: Context, private val files: GameFil
         }
         // The libraries the game needs at launch were downloaded above; the version JSON goes last.
         FileOps.atomic(files.versionJson(profileId), versionText.toByteArray())
-        work.deleteRecursively()
+        FileOps.delete(work)
         Log.i(TAG, "[Cofre] neoforge installed ${files.versionJson(profileId)}")
         files.step("Ready")
         return profileId

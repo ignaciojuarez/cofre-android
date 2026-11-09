@@ -104,12 +104,12 @@ class InstanceStore(val root: File) {
             FileOps.copy(directory(old), dest)
             // Undo history and Cofre's own files stay with the source.
             dest.listFiles().orEmpty().filter { isPrivate(it.name) }.forEach(FileOps::delete)
-            if (!includeWorlds) File(dest, "saves").deleteRecursively()
+            if (!includeWorlds) FileOps.delete(File(dest, "saves"))
             if (!includeOptions) listOf("options.txt", "optionsof.txt").forEach { File(dest, it).delete() }
             // The copied metadata still names the source; replace only after validating the copy.
             FileOps.atomic(File(dest, "cofre.json"), Kit.json.encodeToString(next).toByteArray())
             return get(next.id)
-        } catch (e: Exception) { dest.deleteRecursively(); throw e }
+        } catch (e: Exception) { runCatching { FileOps.delete(dest) }; throw e }
     }
 
     fun trash(id: String): TrashToken {
@@ -169,7 +169,7 @@ class InstanceStore(val root: File) {
             FileOps.atomic(File(source, "cofre.json"), Kit.json.encodeToString(next).toByteArray())
             FileOps.move(source, directory(next))
             return next
-        } finally { stage.deleteRecursively() }
+        } finally { FileOps.delete(stage) }
     }
 
     private fun folder(id: String): File { require('/' !in id && !id.startsWith('.')); return FileOps.child(root, id) }

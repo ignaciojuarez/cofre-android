@@ -1,6 +1,7 @@
 package com.ignacio.cofre.runtime
 
 import android.content.Context
+import com.ignacio.cofre.kit.modpacks.FileOps
 import java.io.BufferedInputStream
 import java.io.DataInputStream
 import java.io.File
@@ -37,14 +38,14 @@ class JreManager(private val context: Context) {
         val version = checkNotNull(bundledVersion()) { "This build has no bundled JRE" }
         if (installedVersion() == version) return home
         val parent = checkNotNull(home.parentFile).apply { mkdirs() }
-        parent.listFiles { f -> f.name.startsWith("$NAME.") }?.forEach { it.deleteRecursively() }
+        parent.listFiles { f -> f.name.startsWith("$NAME.") }?.forEach(FileOps::delete)
         val staging = File(parent, "$NAME.partial")
         context.assets.open("runtime/$NAME.tar.xz").use { untarXz(it, staging) }
         File(staging, STAMP).writeText(version)
         val old = File(parent, "$NAME.old")
         if (home.exists() && !home.renameTo(old)) throw IOException("can't move $home aside")
         if (!staging.renameTo(home)) throw IOException("can't move $staging into place")
-        old.deleteRecursively()
+        FileOps.delete(old)
         return home
     }
 

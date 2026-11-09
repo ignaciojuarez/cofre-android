@@ -62,7 +62,7 @@ class ReportBundle(val store: LogStore, val context: ReportContext = ReportConte
             File(stage, "logs.txt").writeText(redact(logs))
             store.crashReports().take(50).forEachIndexed { i, crash -> File(stage, "crash-reports/crash-$i.txt").apply { parentFile.mkdirs(); writeText(redact(LogStore.text(crash))) } }
             Zip.write(stage, destination); return destination
-        } finally { stage.deleteRecursively() }
+        } finally { FileOps.delete(stage) }
     }
     companion object {
         fun signature(text: String): String = Hashes.sha256(redact(text).toByteArray(Charsets.UTF_8))

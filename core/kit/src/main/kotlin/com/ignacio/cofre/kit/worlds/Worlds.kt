@@ -39,7 +39,7 @@ class WorldStore(val gameDirectory: File, private val isGameRunning: () -> Boole
             val source = source(stage)
             FileOps.move(source, target)
             return read(target)
-        } finally { stage.deleteRecursively() }
+        } finally { FileOps.delete(stage) }
     }
     fun restore(archive: File, world: String) {
         writable(); rejectBedrock(archive)
@@ -50,8 +50,8 @@ class WorldStore(val gameDirectory: File, private val isGameRunning: () -> Boole
             if (target.exists()) { backup(world); FileOps.move(target, previous) }
             try { FileOps.move(source, target) }
             catch (e: Exception) { if (previous.exists()) FileOps.move(previous, target); throw e }
-            previous.deleteRecursively()
-        } finally { stage.deleteRecursively() }
+            FileOps.delete(previous)
+        } finally { FileOps.delete(stage) }
     }
     fun copy(world: String, destination: WorldStore): World {
         writable(); destination.writable()
@@ -60,7 +60,7 @@ class WorldStore(val gameDirectory: File, private val isGameRunning: () -> Boole
         val stage = destination.staging()
         try {
             val copied = File(stage, "world"); FileOps.copy(source, copied); FileOps.move(copied, target); return destination.read(target)
-        } finally { stage.deleteRecursively() }
+        } finally { FileOps.delete(stage) }
     }
     fun trash(world: String): TrashToken {
         writable(); val source = existing(world); val token = TrashToken(world, UUID.randomUUID().toString())
