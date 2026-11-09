@@ -46,6 +46,7 @@ import com.ignacio.cofre.ui.instances.NewInstanceSheet
 import com.ignacio.cofre.ui.mods.ModsSection
 import com.ignacio.cofre.ui.mods.modpackUri
 import com.ignacio.cofre.ui.play.GameStoppedScreen
+import com.ignacio.cofre.ui.play.PreflightSheet
 import com.ignacio.cofre.ui.play.LaunchScreen
 import com.ignacio.cofre.ui.play.PlaySection
 import com.ignacio.cofre.ui.settings.SettingsSection
@@ -139,11 +140,13 @@ fun CofreRoot(
                             onTurnOffMod = launcher::turnOffMod,
                             onShare = launcher::shareReport,
                             onClose = launcher::dismissStopped,
+                            onGetMods = launcher::getStoppedMods,
                         )
                         run != null -> LaunchScreen(run, onCancel = launcher::cancel, onRetry = launcher::retry)
                         else -> Shell(graph)
                     }
                 }
+                launcher.preflight?.let { PreflightSheet(it, onGetMods = launcher::getPreflightMods, onPlayAnyway = launcher::playAnyway, onDismiss = launcher::dismissPreflight) }
                 if (nav.downloads) DownloadsSheet(graph.downloadsModel, onDismiss = { nav.downloads = false })
                 if (nav.newInstance) NewInstanceSheet(graph, onDismiss = { nav.newInstance = false })
             }

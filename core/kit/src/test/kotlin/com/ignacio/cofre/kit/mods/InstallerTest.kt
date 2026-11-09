@@ -104,6 +104,35 @@ class InstallerTest {
             assertEquals(setOf("a", "lib-project"), installed.map { it.projectId }.toSet()); assertFalse(ModIndex(root).read().getValue("architectury.jar").installedDirectly)
         }
     }
+    @Test fun missingModsComeFromTheRequestingModsModrinthDependencies() = runBlocking {
+        MockWebServer().use { server ->
+            server.start()
+            // The mod id (yet_another_config_lib_v3) is not a Modrinth slug; Controlify's version names the project.
+            val ctrlBytes = modJar("controlify", "[[dependencies.controlify]]\nmodId='yet_another_config_lib_v3'\ntype='required'"); val yaclBytes = modJar("yet_another_config_lib_v3")
+            File(mods(), "controlify.jar").writeBytes(ctrlBytes)
+            ModIndex(root).write(mapOf("controlify.jar" to ModIndex.Entry("ctrl", "ctrl-1", sha1 = Hashes.sha1(ctrlBytes))))
+            fun file(bytes: ByteArray, name: String) = Modrinth.File(mapOf("sha1" to Hashes.sha1(bytes)), server.url("/$name").toString(), name, bytes.size.toLong(), true)
+            val ctrl = Modrinth.Version("ctrl-1", "ctrl", "Controlify", "1", listOf("26.2"), listOf("neoforge"), dependencies = listOf(Modrinth.Dependency(projectId = "yacl-id", dependencyType = "required")), files = listOf(file(ctrlBytes, "controlify.jar")))
+            val yacl = Modrinth.Version("yacl-1", "yacl-id", "YACL", "1", listOf("26.2"), listOf("neoforge"), files = listOf(file(yaclBytes, "yacl.jar")))
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = when (request.url.encodedPath) {
+                    "/yacl.jar" -> response(yaclBytes)
+                    "/v2/project/ctrl" -> MockResponse(body = """{"id":"ctrl","title":"Controlify","project_type":"mod"}""")
+                    "/v2/project/yacl-id" -> MockResponse(body = """{"id":"yacl-id","title":"YACL","project_type":"mod"}""")
+                    "/v2/project/ctrl/version" -> MockResponse(body = Kit.json.encodeToString(listOf(ctrl)))
+                    "/v2/project/yacl-id/version" -> MockResponse(body = Kit.json.encodeToString(listOf(yacl)))
+                    else -> MockResponse(code = 404)
+                }
+            }
+            val missing = ModRequirements.missing(root)
+            assertEquals(listOf("yet_another_config_lib_v3"), missing.map { it.modId }); assertEquals("controlify.jar", missing.single().neededBy)
+            val installed = ModInstaller(root, modrinth = Modrinth(baseUrl = server.url("/v2/"))).installMissing(missing)
+            assertEquals(setOf("ctrl", "yacl-id"), installed.map { it.projectId }.toSet()); assertTrue(ModRequirements.missing(root).isEmpty())
+            assertTrue(File(mods(), "controlify.jar").isFile); assertFalse(ModIndex(root).read().getValue("yacl.jar").installedDirectly)
+            // The crash names the requester by mod id, not file: nothing left to get.
+            assertEquals(installed.toSet(), ModInstaller(root, modrinth = Modrinth(baseUrl = server.url("/v2/"))).installMissing(listOf(ModRequirements.requirement("yet_another_config_lib_v3", "dependency", "controlify"))).toSet())
+        }
+    }
     @Test fun unknownEnabledAndDisabledJarsIdentifyBySha1BulkLookup() = runBlocking {
         MockWebServer().use { server ->
             server.start(); val bytes = modJar("a"); File(mods(), "a.jar").writeBytes(bytes); File(mods(), "b.jar.disabled").writeBytes(bytes)

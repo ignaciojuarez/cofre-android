@@ -1,6 +1,7 @@
 package com.ignacio.cofre.kit.mods
 
 import kotlinx.serialization.Serializable
+import java.io.File
 
 @Serializable data class ModRequirement(val modId: String, val name: String = modId, val projectId: String? = null, val reason: String, val neededBy: String? = null) {
     val slugs: List<String> get() = if (projectId != null) emptyList() else listOfNotNull(ModRequirements.aliases[modId], modId, modId.replace('_', '-')).distinct()
@@ -22,6 +23,12 @@ object ModRequirements {
                 jar.dependencies.filter { it.required && !present(it.id) }.forEach { add(requirement(it.id, "dependency:${it.id}", file)) }
             }
         }.distinctBy { it.modId }
+    }
+    /** Preflight: what the instance's enabled jars require that nothing installed provides. Jar metadata is cached per file. */
+    fun missing(instance: File): List<ModRequirement> {
+        val jars = File(instance, "mods").listFiles()?.filter { it.isFile && it.name.endsWith(".jar") }.orEmpty()
+        val metadata = jars.mapNotNull { jar -> ModJarMetadata.read(jar)?.let { jar.name to it } }.toMap()
+        return missing(metadata, jars.filter { it.name !in metadata }.map { it.name })
     }
     fun fromCrash(raw: String): List<ModRequirement> {
         val text = raw.replace(Regex("§[0-9a-fk-or]", RegexOption.IGNORE_CASE), "")

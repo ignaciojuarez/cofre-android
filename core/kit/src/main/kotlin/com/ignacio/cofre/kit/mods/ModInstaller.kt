@@ -107,15 +107,7 @@ class ModInstaller(
                 var added = false
                 for (requirement in missing) {
                     if (!attemptedRequirements.add(requirement.modId)) throw ModInstallFailure.MissingRequirement(requirement)
-                    val project = if (requirement.projectId != null) modrinth.project(requirement.projectId) else {
-                        var found: Modrinth.Project? = null
-                        for (slug in requirement.slugs) {
-                            try { found = modrinth.project(slug); break }
-                            catch (failure: HttpFailure) { if (failure.status != 404) throw failure }
-                        }
-                        found ?: throw ModInstallFailure.MissingRequirement(requirement)
-                    }
-                    val extra = ModResolver.modrinth(modrinth, knownInstalled).plan(project.id)
+                    val extra = ModResolver.modrinth(modrinth, knownInstalled).plan(project(requirement).id)
                     if (extra.blocked != null || extra.target == null) throw ModInstallFailure.Blocked(extra.blocked)
                     extra.downloads.forEach { candidate -> if (candidate.projectId !in all) { add(candidate); added = true } }
                     extra.turnsOn.forEach { if (turnOn.put(it.file, it) == null) added = true }
@@ -130,6 +122,32 @@ class ModInstaller(
             if (ownsStage && !preserveBackup) stage.deleteRecursively()
             mutex.unlock()
         }
+    }
+    /**
+     * "Get missing mods": each requirement comes from the requesting mod's own Modrinth version (its dependency list
+     * names the project), else from Modrinth by the mod id's slugs. Requesters Cofre didn't install are identified by hash.
+     */
+    suspend fun installMissing(requirements: List<ModRequirement>, metered: Boolean = false, onProgress: (DownloadProgress) -> Unit = {}): List<InstalledMod> {
+        val index = ModIndex(instance)
+        var mods = withContext(Dispatchers.IO) { index.installed() }
+        fun requester(requirement: ModRequirement) = requirement.neededBy?.let { by -> mods.firstOrNull { it.file == by || it.aliases.any { id -> id.equals(by, true) } } }
+        if (requirements.any { requester(it)?.versionId == null }) { index.identifyUnknown(modrinth); mods = withContext(Dispatchers.IO) { index.installed() } }
+        for (requirement in requirements) {
+            if (withContext(Dispatchers.IO) { ModRequirements.missing(instance) }.none { it.modId == requirement.modId }) continue
+            val by = requester(requirement)
+            val resolver = ModResolver.modrinth(modrinth, mods)
+            val viaRequester = if (by?.projectId != null && by.versionId != null) resolver.plan(by.projectId, by.versionId).takeIf { it.blocked == null && it.target?.versionId == by.versionId && it.required.isNotEmpty() } else null
+            mods = install(viaRequester ?: resolver.plan(project(requirement).id), metered, onProgress = onProgress)
+        }
+        return mods
+    }
+    private suspend fun project(requirement: ModRequirement): Modrinth.Project {
+        if (requirement.projectId != null) return modrinth.project(requirement.projectId)
+        for (slug in requirement.slugs) {
+            try { return modrinth.project(slug) }
+            catch (failure: HttpFailure) { if (failure.status != 404) throw failure }
+        }
+        throw ModInstallFailure.MissingRequirement(requirement)
     }
     /** Runs [queue], reporting its items after [earlier] ones; returns them all. */
     private suspend fun download(queue: DownloadQueue, metered: Boolean, earlier: List<DownloadItem>, onProgress: (DownloadProgress) -> Unit): List<DownloadItem> = coroutineScope {

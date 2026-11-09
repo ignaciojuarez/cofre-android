@@ -24,6 +24,10 @@ import com.ignacio.cofre.kit.logs.LogStore
 import com.ignacio.cofre.kit.logs.ReportBundle
 import com.ignacio.cofre.kit.logs.ReportContext
 import com.ignacio.cofre.kit.logs.ReportInstance
+import com.ignacio.cofre.kit.mods.ModInstaller
+import com.ignacio.cofre.kit.mods.ModJarMetadata
+import com.ignacio.cofre.kit.mods.ModRequirement
+import com.ignacio.cofre.kit.mods.ModRequirements
 import com.ignacio.cofre.kit.options.JavaHeap
 import com.ignacio.cofre.onIo
 import com.ignacio.cofre.runtime.GameActivity
@@ -81,6 +85,22 @@ class Launcher(private val graph: AppGraph) {
         val mod: ContentStore.Item? = null,
         val modOff: Boolean = false,
         val quickPlay: QuickPlay? = null,
+        /** "Get missing mods": what the crash said is missing, then progress and outcome. */
+        val missing: List<ModRequirement> = emptyList(),
+        val gettingMods: Boolean = false,
+        val modsGot: Boolean = false,
+        val fixError: String? = null,
+    )
+
+    /** "Before you play": installed mods require mods that aren't installed. */
+    data class Preflight(
+        val instance: Instance,
+        val quickPlay: QuickPlay?,
+        val missing: List<ModRequirement>,
+        /** "Controlify needs yet_another_config_lib_v3", one per requirement. */
+        val lines: List<String>,
+        val gettingMods: Boolean = false,
+        val error: String? = null,
     )
 
     @Serializable
@@ -97,6 +117,8 @@ class Launcher(private val graph: AppGraph) {
         }
     var stopped by mutableStateOf<Stopped?>(null)
         private set
+    var preflight by mutableStateOf<Preflight?>(null)
+        private set
     private var job: Job? = null
     private var watching: Job? = null
     private val pendingFile get() = File(graph.home, "launch/pending.json")
@@ -104,16 +126,71 @@ class Launcher(private val graph: AppGraph) {
     /** True while a game started by Cofre is still running: worlds and servers are read-only then. */
     val gameRunning: Boolean get() = pendingFile.isFile && gameProcessAlive()
 
+    /** Checks the instance's mods first (cached per jar, so it's quick); a missing requirement opens "Before you play". */
     fun play(instance: Instance, quickPlay: QuickPlay? = null) {
-        if (job?.isActive == true) return
+        if (job?.isActive == true || preflight != null) return
         graph.library.select(instance.id)
+        job = graph.work({ start(instance, quickPlay) }) {
+            val mods = File(graph.instances.directory(instance), "mods")
+            val missing = graph.onIo { ModRequirements.missing(mods.parentFile!!) }
+            if (missing.isEmpty()) return@work start(instance, quickPlay)
+            val lines = graph.onIo {
+                missing.map { req ->
+                    val by = req.neededBy?.let { ModJarMetadata.read(File(mods, it))?.name ?: it } ?: return@map req.name
+                    graph.context.getString(R.string.mods_needs, by, req.name)
+                }
+            }
+            preflight = Preflight(instance, quickPlay, missing, lines)
+        }
+    }
+
+    private fun start(instance: Instance, quickPlay: QuickPlay?) {
         run = Run(instance, quickPlay)
         job = graph.work(::fail) { launch(instance, quickPlay) }
     }
 
     fun retry() {
         val last = run ?: return
-        play(last.instance, last.quickPlay)
+        start(last.instance, last.quickPlay)
+    }
+
+    fun playAnyway() {
+        val current = preflight ?: return
+        preflight = null
+        start(current.instance, current.quickPlay)
+    }
+
+    fun dismissPreflight() {
+        if (preflight?.gettingMods != true) preflight = null
+    }
+
+    /** "Before you play" → "Get missing mods", then play. */
+    fun getPreflightMods() {
+        val current = preflight?.takeIf { !it.gettingMods } ?: return
+        preflight = current.copy(gettingMods = true, error = null)
+        graph.work({ preflight = current.copy(error = it) }) {
+            getMissing(current.instance, current.missing)
+            preflight = null
+            start(current.instance, current.quickPlay)
+        }
+    }
+
+    /** Game stopped → "Get missing mods". */
+    fun getStoppedMods() {
+        val current = stopped?.takeIf { it.missing.isNotEmpty() && !it.gettingMods } ?: return
+        stopped = current.copy(gettingMods = true, fixError = null)
+        graph.work({ stopped = current.copy(fixError = it) }) {
+            getMissing(current.instance, current.missing)
+            stopped = current.copy(modsGot = true)
+        }
+    }
+
+    private suspend fun getMissing(instance: Instance, missing: List<ModRequirement>) {
+        val dir = graph.instances.directory(instance)
+        ModInstaller(dir, modrinth = graph.modrinth).installMissing(missing)
+        val left = graph.onIo { ModRequirements.missing(dir) }.filter { req -> missing.any { it.modId == req.modId } }
+        check(left.isEmpty()) { graph.context.getString(R.string.mods_still_missing, left.joinToString { it.name }) }
+        graph.library.refresh()
     }
 
     /** Cancel during the stages, or Close after a failure. */
@@ -144,7 +221,7 @@ class Launcher(private val graph: AppGraph) {
             pendingFile.writeText(Kit.json.encodeToString(Pending(instance.id, spec.path, quickPlay)))
             graph.instances.markPlayed(instance.id)
         }
-        graph.context.startActivity(GameActivity.intent(graph.context, spec).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        graph.context.startActivity(GameActivity.intent(graph.context, spec, session.accessToken).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         stage(Stage.InGame)
         run = run?.copy(done = true)
         graph.library.refresh()
@@ -167,7 +244,7 @@ class Launcher(private val graph: AppGraph) {
             val version = withContext(graph.io) { NeoForgeInstaller(graph.context, game.files).install(loader) }
             log("NeoForge $loader", LogLevel.Success)
             val dir = graph.instances.directory(instance)
-            val account = GameAccount(session.name, session.uuid, session.accessToken)
+            val account = GameAccount(session.name, session.uuid)
             val heap = heapMB(instance)
             val jvm = instance.jvmArguments.split(Regex("\\s+")).filter { it.isNotBlank() }
             val file = withContext(graph.io) { game.prepare(version, dir, account, heap, jvm, quickPlay?.args.orEmpty()) }
@@ -210,7 +287,8 @@ class Launcher(private val graph: AppGraph) {
             graph.instances.markLastGood(instance.id)
             return null
         }
-        return Stopped(report, instance, modFor(report, graph.instances.directory(instance)), quickPlay = pending.quickPlay)
+        val missing = report.missingDependencies.map { ModRequirements.requirement(it.modId, "dependency:${it.modId}", it.requestedBy) }
+        return Stopped(report, instance, modFor(report, graph.instances.directory(instance)), quickPlay = pending.quickPlay, missing = missing)
     }
 
     private fun modFor(report: GameExitReport, dir: File): ContentStore.Item? {

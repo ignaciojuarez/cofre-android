@@ -137,6 +137,13 @@
     <string name="stopped_turn_off_next">Turn off %1$s, then play again.</string>
     <string name="stopped_mod_off">%1$s is off. Play again to try without it.</string>
     <string name="stopped_play_again">Play again</string>
+    <string name="stopped_get_mods">Get missing mods</string>
+    <string name="stopped_mods_got">Missing mods installed. Play again.</string>
+    <string name="mods_needs">%1$s needs %2$s</string>
+    <string name="mods_still_missing">Still missing: %1$s</string>
+    <string name="preflight_title">Before you play</string>
+    <string name="preflight_body">These mods need other mods that aren\'t installed. Without them the game stops while loading.</string>
+    <string name="preflight_play_anyway">Play anyway</string>
     <string name="stopped_play_again_to">Play again · %1$s</string>
     <string name="stopped_share">Share report</string>
     <string name="stopped_details">Details</string>

@@ -69,6 +69,7 @@ fun GameStoppedScreen(
     onShare: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    onGetMods: () -> Unit = {},
 ) {
     var details by rememberSaveable { mutableStateOf(false) }
     BackHandler(onBack = onClose)
@@ -92,13 +93,13 @@ fun GameStoppedScreen(
                                 Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) { Message(stopped) }
                                     Column(Modifier.width(340.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Actions(stopped, onPlayAgain, onTurnOffMod, onShare, onClose, onDetails = { details = true })
+                                        Actions(stopped, onPlayAgain, onTurnOffMod, onGetMods, onShare, onClose, onDetails = { details = true })
                                     }
                                 }
                             } else {
                                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                                     Message(stopped)
-                                    Actions(stopped, onPlayAgain, onTurnOffMod, onShare, onClose, onDetails = { details = true })
+                                    Actions(stopped, onPlayAgain, onTurnOffMod, onGetMods, onShare, onClose, onDetails = { details = true })
                                 }
                             }
                         }
@@ -137,12 +138,22 @@ private fun Actions(
     stopped: Launcher.Stopped,
     onPlayAgain: () -> Unit,
     onTurnOffMod: () -> Unit,
+    onGetMods: () -> Unit,
     onShare: () -> Unit,
     onClose: () -> Unit,
     onDetails: () -> Unit,
 ) {
     val mod = stopped.mod
-    val fixPending = mod != null && !stopped.modOff
+    val fixPending = mod != null && !stopped.modOff || stopped.missing.isNotEmpty() && !stopped.modsGot
+    if (stopped.missing.isNotEmpty()) {
+        when {
+            stopped.modsGot -> Banner(stringResource(R.string.stopped_mods_got), PixelGlyph.Check, tone = Tone.Success)
+            else -> {
+                stopped.fixError?.let { Banner(it, PixelGlyph.Cross, tone = Tone.Danger) }
+                BlockButton(stringResource(R.string.stopped_get_mods), onGetMods, Modifier.testTag("stopped.getMods"), role = ButtonRole.Primary, size = ButtonSize.Large, loading = stopped.gettingMods, enabled = !stopped.gettingMods)
+            }
+        }
+    }
     if (mod != null) {
         if (stopped.modOff) {
             Banner(stringResource(R.string.stopped_mod_off, mod.name), PixelGlyph.Check, tone = Tone.Success)
