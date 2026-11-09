@@ -6,7 +6,8 @@ import kotlinx.serialization.json.Json
 
 /**
  * Everything the :game process needs to start the JVM. The launcher writes it to a JSON file and
- * starts [GameActivity] with that file's path ([GameActivity.intent]).
+ * starts [GameActivity] with that file's path ([GameActivity.intent]). The access token is never
+ * in the file: arguments carry [TOKEN], and GameActivity puts the real one in from its intent.
  *
  * GameActivity adds what's device-specific itself: the GLFW shim first on the classpath, the
  * LWJGL properties (library path, libvulkan.so, system allocator) and java.home/tmpdir.
@@ -32,12 +33,18 @@ data class LaunchSpec(
      */
     val builtInController: Boolean = true,
 ) {
+    /** This spec with the account's token in place of [TOKEN]. */
+    fun withToken(token: String): LaunchSpec = copy(gameArgs = gameArgs.map { it.replace(TOKEN, token) })
+
     fun write(file: File) {
         file.parentFile?.mkdirs()
         file.writeText(json.encodeToString(serializer(), this))
     }
 
     companion object {
+        /** Stands for the access token in [gameArgs] at rest. */
+        const val TOKEN = "\${auth_access_token}"
+
         fun read(file: File): LaunchSpec = json.decodeFromString(serializer(), file.readText())
     }
 }

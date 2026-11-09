@@ -11,6 +11,6 @@ object DevAccount {
     val account: GameAccount = GameAccount(
         username = "Dev",
         uuid = UUID.nameUUIDFromBytes("OfflinePlayer:Dev".toByteArray()).toString().replace("-", ""),
-        accessToken = "0",
     )
+    const val TOKEN = "0"
 }

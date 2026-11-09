@@ -123,7 +123,7 @@ class RuntimeDebugActivity : Activity() {
         show("Launching $versionId")
         runOnUiThread {
             gameSpec = spec
-            startActivity(GameActivity.intent(this, spec))
+            startActivity(GameActivity.intent(this, spec, DevAccount.TOKEN))
         }
     }
 

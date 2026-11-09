@@ -5,6 +5,7 @@ import com.ignacio.cofre.kit.logs.ExitReason
 import com.ignacio.cofre.kit.logs.GameExitReport
 import com.ignacio.cofre.kit.versions.InstallProfile
 import com.ignacio.cofre.kit.versions.VersionJson
+import com.ignacio.cofre.runtime.LaunchSpec
 import java.io.File
 import java.nio.file.Files
 import org.junit.Test
@@ -21,14 +22,15 @@ class LaunchTest {
     private val neoforge = VersionJson.decode(fixture("neoforge-version.json")).merge(vanilla)
     private val profile = Kit.json.decodeFromString(InstallProfile.serializer(), fixture("neoforge-install_profile.json"))
     private val files = GameFiles(File("/m"))
-    private val account = GameAccount("Dev", "0123456789abcdef0123456789abcdef", "0")
+    private val account = GameAccount("Dev", "0123456789abcdef0123456789abcdef")
+    private val exit = File("/r/g.exit.json")
 
     @Test fun substitutesKnownKeysAndKeepsUnknownOnes() {
         assertEquals("-Djna.tmpdir=/n/jna \${nope}", LaunchArgs.substitute("-Djna.tmpdir=\${natives_directory}/jna \${nope}", mapOf("natives_directory" to "/n")))
     }
 
     @Test fun vanillaJvmArgsForLinuxArm64() {
-        val spec = LaunchArgs.spec(vanilla, files, File("/g"), account, "/jre", 2048)
+        val spec = LaunchArgs.spec(vanilla, files, File("/g"), account, "/jre", 2048, exit)
         val jvm = spec.jvmArgs
         assertEquals(listOf("-Xms256m", "-Xmx2048m"), jvm.take(2))
         assertTrue("-Djna.tmpdir=/m/natives/26.2/jna" in jvm)
@@ -43,7 +45,7 @@ class LaunchTest {
     }
 
     @Test fun vanillaGameArgs() {
-        val args = LaunchArgs.spec(vanilla, files, File("/g"), account, "/jre", 2048).gameArgs
+        val args = LaunchArgs.spec(vanilla, files, File("/g"), account, "/jre", 2048, exit).gameArgs
         fun value(name: String) = args[args.indexOf(name) + 1]
         assertEquals("Dev", value("--username"))
         assertEquals("26.2", value("--version"))
@@ -51,16 +53,17 @@ class LaunchTest {
         assertEquals("/m/assets", value("--assetsDir"))
         assertEquals("32", value("--assetIndex"))
         assertEquals(account.uuid, value("--uuid"))
-        assertEquals("0", value("--accessToken"))
+        assertEquals(LaunchSpec.TOKEN, value("--accessToken")) // the spec on disk never holds the token
+        assertEquals("tok", LaunchArgs.spec(vanilla, files, File("/g"), account, "/jre", 2048, exit).withToken("tok").gameArgs.let { it[it.indexOf("--accessToken") + 1] })
         assertEquals("msa", value("--userType"))
         assertEquals("release", value("--versionType"))
         assertEquals("vulkan", value("--graphicsBackend"))
         listOf("--demo", "--width", "--quickPlayPath").forEach { assertFalse(it in args, it) }
-        assertTrue(args.none { "\${" in it })
+        assertTrue(args.none { "\${" in it && it != LaunchSpec.TOKEN })
     }
 
     @Test fun heapInstanceArgsAndQuickPlayGoLast() {
-        val spec = LaunchArgs.spec(vanilla, files, File("/g"), account, "/jre", 3072, listOf("-XX:+UseZGC"), listOf("--quickPlaySingleplayer", "World"))
+        val spec = LaunchArgs.spec(vanilla, files, File("/g"), account, "/jre", 3072, exit, listOf("-XX:+UseZGC"), listOf("--quickPlaySingleplayer", "World"))
         assertEquals(listOf("-Xmx3072m"), spec.jvmArgs.filter { it.startsWith("-Xmx") })
         assertEquals("-XX:+UseZGC", spec.jvmArgs.last())
         assertEquals(listOf("--quickPlaySingleplayer", "World"), spec.gameArgs.takeLast(2))
@@ -68,7 +71,7 @@ class LaunchTest {
     }
 
     @Test fun neoForgeArgsAppendToVanilla() {
-        val spec = LaunchArgs.spec(neoforge, files, File("/g"), account, "/jre", 4096)
+        val spec = LaunchArgs.spec(neoforge, files, File("/g"), account, "/jre", 4096, exit)
         assertEquals("net.neoforged.fml.startup.Client", spec.mainClass)
         assertTrue(LaunchArgs.isNeoForge(neoforge))
         assertFalse(LaunchArgs.isNeoForge(vanilla))

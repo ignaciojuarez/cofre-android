@@ -30,10 +30,11 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
 
     companion object {
         private const val EXTRA_SPEC = "com.ignacio.cofre.runtime.SPEC"
+        private const val EXTRA_TOKEN = "com.ignacio.cofre.runtime.TOKEN"
 
-        /** Starts the game described by the JSON [spec] file (see [LaunchSpec.write]). */
-        fun intent(context: Context, spec: File): Intent =
-            Intent(context, GameActivity::class.java).putExtra(EXTRA_SPEC, spec.absolutePath)
+        /** Starts the game described by the JSON [spec] file (see [LaunchSpec.write]); [accessToken] replaces [LaunchSpec.TOKEN] in memory only. */
+        fun intent(context: Context, spec: File, accessToken: String? = null): Intent =
+            Intent(context, GameActivity::class.java).putExtra(EXTRA_SPEC, spec.absolutePath).putExtra(EXTRA_TOKEN, accessToken)
 
         private var started = false // one JVM per process
         private var activity: GameActivity? = null
@@ -70,7 +71,7 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
         val path = intent.getStringExtra(EXTRA_SPEC)
         if (started || path == null) return
         started = true
-        val spec = LaunchSpec.read(File(path))
+        val spec = LaunchSpec.read(File(path)).let { s -> intent.getStringExtra(EXTRA_TOKEN)?.let(s::withToken) ?: s }
         if (spec.builtInController) gamepad = GamepadMapper()
         thread(name = "cofre-requests", isDaemon = true) { serveRequests() }
         start(spec)

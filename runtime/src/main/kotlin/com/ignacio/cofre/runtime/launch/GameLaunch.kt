@@ -5,6 +5,7 @@ import android.content.Context
 import android.util.Log
 import com.ignacio.cofre.kit.logs.ExitReason
 import com.ignacio.cofre.kit.logs.GameExitReport
+import com.ignacio.cofre.kit.modpacks.FileOps
 import com.ignacio.cofre.kit.options.FMLConfig
 import com.ignacio.cofre.kit.options.GameOptions
 import com.ignacio.cofre.kit.options.JavaHeap
@@ -14,13 +15,14 @@ import com.ignacio.cofre.runtime.JreManager
 import com.ignacio.cofre.runtime.LaunchSpec
 import java.io.File
 
-/** Who plays. Comes from Microsoft sign-in; debug builds also have `DevAccount`. */
-data class GameAccount(val username: String, val uuid: String, val accessToken: String)
+/** Who plays. Comes from Microsoft sign-in; debug builds also have `DevAccount`. The token goes to `GameActivity.intent`, never to disk. */
+data class GameAccount(val username: String, val uuid: String)
 
 /**
  * Prepares and explains game runs. [prepare] downloads what's missing, writes the Vulkan
  * settings and returns the [LaunchSpec] file for `GameActivity.intent`; [exit] reads what the
- * run left behind once the launcher is back.
+ * run left behind once the launcher is back. Specs and exit records live in `noBackupFilesDir/launch`,
+ * outside the instance, so exports, copies and the file manager never see them.
  */
 class GameLaunch(private val context: Context, val files: GameFiles = GameFiles(File(context.filesDir, "minecraft"))) {
 
@@ -39,10 +41,13 @@ class GameLaunch(private val context: Context, val files: GameFiles = GameFiles(
     ): File {
         val version = files.install(versionId)
         val javaHome = JreManager(context).install()
-        val spec = LaunchArgs.spec(version, files, gameDir, account, javaHome.path, heapMB, extraJvmArgs, extraGameArgs)
+        val runs = File(context.noBackupFilesDir, "launch")
+        val exitFile = File(runs, "${gameDir.name}.exit.json")
+        val spec = LaunchArgs.spec(version, files, gameDir, account, javaHome.path, heapMB, exitFile, extraJvmArgs, extraGameArgs)
         prepareGameDir(gameDir, LaunchArgs.isNeoForge(version))
-        val file = File(gameDir, ".cofre/launch.json")
-        File(spec.exitFile).delete()
+        FileOps.delete(File(gameDir, ".cofre")) // where older builds kept the spec, token included
+        val file = File(runs, "${gameDir.name}.json")
+        exitFile.delete()
         spec.write(file)
         Log.i(TAG, "[Cofre] launch prepared ${version.id} main=${spec.mainClass} classpath=${spec.classpath.size} jars heap=${spec.jvmArgs.first { it.startsWith("-Xmx") }}")
         return file
@@ -105,6 +110,7 @@ internal object LaunchArgs {
         account: GameAccount,
         javaHome: String,
         heapMB: Int,
+        exitFile: File,
         extraJvmArgs: List<String> = emptyList(),
         extraGameArgs: List<String> = emptyList(),
     ): LaunchSpec {
@@ -124,8 +130,8 @@ internal object LaunchArgs {
             "assets_index_name" to (version.assetIndex?.id ?: version.assets.orEmpty()),
             "auth_player_name" to account.username,
             "auth_uuid" to account.uuid,
-            "auth_access_token" to account.accessToken,
-            "auth_session" to account.accessToken,
+            "auth_access_token" to LaunchSpec.TOKEN,
+            "auth_session" to LaunchSpec.TOKEN,
             "user_type" to "msa",
             "user_properties" to "{}",
             "clientid" to "",
@@ -139,7 +145,7 @@ internal object LaunchArgs {
             gameArgs = game(version, values) + extraGameArgs,
             gameDir = gameDir.path,
             logFile = File(gameDir, "logs/cofre-output.log").path,
-            exitFile = File(gameDir, ".cofre/exit.json").path,
+            exitFile = exitFile.path,
         )
     }
 
