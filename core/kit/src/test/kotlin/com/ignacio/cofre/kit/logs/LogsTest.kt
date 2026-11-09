@@ -77,6 +77,35 @@ class LogsTest {
         assertEquals(ExitReason.VulkanUnsupported, r.reason)
         assertEquals(listOf("VK_KHR_push_descriptor", "VK_EXT_vertex_attribute_divisor", "timelineSemaphore"), r.missingVulkanRequirements)
     }
+    @Test fun vulkanUnsuitableWinsOverTheOpenGLFallbackCrash() {
+        // Emulator, NeoForge 26.2.0.93: the Vulkan check fails, Minecraft falls back to OpenGL, and GL has no context.
+        val log = """
+            [Render thread/WARN] [mojang/VulkanBackend]: Device [Goldfish GFXStream (llvmpipe (LLVM 17.0.6, 256 bits))] does not support required extensions, missing: [VK_EXT_vertex_attribute_divisor, VK_KHR_push_descriptor]
+            [Render thread/ERROR] [minecraft/Minecraft]: Failed to create backend Vulkan
+            com.mojang.blaze3d.systems.BackendCreationException: Device missing capabilities
+            java.lang.IllegalStateException: There is no OpenGL context current in the current thread.
+            	at com.mojang.blaze3d.opengl.GlDevice.<init>(GlDevice.java:120)
+        """.trimIndent()
+        for (r in listOf(GameExitReport.diagnose(1, log = log), GameExitReport.diagnose(1, crashReport = "java.lang.IllegalStateException: There is no OpenGL context current in the current thread.", log = log))) {
+            assertEquals(ExitReason.VulkanUnsupported, r.reason)
+            assertEquals(listOf("VK_EXT_vertex_attribute_divisor", "VK_KHR_push_descriptor"), r.missingVulkanRequirements)
+            assertTrue(r.clue!!.contains("does not support required extensions"), r.clue)
+        }
+        assertEquals(ExitReason.VulkanUnsupported, GameExitReport.diagnose(1, log = "[Render thread/ERROR] [minecraft/Minecraft]: Failed to create backend Vulkan\njava.lang.IllegalStateException: There is no OpenGL context current in the current thread.").reason)
+        assertEquals(ExitReason.NativeWindowInUse, GameExitReport.diagnose(1, log = "Failed to create backend Vulkan\nVK_ERROR_NATIVE_WINDOW_IN_USE_KHR").reason)
+    }
+    @Test fun missingModDependenciesAreNamed() {
+        val log = """
+            [12:00:01] [main/ERROR] [ModSorter/LOADING]: Missing or unsupported mandatory dependencies:
+            	Mod ID: 'yet_another_config_lib_v3', Requested by: 'controlify', Expected range: '(,)', Actual version: '[MISSING]'
+            [12:00:01] [main/ERROR] [FMLLoader/]: Mod controlify requires yet_another_config_lib_v3 any
+            Currently, yet_another_config_lib_v3 is not installed
+        """.trimIndent()
+        val r = GameExitReport.diagnose(1, log = log)
+        assertEquals(ExitReason.MissingDependency, r.reason)
+        assertEquals(listOf(MissingDependency("yet_another_config_lib_v3", "controlify", "(,)", "[MISSING]")), r.missingDependencies)
+        assertEquals("Controlify needs yet_another_config_lib_v3", r.clue)
+    }
     @Test fun openGLCrashNamesTheModFromNeoForgeAndMixinFrames() {
         val trace = "java.lang.IllegalStateException: No context is current\n\tat TRANSFORMER/minecraft@26.2/net.minecraft.client.Main.run(Main.java:1)\n\tat TRANSFORMER/better_clouds@1.0/com.example.Clouds.render(Clouds.java:9)"
         val r = GameExitReport.diagnose(1, log = trace); assertEquals(ExitReason.OpenGLMod, r.reason); assertEquals("Better Clouds", r.mod); assertTrue("Better Clouds" in r.explanation && "Better Clouds" in r.nextStep)

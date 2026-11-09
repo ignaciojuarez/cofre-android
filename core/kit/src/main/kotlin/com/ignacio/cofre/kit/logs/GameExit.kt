@@ -4,7 +4,7 @@ import com.ignacio.cofre.kit.compat.KnownModsCatalog
 
 enum class ExitReason { Memory, SystemKilled, VulkanUnsupported, NativeWindowInUse, OpenGLMod, Mods, MissingDependency, MissingLibrary, JavaVersion, Java, Renderer, Unknown, Quit }
 
-data class GameExitReport(val code: Int, val reason: ExitReason, val clue: String? = null, val instance: String? = null, val logTail: List<String> = emptyList(), val missingVulkanRequirements: List<String> = emptyList(), val mod: String? = null) {
+data class GameExitReport(val code: Int, val reason: ExitReason, val clue: String? = null, val instance: String? = null, val logTail: List<String> = emptyList(), val missingVulkanRequirements: List<String> = emptyList(), val mod: String? = null, val missingDependencies: List<MissingDependency> = emptyList()) {
     val title: String get() = if (reason == ExitReason.Quit) "Minecraft closed" else "Minecraft stopped"
     val explanation: String get() = when (reason) {
         ExitReason.Memory -> "Minecraft ran out of memory."
@@ -35,6 +35,7 @@ data class GameExitReport(val code: Int, val reason: ExitReason, val clue: Strin
     val detailsText: String get() = buildList {
         add("$title: $explanation"); instance?.let { add("Instance: $it") }; add("Exit code: $code"); clue?.let { add("Clue: $it") }
         if (missingVulkanRequirements.isNotEmpty()) add("Missing: ${missingVulkanRequirements.joinToString()}")
+        missingDependencies.forEach { add("Missing mod: ${it.modId} (requested by ${it.requestedBy}, range ${it.range}, found ${it.actual})") }
         if (logTail.isNotEmpty()) { add(""); add("Last log lines:"); addAll(logTail.takeLast(20)) }
     }.joinToString("\n")
     companion object {
@@ -42,29 +43,26 @@ data class GameExitReport(val code: Int, val reason: ExitReason, val clue: Strin
             require(tail >= 0)
             val lines = log.orEmpty().lines().filter { it.isNotEmpty() }
             val report = crashReport.orEmpty().lines().takeWhile { !it.startsWith("-- System Details --") }.filter { it.isNotEmpty() }
+            val dependencies = missingDependencies(report + lines)
             fun result(reason: ExitReason, clue: String? = null, missing: List<String> = emptyList()): GameExitReport =
-                GameExitReport(code, reason, clue?.let(::clean), instance, lines.takeLast(tail), missing, if (reason == ExitReason.OpenGLMod) glMod(report + lines) else null)
+                GameExitReport(code, reason, clue?.let(::clean), instance, lines.takeLast(tail), missing, if (reason == ExitReason.OpenGLMod) glMod(report + lines) else null, dependencies)
             val stopped = lines.indexOfLast { "Stopping!" in it }
             if (crashReport == null && stopped >= 0 && lines.drop(stopped + 1).none(::isError)) return result(ExitReason.Quit)
             val errors = lines.filter { isError(it) || listOf("No context is current", "No GLCapabilities", "does not support required", "CodeCache is full", "VK_ERROR_").any { marker -> it.contains(marker, true) } }
+            // A Vulkan-unsuitable device makes 26.2 fall back to OpenGL, whose "no context" crash is only the aftermath.
+            val all = (report + lines).map { it.lowercase() }
+            val vulkanSigns = rules().first { it.first == ExitReason.VulkanUnsupported }.second
+            val vulkan = (report + lines).lastOrNull { l -> vulkanSigns.any { it in l.lowercase() } }
+                ?: (report + lines).lastOrNull { "failed to create backend vulkan" in it.lowercase() }?.takeIf { all.none { "vk_error_native_window_in_use_khr" in it } }
+            if (vulkan != null) return result(ExitReason.VulkanUnsupported, vulkan, vulkanMissing((report + lines).joinToString("\n")))
+            if (dependencies.isNotEmpty()) return result(ExitReason.MissingDependency, dependencies.joinToString("; ") { "${modName(it.requestedBy)} needs ${it.modId}" })
             val loader = (report + lines).firstOrNull { "Failure message: " in it || "Error during pre-loading phase: " in it }
-            val rules = listOf(
-                ExitReason.Memory to listOf("outofmemoryerror", "out of memory", "gc overhead limit", "cannot allocate memory"),
-                ExitReason.VulkanUnsupported to listOf("does not support required extensions", "does not support required features", "does not have required feature", "no suitable vulkan device", "failed to find a suitable physical device", "vulkan device not suitable", "missing required vulkan"),
-                ExitReason.NativeWindowInUse to listOf("vk_error_native_window_in_use_khr"),
-                ExitReason.OpenGLMod to listOf("no context is current", "no glcapabilities instance set", "no opengl context", "cannot be cast to class com.mojang.blaze3d.opengl"),
-                ExitReason.MissingDependency to listOf("missing or unsupported mandatory dependencies", "requires version", "requires any version", "missing dependency", "needs language provider", "requires mod"),
-                ExitReason.JavaVersion to listOf("unsupportedclassversionerror", "class file version", "unsupported major.minor version", "requires java 25"),
-                ExitReason.Mods to listOf("failed to start fml", "modloadingexception", "incompatible mods found", "incompatible mod set", "modresolutionexception", "mod resolution", "duplicate mod", "duplicatemods", "mixin apply", "mixinapplyerror", "invalidinjectionexception", "nosuchmethoderror", "nosuchfielderror"),
-                ExitReason.MissingLibrary to listOf("unsatisfiedlinkerror", "noclassdeffounderror", "classnotfoundexception", "failed to load library", "library not loaded"),
-                ExitReason.Renderer to listOf("vk_error", "glfw error", "failed to create window", "vulkan renderer", "failed to create swapchain")
-            )
+            val rules = rules()
             for (source in listOf(report, errors)) {
                 for ((reason, signs) in rules) {
                     val line = source.lastOrNull { l -> signs.any { it in l.lowercase() } } ?: continue
                     if (reason == ExitReason.Renderer && loader != null) return result(if (loader.contains("needs language provider")) ExitReason.MissingDependency else ExitReason.Mods, loader.substringAfter("Failure message: ").substringAfter("Error during pre-loading phase: "))
-                    val missing = if (reason == ExitReason.VulkanUnsupported) vulkanMissing((report + lines).joinToString("\n")) else emptyList()
-                    return result(reason, line, missing)
+                    return result(reason, line)
                 }
             }
             if (loader != null) return result(ExitReason.Mods, loader.substringAfter("Failure message: ").substringAfter("Error during pre-loading phase: "))
@@ -76,6 +74,17 @@ data class GameExitReport(val code: Int, val reason: ExitReason, val clue: Strin
             val java = (report + errors).firstOrNull { "Exception" in it || "java.lang." in it } ?: report.firstOrNull { it.startsWith("Description:") }?.substringAfter("Description:")
             return when { java != null || report.isNotEmpty() -> result(ExitReason.Java, java); code == 0 -> result(ExitReason.Quit); else -> result(ExitReason.Unknown, errors.lastOrNull()) }
         }
+        private fun rules() = listOf(
+                ExitReason.Memory to listOf("outofmemoryerror", "out of memory", "gc overhead limit", "cannot allocate memory"),
+                ExitReason.VulkanUnsupported to listOf("does not support required extensions", "does not support required features", "does not have required feature", "no suitable vulkan device", "failed to find a suitable physical device", "vulkan device not suitable", "missing required vulkan"),
+                ExitReason.NativeWindowInUse to listOf("vk_error_native_window_in_use_khr"),
+                ExitReason.OpenGLMod to listOf("no context is current", "no glcapabilities instance set", "no opengl context", "cannot be cast to class com.mojang.blaze3d.opengl"),
+                ExitReason.MissingDependency to listOf("missing or unsupported mandatory dependencies", "requires version", "requires any version", "missing dependency", "needs language provider", "requires mod"),
+                ExitReason.JavaVersion to listOf("unsupportedclassversionerror", "class file version", "unsupported major.minor version", "requires java 25"),
+                ExitReason.Mods to listOf("failed to start fml", "modloadingexception", "incompatible mods found", "incompatible mod set", "modresolutionexception", "mod resolution", "duplicate mod", "duplicatemods", "mixin apply", "mixinapplyerror", "invalidinjectionexception", "nosuchmethoderror", "nosuchfielderror"),
+                ExitReason.MissingLibrary to listOf("unsatisfiedlinkerror", "noclassdeffounderror", "classnotfoundexception", "failed to load library", "library not loaded"),
+                ExitReason.Renderer to listOf("vk_error", "glfw error", "failed to create window", "vulkan renderer", "failed to create swapchain")
+        )
         private val glMarkers = listOf("no context is current", "no glcapabilities", "no opengl context", "com.mojang.blaze3d.opengl")
         private val platformIDs = setOf("minecraft", "neoforge", "forge", "fml", "fmlloader", "fancymodloader", "mixinextras")
         /** The first mod frame after the OpenGL error: NeoForge's `TRANSFORMER/<id>@<version>/` or a mixin's `from mod <id>`. */
@@ -84,10 +93,15 @@ data class GameExitReport(val code: Int, val reason: ExitReason, val clue: Strin
             val frame = Regex("^\\s*at [A-Z-]+/([a-z][a-z0-9_]{1,63})@|from mod ([A-Za-z0-9_-]{2,64})")
             for (line in lines.drop(start).take(60)) {
                 val id = frame.findAll(line).map { (it.groupValues[1].ifEmpty { it.groupValues[2] }).lowercase() }.firstOrNull { it !in platformIDs } ?: continue
-                return KnownModsCatalog.name(id) ?: id.replace('_', ' ').replace('-', ' ').split(' ').joinToString(" ") { w -> w.replaceFirstChar(Char::uppercase) }
+                return modName(id)
             }
             return null
         }
+        private fun modName(id: String) = KnownModsCatalog.name(id) ?: id.replace('_', ' ').replace('-', ' ').split(' ').joinToString(" ") { w -> w.replaceFirstChar(Char::uppercase) }
+        private val dependencyLine = Regex("Mod ID: '([^']+)', Requested by: '([^']+)', Expected range: '([^']*)', Actual version: '([^']*)'")
+        /** FML's "Missing or unsupported mandatory dependencies:" block, one tab-indented line per dependency. */
+        internal fun missingDependencies(lines: List<String>): List<MissingDependency> =
+            lines.mapNotNull { dependencyLine.find(it)?.destructured?.let { (id, by, range, actual) -> MissingDependency(id, by, range, actual) } }.distinct()
         fun isError(line: String): Boolean = listOf("error", "exception", "fatal", "caused by", "failed").any { it in line.lowercase() }
         private fun clean(line: String): String {
             val text = line.replace(Regex("^(?:\\s*\\[[^]]*][ :]*\\s*)+"), "").trim()
@@ -95,6 +109,8 @@ data class GameExitReport(val code: Int, val reason: ExitReason, val clue: Strin
         }
     }
 }
+
+data class MissingDependency(val modId: String, val requestedBy: String, val range: String, val actual: String)
 
 enum class LaunchRecovery { RepairInstance, Retry, Log }
 data class LaunchFailure(val reason: Reason, val detail: String = "") {
