@@ -84,10 +84,15 @@ class Accounts(private val graph: AppGraph) {
             .launchUrl(context, client.authorizeUrl(pkce, state).toString().toUri())
     }
 
-    /** The `cofre://auth?code=…&state=…` redirect. A state that doesn't match the one sent is rejected. */
+    /**
+     * The `cofre://auth?code=…&state=…` redirect. Only the one carrying the state [begin] sent counts (Microsoft echoes
+     * it on errors too); any other `cofre://auth` link is ignored, so it can't cancel a sign-in in progress. The state
+     * lives in the vault, not memory, so the redirect still lands if Android stopped Cofre while the browser was open.
+     */
     fun complete(uri: Uri) {
+        val expected = graph.vault.get(PENDING_STATE) ?: return
+        if (uri.getQueryParameter("state") != expected) return
         val verifier = graph.vault.get(PENDING_VERIFIER)
-        val expected = graph.vault.get(PENDING_STATE)
         graph.vault.set(PENDING_VERIFIER, null)
         graph.vault.set(PENDING_STATE, null)
         val code = uri.getQueryParameter("code")
@@ -95,7 +100,7 @@ class Accounts(private val graph: AppGraph) {
             signIn = SignIn.Failed(graph.context.getString(R.string.signin_cancelled))
             return
         }
-        if (verifier == null || expected == null || uri.getQueryParameter("state") != expected) {
+        if (verifier == null) {
             signIn = SignIn.Failed(graph.context.getString(R.string.signin_state_mismatch))
             return
         }
