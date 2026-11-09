@@ -13,6 +13,7 @@ import com.ignacio.cofre.kit.versions.VersionJson
 import com.ignacio.cofre.runtime.ExitRecord
 import com.ignacio.cofre.runtime.JreManager
 import com.ignacio.cofre.runtime.LaunchSpec
+import com.ignacio.cofre.runtime.TAG
 import java.io.File
 import java.io.RandomAccessFile
 
@@ -78,7 +79,6 @@ class GameLaunch(private val context: Context, val files: GameFiles = GameFiles(
     }
 
     companion object {
-        private const val TAG = "Cofre"
         private const val KILLED = -9
 
         /**

@@ -8,10 +8,12 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import com.ignacio.cofre.kit.common.Target
 import com.ignacio.cofre.runtime.ExitRecord
 import com.ignacio.cofre.runtime.GameActivity
 import com.ignacio.cofre.runtime.JreManager
 import com.ignacio.cofre.runtime.LaunchSpec
+import com.ignacio.cofre.runtime.TAG
 import com.ignacio.cofre.runtime.VulkanSupport
 import com.ignacio.cofre.runtime.launch.GameLaunch
 import com.ignacio.cofre.runtime.launch.NeoForgeInstaller
@@ -107,7 +109,7 @@ class RuntimeDebugActivity : Activity() {
                         val id = NeoForgeInstaller(this@RuntimeDebugActivity, launcher.files).install()
                         show("Installed $id in ${(SystemClock.elapsedRealtime() - started) / 1000} s")
                     }
-                    "vanilla" -> play(NeoForgeInstaller.MINECRAFT, "debug-vanilla")
+                    "vanilla" -> play(Target.GAME_VERSION, "debug-vanilla")
                     "neoforge" -> play(NeoForgeInstaller(this@RuntimeDebugActivity, launcher.files).install(), "debug-neoforge")
                     else -> show("Unknown action $name")
                 }
@@ -167,8 +169,4 @@ class RuntimeDebugActivity : Activity() {
     }
 
     private fun show(message: String) = runOnUiThread { text.append(message + "\n\n") }
-
-    private companion object {
-        const val TAG = "Cofre"
-    }
 }

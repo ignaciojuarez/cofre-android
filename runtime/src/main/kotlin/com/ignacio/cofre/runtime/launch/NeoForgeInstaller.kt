@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.ignacio.cofre.kit.common.Hashes
 import com.ignacio.cofre.kit.common.Kit
+import com.ignacio.cofre.kit.common.Target
 import com.ignacio.cofre.kit.downloads.DownloadItem
 import com.ignacio.cofre.kit.modpacks.FileOps
 import com.ignacio.cofre.kit.versions.InstallProfile
@@ -11,6 +12,7 @@ import com.ignacio.cofre.kit.versions.NeoForgeVersion
 import com.ignacio.cofre.kit.versions.VersionJson
 import com.ignacio.cofre.runtime.JreManager
 import com.ignacio.cofre.runtime.LaunchSpec
+import com.ignacio.cofre.runtime.TAG
 import java.io.File
 import java.io.IOException
 import java.util.jar.JarFile
@@ -32,7 +34,7 @@ class NeoForgeInstaller(private val context: Context, private val files: GameFil
         val profileId = "neoforge-$version"
         if (files.versionJson(profileId).isFile) return profileId
 
-        val vanilla = files.install(MINECRAFT, withAssets = false)
+        val vanilla = files.install(Target.GAME_VERSION, withAssets = false)
         files.step("Downloading the NeoForge installer")
         val installer = files.library("net.neoforged:neoforge:$version:installer")
         // Pinned for the version we ship; any other one (a modpack's) can only be checked against its server's .sha1.
@@ -44,14 +46,14 @@ class NeoForgeInstaller(private val context: Context, private val files: GameFil
             Kit.json.decodeFromString(InstallProfile.serializer(), entry("install_profile.json")) to entry("version.json")
         }
         val versionJson = VersionJson.decode(versionText)
-        check(profile.minecraft == MINECRAFT && versionJson.id == profileId) { "Unexpected installer: ${profile.version} for ${profile.minecraft}" }
+        check(profile.minecraft == Target.GAME_VERSION && versionJson.id == profileId) { "Unexpected installer: ${profile.version} for ${profile.minecraft}" }
         files.download("NeoForge libraries", files.libraryDownloads(profile.libraries + versionJson.libraries))
 
         val work = File(files.root, ".neoforge/$version").apply { FileOps.delete(this); mkdirs() }
         val base = mapOf(
             "SIDE" to SIDE,
             "MINECRAFT_JAR" to files.clientJar(vanilla).path,
-            "MINECRAFT_VERSION" to MINECRAFT,
+            "MINECRAFT_VERSION" to Target.GAME_VERSION,
             "ROOT" to files.root.path,
             "INSTALLER" to installer.path,
             "LIBRARY_DIR" to files.libraries.path,
@@ -112,9 +114,7 @@ class NeoForgeInstaller(private val context: Context, private val files: GameFil
         const val VERSION = "26.2.0.93"
         /** [VERSION]'s installer jar (maven.neoforged.net's .sha1 and the downloaded jar agreed, 2026-11-09). */
         private const val VERSION_SHA1 = "97205829a020fc9389f504a77f590b54157c8dde"
-        const val MINECRAFT = "26.2"
         const val SIDE = "client"
-        private const val TAG = "Cofre"
     }
 }
 

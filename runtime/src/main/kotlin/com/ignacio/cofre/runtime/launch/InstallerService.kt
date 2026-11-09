@@ -17,6 +17,7 @@ import com.ignacio.cofre.runtime.ExitRecord
 import com.ignacio.cofre.runtime.GameBridge
 import com.ignacio.cofre.runtime.LaunchSpec
 import com.ignacio.cofre.runtime.R
+import com.ignacio.cofre.runtime.TAG
 import java.io.File
 import java.io.IOException
 import kotlin.concurrent.thread
@@ -80,7 +81,6 @@ class InstallerService : Service() {
     }
 
     companion object {
-        private const val TAG = "Cofre"
         private const val EXTRA_SPEC = "com.ignacio.cofre.runtime.SPEC"
         private const val EXTRA_TITLE = "com.ignacio.cofre.runtime.TITLE"
         private const val EXTRA_STEP = "com.ignacio.cofre.runtime.STEP"

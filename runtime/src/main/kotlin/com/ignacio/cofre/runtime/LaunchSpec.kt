@@ -1,8 +1,8 @@
 package com.ignacio.cofre.runtime
 
+import com.ignacio.cofre.kit.common.Kit
 import java.io.File
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
 /**
  * Everything the :game process needs to start the JVM. The launcher writes it to a JSON file and
@@ -32,14 +32,14 @@ data class LaunchSpec(
 
     fun write(file: File) {
         file.parentFile?.mkdirs()
-        file.writeText(json.encodeToString(serializer(), this))
+        file.writeText(Kit.json.encodeToString(serializer(), this))
     }
 
     companion object {
         /** Stands for the access token in [gameArgs] at rest. */
         const val TOKEN = "\${auth_access_token}"
 
-        fun read(file: File): LaunchSpec = json.decodeFromString(serializer(), file.readText())
+        fun read(file: File): LaunchSpec = Kit.json.decodeFromString(serializer(), file.readText())
     }
 }
 
@@ -48,8 +48,6 @@ data class LaunchSpec(
 data class ExitRecord(val code: Int, val timeMillis: Long) {
     companion object {
         fun read(file: File): ExitRecord? =
-            if (file.isFile) runCatching { json.decodeFromString(serializer(), file.readText()) }.getOrNull() else null
+            if (file.isFile) runCatching { Kit.json.decodeFromString(serializer(), file.readText()) }.getOrNull() else null
     }
 }
-
-private val json = Json { ignoreUnknownKeys = true }
