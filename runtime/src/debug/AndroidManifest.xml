@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Debug builds only: drives the runtime without the launcher UI. See RuntimeDebugActivity. -->
+    <application>
+        <activity
+            android:name="com.ignacio.cofre.runtime.debug.RuntimeDebugActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.DeviceDefault" />
+    </application>
+</manifest>

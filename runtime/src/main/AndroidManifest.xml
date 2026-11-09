@@ -1,1 +1,18 @@
-<manifest />
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- The game runs in its own process: Minecraft calls System.exit, which must not take the
+             launcher with it. Every config change is handled in place: recreating this activity
+             would mean restarting the JVM. -->
+        <activity
+            android:name="com.ignacio.cofre.runtime.GameActivity"
+            android:process=":game"
+            android:exported="false"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode|density|fontScale|locale|layoutDirection|touchscreen|colorMode"
+            android:enableOnBackInvokedCallback="true"
+            android:resizeableActivity="false"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen" />
+    </application>
+</manifest>
