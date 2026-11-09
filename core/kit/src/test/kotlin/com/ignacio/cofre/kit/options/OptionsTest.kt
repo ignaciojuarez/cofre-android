@@ -62,7 +62,7 @@ class OptionsTest {
     @Test fun storageCountsFilesAndSkipsSymlinkTrees() {
         File(root, "mods").mkdir(); File(root, "mods/a").writeText("1234"); val outside = File(root, "outside").apply { mkdir() }; File(outside, "x").writeText("12")
         Files.createSymbolicLink(File(root, "mods/link").toPath(), outside.toPath())
-        assertEquals(4, Storage.bytes(File(root, "mods"))); assertEquals(6, Storage.usage(root).totalBytes)
+        assertEquals(4, Storage.bytes(File(root, "mods"))); assertEquals(6, Storage.bytes(root))
     }
     @Test fun cleanupKeepsContentActiveLogsRecentDownloadsAndSymlinks() {
         val home = File(root, "home"); val game = File(root, "game"); val temp = File(root, "tmp")

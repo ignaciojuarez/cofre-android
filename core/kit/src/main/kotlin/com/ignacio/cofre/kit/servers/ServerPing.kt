@@ -1,6 +1,7 @@
 package com.ignacio.cofre.kit.servers
 
 import com.ignacio.cofre.kit.common.Kit
+import com.ignacio.cofre.kit.common.Target
 import kotlinx.serialization.json.*
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -37,7 +38,7 @@ object MinecraftServerPing {
             }
             fun send(payload: ByteArray) { output.write(varint(payload.size)); output.write(payload); output.flush() }
             val host = address.host.toByteArray(Charsets.UTF_8)
-            val handshake = ByteArrayOutputStream(); DataOutputStream(handshake).use { h -> h.write(varint(0)); h.write(varint(ProtocolVersionMap.protocol("26.2") ?: 776)); h.write(varint(host.size)); h.write(host); h.writeShort(address.effectivePort); h.write(varint(1)) }
+            val handshake = ByteArrayOutputStream(); DataOutputStream(handshake).use { h -> h.write(varint(0)); h.write(varint(Target.PROTOCOL_VERSION)); h.write(varint(host.size)); h.write(host); h.writeShort(address.effectivePort); h.write(varint(1)) }
             send(handshake.toByteArray()); send(byteArrayOf(0))
             val status = statusObject(packet(input))
             val nonce = System.nanoTime(); val started = System.nanoTime()

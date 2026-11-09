@@ -23,15 +23,3 @@ object ServerDirectory {
         }.take(20)
     }
 }
-
-object ProtocolVersionMap {
-    const val SOURCE: String = "https://raw.githubusercontent.com/PrismarineJS/minecraft-data/master/data/pc/common/protocolVersions.json"
-    fun parse(text: String): Map<Int, List<String>> = Kit.json.parseToJsonElement(text).jsonArray.mapNotNull { e ->
-        val o = e.jsonObject; val protocol = o["version"]?.jsonPrimitive?.intOrNull ?: return@mapNotNull null
-        val name = (o["minecraftVersion"] ?: o["name"])?.jsonPrimitive?.contentOrNull ?: return@mapNotNull null
-        protocol to name
-    }.groupBy({ it.first }, { it.second })
-    private val values: Map<Int, List<String>> by lazy { parse(requireNotNull(javaClass.getResourceAsStream("/protocolVersions.json")).bufferedReader().use { it.readText() }) }
-    fun versions(protocol: Int): List<String> = values[protocol].orEmpty()
-    fun protocol(version: String): Int? = values.entries.firstOrNull { version in it.value }?.key
-}

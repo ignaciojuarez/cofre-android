@@ -101,21 +101,10 @@ class Modrinth(
     suspend fun matchingFirst(projectId: String, loaders: List<String>, gameVersions: List<String>): List<Version> =
         mergeVersions(versions(projectId, loaders, gameVersions), versions(projectId, includeChangelog = false))
 
-    suspend fun versionFile(hash: String, algorithm: String = "sha1"): Version? {
-        require(algorithm == "sha1" || algorithm == "sha512")
-        return try {
-            Kit.json.decodeFromString(request(endpoint("version_file", hash).newBuilder().addQueryParameter("algorithm", algorithm).build()))
-        } catch (e: HttpFailure) { if (e.status == 404) null else throw e }
-    }
     suspend fun versionFiles(hashes: List<String>, algorithm: String = "sha1"): Map<String, Version> {
         require(algorithm == "sha1" || algorithm == "sha512")
         if (hashes.isEmpty()) return emptyMap()
         return Kit.json.decodeFromString(request(endpoint("version_files"), Kit.json.encodeToString(HashRequest(hashes, algorithm))))
-    }
-    suspend fun projects(ids: List<String>): List<Project> {
-        if (ids.isEmpty()) return emptyList()
-        // Modrinth v2 bulk projects is GET with a JSON array query parameter.
-        return Kit.json.decodeFromString(request(endpoint("projects").newBuilder().addQueryParameter("ids", Kit.json.encodeToString(ids)).build()))
     }
     private fun endpoint(vararg segments: String): HttpUrl = baseUrl.newBuilder().apply { segments.forEach { addPathSegment(it) } }.build()
 

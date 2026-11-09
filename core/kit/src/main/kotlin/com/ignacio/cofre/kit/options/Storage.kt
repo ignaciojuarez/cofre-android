@@ -4,14 +4,9 @@ import java.io.File
 import java.nio.file.Files
 
 object Storage {
-    data class Usage(val totalBytes: Long, val categories: Map<String, Long>)
     fun bytes(root: File): Long {
         if (Files.isSymbolicLink(root.toPath())) return 0
         return if (root.isFile) root.length() else root.listFiles().orEmpty().sumOf(::bytes)
-    }
-    fun usage(gameDirectory: File): Usage {
-        val categories = gameDirectory.listFiles().orEmpty().associate { it.name to bytes(it) }
-        return Usage(categories.values.sum(), categories)
     }
 }
 

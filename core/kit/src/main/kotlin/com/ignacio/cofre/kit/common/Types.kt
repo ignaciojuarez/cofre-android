@@ -28,15 +28,14 @@ enum class ContentKind(val folderName: String?) {
     @SerialName("shaders") Shaders("shaderpacks"),
     @SerialName("resourcePacks") ResourcePacks("resourcepacks"),
     @SerialName("dataPacks") DataPacks("datapacks"),
-    @SerialName("modpacks") Modpacks(null);
-
-    /** Get adds it to the whole instance. Data packs belong to one world; modpacks make their own instance. */
-    val isInstallable: Boolean get() = this == Mods || this == Shaders || this == ResourcePacks
+    @SerialName("modpacks") Modpacks(null),
 }
 
 /** The only game and loader line Cofre for Android targets. See PLAN.md. */
 object Target {
     const val GAME_VERSION = "26.2"
+    /** 26.2's network protocol, for the server status handshake (PrismarineJS minecraft-data `protocolVersions.json`). */
+    const val PROTOCOL_VERSION = 776
     const val JAVA_MAJOR = 25
     val LOADER = Loader.NeoForge
 }

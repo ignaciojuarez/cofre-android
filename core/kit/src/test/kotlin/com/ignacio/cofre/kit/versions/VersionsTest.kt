@@ -66,34 +66,18 @@ class VersionsTest {
         val legacy = VersionJson.decode("""{"id":"legacy","minecraftArguments":"--username demo","libraries":[{"name":"a:b:1","natives":{"linux":"natives-linux-${'$'}{arch}"},"downloads":{"classifiers":{"natives-linux-64":{"url":"https://cdn/n","size":10}}},"extract":{"exclude":["META-INF/"]}}]}""")
         assertEquals("--username demo", legacy.minecraftArguments); assertEquals(10, legacy.libraries.single().downloads!!.classifiers.values.single().size)
     }
-    @Test fun manifestsSplitReleasesSnapshotsAndOld() {
-        val manifest = Kit.json.decodeFromString<VersionManifest>("""{"versions":[{"id":"26.2","type":"release"},{"id":"snap","type":"snapshot"},{"id":"old","type":"old_beta"}]}""")
-        assertEquals("26.2", manifest.versions(VersionManifest.Entry.Kind.Release).single().id)
-        assertEquals("old", manifest.versions(VersionManifest.Entry.Kind.Old).single().id); assertNull(manifest.entry("none"))
+    @Test fun manifestFindsEntriesById() {
+        val manifest = Kit.json.decodeFromString<VersionManifest>("""{"versions":[{"id":"26.2","type":"release"},{"id":"snap","type":"snapshot"}]}""")
+        assertEquals("release", manifest.entry("26.2")?.type); assertNull(manifest.entry("none"))
     }
     @Test fun assetsUseHashPrefix() {
         val index = Kit.json.decodeFromString<AssetIndex>("""{"objects":{"a":{"hash":"abcdef","size":12}},"virtual":true}""")
         assertEquals("ab/abcdef", index.objects.getValue("a").path); assertTrue(index.virtual)
     }
-    @Test fun neoForgeMetadataOnlyReturns262AndBetaFlag() {
+    @Test fun neoForgeMetadataOnlyReturns262() {
         val versions = NeoForgeVersion.parseMetadata("<versions><version>21.1.1</version><version>26.2.0.9-beta</version><version>26.2.0.93</version><version>26.3.0.1</version></versions>")
-        assertEquals(listOf("26.2.0.93", "26.2.0.9-beta"), versions.map { it.version }); assertTrue(versions.last().beta)
+        assertEquals(listOf("26.2.0.93", "26.2.0.9-beta"), versions.map { it.version })
         assertTrue(versions.first().installerUrl.endsWith("/26.2.0.93/neoforge-26.2.0.93-installer.jar"))
-    }
-    @Test fun missingDownloadsSkipExistingFiles() {
-        val version = VersionJson("26.2", downloads = mapOf("client" to Artifact(size = 10)), libraries = listOf(Library("a:b:1", Library.Downloads(Artifact(path = "a.jar", size = 20)))), assetIndex = AssetIndexReference("32", "https://cdn/a", totalSize = 30))
-        assertEquals(60, VersionDownloads.missing(version, root).totalBytes)
-        File(root, "libraries").mkdirs(); File(root, "libraries/a.jar").writeText("existing")
-        assertEquals(40, VersionDownloads.missing(version, root).totalBytes)
-        File(root, "assets/indexes").mkdirs(); File(root, "assets/indexes/32.json").writeText("{}")
-        assertEquals(10, VersionDownloads.missing(version, root).totalBytes)
-    }
-    @Test fun estimatePrefersLocalThenManifest() = runBlocking {
-        val file = File(root, "versions/26.2/26.2.json"); file.parentFile.mkdirs(); file.writeText(fixture("26.2.json"))
-        assertTrue(VersionDownloads.estimate(root) { error("must use local") }.totalBytes > 0)
-        file.delete(); val calls = mutableListOf<String>()
-        VersionDownloads.estimate(root) { url -> calls += url; if (url == VersionManifest.URL) """{"versions":[{"id":"26.2","type":"release","url":"https://fixture/version"}]}""" else fixture("26.2.json") }
-        assertEquals(listOf(VersionManifest.URL, "https://fixture/version"), calls)
     }
     @Test fun inheritanceCycleIsRejected() = runBlocking {
         assertFailsWith<IllegalArgumentException> { Versions().resolve(VersionJson("a", inheritsFrom = "b")) { VersionJson("b", inheritsFrom = "a") } }

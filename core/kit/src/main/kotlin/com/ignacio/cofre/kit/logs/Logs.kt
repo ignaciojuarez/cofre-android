@@ -21,12 +21,7 @@ class LogStore(val instance: File, val launcherLog: File) {
     fun newestCrashReport(since: Instant = Instant.MIN): File? = crashReports(since).firstOrNull()
     fun file(source: LogFile): File? = when (source) { LogFile.Launcher -> launcherLog; LogFile.Game -> gameLog; LogFile.Crash -> newestCrashReport() }
     fun read(source: LogFile): List<LogEntry> = file(source)?.let(::text)?.lineSequence()?.filter { it.isNotEmpty() }?.mapIndexed { i, line -> LogEntry(i, line, level(line), source) }?.toList().orEmpty()
-    fun tail(source: LogFile, limit: Int = 200): List<LogEntry> { require(limit >= 0); return read(source).takeLast(limit) }
     fun search(query: String = "", levels: Set<LogLevel> = LogLevel.entries.toSet(), sources: Set<LogFile> = LogFile.entries.toSet()): List<LogEntry> = LogFile.entries.filter { it in sources }.flatMap(::read).filter { it.level in levels && it.text.contains(query.trim(), ignoreCase = true) }
-    fun export(source: LogFile, destination: File): File {
-        val sourceFile = requireNotNull(file(source)); require(sourceFile.isFile)
-        FileOps.atomic(destination, ReportBundle.redact(text(sourceFile)).toByteArray()); return destination
-    }
     companion object {
         private const val MAX_TEXT_BYTES = 8 * 1024 * 1024
         internal fun text(file: File): String {
@@ -51,8 +46,6 @@ data class ReportInstance(val minecraftVersion: String? = null, val loader: Stri
 data class ReportContext(val appVersion: String? = null, val build: String? = null, val device: String? = null, val android: String? = null, val instance: ReportInstance? = null, val exitReason: String? = null, val clue: String? = null)
 
 class ReportBundle(val store: LogStore, val context: ReportContext = ReportContext()) {
-    data class Preview(val fields: Map<String, String>, val files: List<String>)
-    fun preview(): Preview = Preview(mapOf("App version" to redact(context.appVersion ?: "unknown"), "Device" to redact(context.device ?: "unknown"), "Android" to redact(context.android ?: "unknown"), "Exit reason" to redact(context.exitReason ?: "unknown")), listOf("report.json", "logs.txt") + store.crashReports().take(50).indices.map { "crash-reports/crash-$it.txt" })
     fun make(destination: File): File {
         val stage = Files.createTempDirectory("cofre-report-").toFile()
         try {

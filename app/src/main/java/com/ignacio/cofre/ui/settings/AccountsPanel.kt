@@ -28,7 +28,6 @@ import com.ignacio.cofre.design.PixelGlyph
 import com.ignacio.cofre.design.PixelIcon
 import com.ignacio.cofre.design.Spinner
 import com.ignacio.cofre.design.Tone
-import com.ignacio.cofre.kit.accounts.AccountStore
 import com.ignacio.cofre.ui.common.ConfirmSheet
 
 /** The account list, Microsoft sign-in, and (debug builds) the offline Dev account. Used in setup and Settings. */
@@ -62,9 +61,6 @@ fun AccountsPanel(
                     )
                 }
             }
-        }
-        if (accounts.entries.any { it.account.state == AccountStore.State.Demo }) {
-            Banner(stringResource(R.string.accounts_demo), PixelGlyph.Head, tone = Tone.Warn)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             BlockButton(

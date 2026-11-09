@@ -103,8 +103,4 @@ class ServersTest {
         val text = "{\"hits\":[${listOf(hit("a", "Play.X"), hit("b", "play.x:25565"), hit("c", "fabric.test", "fabric"), hit("d", "old.test", version = "1.21.1")).joinToString(",")}]}"
         assertEquals("a", ServerDirectory.decode(text).single().id); assertTrue(ServerDirectory.decode(text, setOf("play.x:25565")).isEmpty())
     }
-    @Test fun protocolMapHasCurrentAndLegacyVersionsAndParsesNames() {
-        assertEquals(776, ProtocolVersionMap.protocol("26.2")); assertTrue("26.2" in ProtocolVersionMap.versions(776)); assertTrue(ProtocolVersionMap.versions(-999).isEmpty())
-        assertEquals(mapOf(1 to listOf("a", "b")), ProtocolVersionMap.parse("""[{"version":1,"name":"a"},{"version":1,"minecraftVersion":"b"}]"""))
-    }
 }

@@ -8,7 +8,7 @@ import java.io.File
 
 /** Non-secret account summaries only. Tokens belong in the platform's encrypted store. */
 class AccountStore(private val directory: File, private val readSelected: () -> String? = { null }, private val writeSelected: (String?) -> Unit = {}) {
-    @Serializable enum class State { Ready, Demo }
+    @Serializable enum class State { Ready }
     data class Account(val id: String, val name: String, val kind: String, val active: Boolean, val expiresAt: Long?, val state: State) {
         override fun toString(): String = "Account(redacted)"
     }
@@ -20,9 +20,8 @@ class AccountStore(private val directory: File, private val readSelected: () -> 
             val name = obj["username"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() } ?: id
             val expiry = obj["expiresAt"]?.jsonPrimitive?.longOrNull
             val microsoft = "xuid" in obj || "xboxGamertag" in obj || expiry != null
-            val demo = obj["demo"]?.jsonPrimitive?.booleanOrNull == true || obj["isDemoUser"]?.jsonPrimitive?.booleanOrNull == true || obj["ownsJava"]?.jsonPrimitive?.booleanOrNull == false
             // Access-token expiry does not sign the account out: the refresh token renews it at launch.
-            Account(id, name, if (microsoft) "Microsoft" else "Offline", id == readSelected(), expiry, if (demo) State.Demo else State.Ready)
+            Account(id, name, if (microsoft) "Microsoft" else "Offline", id == readSelected(), expiry, State.Ready)
         }.getOrNull()
     }.sortedBy { it.name.lowercase() }
     fun remove(id: String): Account? {

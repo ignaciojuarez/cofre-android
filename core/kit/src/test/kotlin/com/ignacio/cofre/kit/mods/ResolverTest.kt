@@ -106,7 +106,6 @@ class ResolverTest {
         assertNull(ModUpdates.candidate(old, listOf(beta, old)))
         assertNull(ModUpdates.candidate(release, listOf(release, old)))
         assertEquals(release, ModUpdates.candidate(old.copy(channel = VersionChannel.Alpha), listOf(beta.copy(gameVersions = listOf("other")), release, old)))
-        assertEquals(listOf(VersionChannel.Release), VersionChannel.Release.updateChannels)
         assertTrue(VersionChannel.Beta.allowsUpdate(VersionChannel.Release)); assertFalse(VersionChannel.Beta.allowsUpdate(VersionChannel.Alpha))
         assertEquals(VersionChannel.Beta, VersionChannel.from("BETA")); assertEquals(VersionChannel.Release, VersionChannel.from(null))
     }

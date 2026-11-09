@@ -2,7 +2,6 @@ package com.ignacio.cofre.kit.content
 
 import com.ignacio.cofre.kit.common.ContentKind
 import com.ignacio.cofre.kit.common.Kit
-import com.ignacio.cofre.kit.common.Loader
 import com.ignacio.cofre.kit.modpacks.FileOps
 import com.ignacio.cofre.kit.modpacks.Zip
 import com.ignacio.cofre.kit.mods.ModJarMetadata
@@ -56,7 +55,6 @@ class ContentStore(val gameDirectory: File) {
         return token
     }
     fun restore(token: TrashToken) { FileOps.move(trashFile(token), FileOps.child(gameDirectory, token.path)) }
-    fun delete(item: Item) { trash(item) }
     private fun trashFile(token: TrashToken): File { require(token.trashID.matches(Regex("[a-f0-9-]{36}"))); return FileOps.child(gameDirectory, ".cofre-trash/content/${token.trashID}") }
     fun activeShaderPack(): String? {
         for (name in listOf("iris.properties", "oculus.properties")) {
@@ -87,12 +85,4 @@ class ContentStore(val gameDirectory: File) {
         fun properties(text: String): Map<String, String> = Properties().apply { load(text.reader()) }.entries.associate { it.key.toString() to it.value.toString() }
         private fun flatten(e: JsonElement): String = when (e) { is JsonPrimitive -> e.content; is JsonArray -> e.joinToString("") { flatten(it) }; is JsonObject -> (e["text"]?.let(::flatten) ?: "") + (e["extra"]?.let(::flatten) ?: "") }
     }
-}
-
-fun ContentKind.updateLoaders(loader: Loader): List<String> = when (this) {
-    ContentKind.Mods -> if (loader == Loader.Quilt) listOf("quilt", "fabric") else listOf(loader.modrinthId)
-    ContentKind.Shaders -> listOf("iris", "optifine", "canvas", "vanilla")
-    ContentKind.ResourcePacks -> listOf("minecraft")
-    ContentKind.DataPacks -> listOf("datapack")
-    ContentKind.Modpacks -> emptyList()
 }

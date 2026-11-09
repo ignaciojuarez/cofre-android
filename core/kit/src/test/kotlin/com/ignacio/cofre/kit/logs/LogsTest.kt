@@ -11,10 +11,10 @@ class LogsTest {
     @TempDir lateinit var root: File
     private fun write(path: String, text: String): File = File(root, path).apply { parentFile.mkdirs(); writeText(text) }
     private fun store(): LogStore = LogStore(File(root, "game"), File(root, "launcher.log"))
-    @Test fun sourcesNewestCrashAndTailAreReadFromGameFiles() {
+    @Test fun sourcesAndNewestCrashAreReadFromGameFiles() {
         write("launcher.log", "launch\n"); write("game/logs/latest.log", "one\ntwo\nthree\n")
         write("game/crash-reports/old.txt", "old").setLastModified(1000); val newest = write("game/crash-reports/new.txt", "new").apply { setLastModified(2000) }
-        val s = store(); assertEquals("launch", s.read(LogFile.Launcher).single().text); assertEquals(listOf("two", "three"), s.tail(LogFile.Game, 2).map { it.text }); assertEquals(newest, s.newestCrashReport()); assertNull(s.newestCrashReport(Instant.ofEpochMilli(3000)))
+        val s = store(); assertEquals("launch", s.read(LogFile.Launcher).single().text); assertEquals(listOf("one", "two", "three"), s.read(LogFile.Game).map { it.text }); assertEquals(newest, s.newestCrashReport()); assertNull(s.newestCrashReport(Instant.ofEpochMilli(3000)))
     }
     @Test fun searchFiltersQueryLevelsAndSources() {
         write("launcher.log", "[WARN] memory low\n[ERROR] launch failed\n"); write("game/logs/latest.log", "[INFO] loaded\n[ERROR] bad mod\n")
@@ -39,14 +39,10 @@ class LogsTest {
         val text = ReportBundle.redact(input)
         for (secret in listOf("192.168.1.2", "2001:db8", "::1", "alice", "Alice", "com.ignacio", "emulated/0", "play.example.com", "123e4567")) assertFalse(secret in text, secret)
     }
-    @Test fun exportedLogIsRedactedWithoutChangingSource() {
-        val raw = "token=SECRET me@example.com"; val source = write("game/logs/latest.log", raw)
-        val out = store().export(LogFile.Game, File(root, "clean.log")); assertFalse("SECRET" in out.readText()); assertEquals(raw, source.readText())
-    }
     @Test fun reportRedactsContextAndEveryArchiveMember() {
         write("game/logs/latest.log", "token=SECRET"); write("game/crash-reports/a.txt", "user@example.com /home/alice/world")
         val context = ReportContext(device = "me@example.com", instance = ReportInstance(mods = mapOf("user@example.com" to "token=SECRET")), clue = "username=Alex")
-        val bundle = ReportBundle(store(), context); val zip = bundle.make(File(root, "report.zip")); assertEquals(3, bundle.preview().files.size)
+        val bundle = ReportBundle(store(), context); val zip = bundle.make(File(root, "report.zip")); assertEquals(3, Zip.entries(zip).count { !it.directory })
         for (entry in Zip.entries(zip).filterNot { it.directory }) {
             val text = Zip.read(zip, entry.path).decodeToString(); assertFalse(listOf("SECRET", "me@example.com", "user@example.com", "alice", "Alex").any { it in text }, entry.path)
         }
@@ -159,15 +155,9 @@ class LogsTest {
         assertEquals(ExitReason.SystemKilled, GameExitReport.diagnose(137).reason); assertEquals(ExitReason.Quit, GameExitReport.diagnose(1, log = "earlier Exception\n[INFO]: Stopping!").reason)
         assertNotEquals(ExitReason.Quit, GameExitReport.diagnose(1, log = "[INFO]: Stopping!\njava.lang.IllegalStateException").reason)
     }
-    @Test fun cluesAreCleanAndLimitedAndDetailsUseLastTwentyLines() {
+    @Test fun cluesAreCleanAndLimitedAndTheTailIsKept() {
         val r = GameExitReport.diagnose(1, log = "[12:00] [main/ERROR]: java.lang.UnsatisfiedLinkError: " + "x".repeat(400)); assertEquals(200, r.clue?.length); assertTrue(r.clue!!.startsWith("java.lang.")); assertTrue(r.clue.endsWith('…'))
         val d = GameExitReport.diagnose(1, log = (1..100).joinToString("\n") { "line $it" }, instance = "Main")
-        assertEquals(60, d.logTail.size); assertTrue("Instance: Main\nExit code: 1" in d.detailsText); assertFalse("line 80\n" in d.detailsText); assertTrue(d.detailsText.endsWith("line 100"))
-    }
-    @Test fun launchFailuresOfferTheOwningRecoveryAndLoaderDetection() {
-        assertEquals(LaunchRecovery.RepairInstance, LaunchFailure(LaunchFailure.Reason.LoaderMissing).recovery); assertEquals(LaunchRecovery.Retry, LaunchFailure(LaunchFailure.Reason.DownloadFailed).recovery)
-        assertEquals(LaunchRecovery.Log, LaunchFailure(LaunchFailure.Reason.JVMExit).recovery)
-        for (reason in LaunchFailure.Reason.entries) assertTrue(LaunchFailure(reason).message.isNotBlank())
-        assertTrue(LaunchFailure.modLoaderFailed("Failed to start FML: ModLoadingException")); assertFalse(LaunchFailure.modLoaderFailed("Loaded successfully"))
+        assertEquals(60, d.logTail.size); assertEquals("line 100", d.logTail.last()); assertEquals("Main", d.instance)
     }
 }

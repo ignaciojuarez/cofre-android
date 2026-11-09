@@ -93,13 +93,12 @@ class AccountsTest {
         val dir = File(root, "accounts"); dir.mkdirs()
         File(dir, "ready.json").writeText("""{"accountId":"ready","username":"Ready","xuid":"1","expiresAt":1800000000}""")
         File(dir, "old.json").writeText("""{"accountId":"old","username":"Old","expiresAt":1600000000}""")
-        File(dir, "demo.json").writeText("""{"accountId":"demo","username":"Demo","demo":true}""")
+        File(dir, "other.json").writeText("""{"accountId":"other","username":"Other"}""")
         var selected: String? = "old"
         val store = AccountStore(root, { selected }, { selected = it })
         assertEquals(AccountStore.State.Ready, store.list().first { it.id == "old" }.state)
-        assertEquals(AccountStore.State.Demo, store.list().first { it.id == "demo" }.state)
-        store.remove("old"); assertEquals("demo", selected); assertFalse(File(dir, "old.json").exists())
-        store.select("missing"); assertEquals("demo", selected); store.select("ready"); assertEquals("ready", selected)
+        store.remove("old"); assertEquals("other", selected); assertFalse(File(dir, "old.json").exists())
+        store.select("missing"); assertEquals("other", selected); store.select("ready"); assertEquals("ready", selected)
         assertNull(store.remove("../outside"))
     }
     @Test fun savedSummariesListBackWithoutTokens() {

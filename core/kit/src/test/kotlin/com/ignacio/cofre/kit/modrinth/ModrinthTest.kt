@@ -53,25 +53,20 @@ class ModrinthTest {
             assertEquals(emptyList(), client.versions("a")); assertEquals(299, client.rateLimit?.remaining)
         }
     }
-    @Test fun singleAndBulkHashesUseV2Contract() = runBlocking {
+    @Test fun bulkHashesUseV2Contract() = runBlocking {
         MockWebServer().use { server ->
-            server.start()
-            server.enqueue(MockResponse(code = 404)); server.enqueue(MockResponse(body = "{}")); server.enqueue(MockResponse(body = "[]"))
+            server.start(); server.enqueue(MockResponse(body = "{}"))
             val client = Modrinth(baseUrl = server.url("/v2/"))
-            assertNull(client.versionFile("abc")); assertEquals(emptyMap(), client.versionFiles(listOf("abc")))
-            assertEquals(emptyList(), client.projects(listOf("a")))
-            assertEquals("/v2/version_file/abc?algorithm=sha1", server.takeRequest().url.encodedPath + "?algorithm=sha1")
+            assertEquals(emptyMap(), client.versionFiles(listOf("abc")))
             val bulk = server.takeRequest(); assertEquals("POST", bulk.method); assertEquals("/v2/version_files", bulk.url.encodedPath)
-            val projects = server.takeRequest(); assertEquals("GET", projects.method); assertNotNull(projects.url.queryParameter("ids"))
         }
     }
-    @Test fun facetsFollowInstanceAndClearingKeepsTaste() {
-        val filters = ProjectFilters(categories = setOf("adventure"), clientSide = true)
+    @Test fun facetsFollowInstanceUnlessTurnedOff() {
+        val filters = ProjectFilters(categories = setOf("adventure"))
         assertTrue(filters.facets().contains(listOf("categories:neoforge")))
         assertTrue(filters.facets().contains(listOf("versions:26.2")))
-        assertFalse(ProjectFilters.cleared.facets().any { it.any { v -> v.startsWith("versions:") } })
+        assertFalse(filters.copy(followGame = false).facets().any { it.any { v -> v.startsWith("versions:") } })
         assertFalse(filters.facets(ContentKind.DataPacks).contains(listOf("categories:neoforge")))
-        assertTrue(ProjectFilters(resolution = 128).facets(ContentKind.ResourcePacks).contains(listOf("categories:128x", "categories:256x", "categories:512x+")))
-        assertEquals(filters, filters.copy(followGame = false).followInstance())
+        assertTrue(filters.facets(ContentKind.Shaders).contains(listOf("categories:iris")))
     }
 }

@@ -95,7 +95,6 @@
     <string name="accounts_offline">Offline · debug builds only</string>
     <string name="accounts_active">Active</string>
     <string name="accounts_dev">Dev (offline)</string>
-    <string name="accounts_demo">This account doesn\'t own Java Edition · demo only</string>
     <string name="accounts_remove_title">Remove %1$s?</string>
     <string name="accounts_remove_body">Cofre forgets this account and its sign-in. Your instances and worlds stay.</string>
 

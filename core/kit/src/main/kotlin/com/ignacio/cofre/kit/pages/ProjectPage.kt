@@ -57,19 +57,6 @@ data class ProjectPage(
     }
 }
 
-object PageLinkPolicy {
-    sealed interface Decision {
-        data object Allow : Decision
-        data class OpenOutside(val url: String) : Decision
-        data object Cancel : Decision
-    }
-    fun decide(url: String?, initialLoad: Boolean = false): Decision = when {
-        initialLoad && url == "about:blank" -> Decision.Allow
-        url?.toHttpUrlOrNull() != null -> Decision.OpenOutside(url)
-        else -> Decision.Cancel
-    }
-}
-
 class Gallery(images: List<ProjectPage.Image>, videos: List<ProjectPage.Video> = emptyList()) {
     constructor(page: ProjectPage) : this(page.gallery, page.videos)
     val images: List<ProjectPage.Image> = images.distinctBy { it.id }
@@ -81,11 +68,4 @@ class Gallery(images: List<ProjectPage.Image>, videos: List<ProjectPage.Video> =
     val items: List<Item> = this.videos.map(Item::Video) + this.images.mapIndexed { index, image -> Item.Image(image, index) }
     val count: Int get() = items.size
     val isEmpty: Boolean get() = items.isEmpty()
-    fun clamped(index: Int): Int = if (images.isEmpty()) 0 else index.coerceIn(images.indices)
-    fun counter(index: Int): String = "${if (images.isEmpty()) 0 else clamped(index) + 1} / ${images.size}"
-    fun spokenLabel(index: Int): String {
-        val image = images.getOrNull(clamped(index))
-        return listOfNotNull(image?.title, image?.caption, "image ${if (images.isEmpty()) 0 else clamped(index) + 1} of ${images.size}").joinToString(", ")
-    }
-    companion object { fun loadsFull(index: Int, current: Int): Boolean = kotlin.math.abs(index.toLong() - current) <= 1 }
 }

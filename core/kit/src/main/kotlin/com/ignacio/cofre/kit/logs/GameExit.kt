@@ -33,12 +33,6 @@ data class GameExitReport(val code: Int, val reason: ExitReason, val clue: Strin
         ExitReason.Java, ExitReason.Renderer, ExitReason.Unknown -> "Try again; share a redacted report if it keeps happening."
         ExitReason.Quit -> "Play again whenever you want."
     }
-    val detailsText: String get() = buildList {
-        add("$title: $explanation"); instance?.let { add("Instance: $it") }; add("Exit code: $code"); clue?.let { add("Clue: $it") }
-        if (missingVulkanRequirements.isNotEmpty()) add("Missing: ${missingVulkanRequirements.joinToString()}")
-        missingDependencies.forEach { add("Missing mod: ${it.modId} (requested by ${it.requestedBy}, range ${it.range}, found ${it.actual})") }
-        if (logTail.isNotEmpty()) { add(""); add("Last log lines:"); addAll(logTail.takeLast(20)) }
-    }.joinToString("\n")
     companion object {
         fun diagnose(code: Int, crashReport: String? = null, log: String? = null, instance: String? = null, tail: Int = 60): GameExitReport {
             require(tail >= 0)
@@ -126,14 +120,6 @@ data class GameExitReport(val code: Int, val reason: ExitReason, val clue: Strin
 }
 
 data class MissingDependency(val modId: String, val requestedBy: String, val range: String, val actual: String)
-
-enum class LaunchRecovery { RepairInstance, Retry, Log }
-data class LaunchFailure(val reason: Reason, val detail: String = "") {
-    enum class Reason { LoaderMissing, ModsNeedLoader, UnknownLoader, ProfileMissing, DownloadFailed, JVMExit, Unknown }
-    val recovery: LaunchRecovery get() = when (reason) { Reason.LoaderMissing, Reason.ModsNeedLoader, Reason.UnknownLoader, Reason.ProfileMissing -> LaunchRecovery.RepairInstance; Reason.DownloadFailed -> LaunchRecovery.Retry; Reason.JVMExit, Reason.Unknown -> LaunchRecovery.Log }
-    val message: String get() = when (reason) { Reason.LoaderMissing, Reason.ModsNeedLoader -> "This instance needs an installed NeoForge loader. Repair it before playing."; Reason.UnknownLoader -> "Choose a supported NeoForge loader before playing."; Reason.ProfileMissing -> "The instance profile is missing. Repair it before playing."; Reason.DownloadFailed -> "Game files could not be downloaded: $detail"; Reason.JVMExit -> "Minecraft exited before it reached the game: $detail"; Reason.Unknown -> detail.ifEmpty { "Minecraft could not start. Check the launcher log." } }
-    companion object { fun modLoaderFailed(log: String): Boolean = listOf("Failed to start FML", "ModLoadingException", "Missing or unsupported mandatory dependencies").any { it in log } }
-}
 
 /**
  * What Minecraft's Vulkan check said is missing. 26.2 logs "Device [x] does not support required extensions, missing:

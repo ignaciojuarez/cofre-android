@@ -12,7 +12,6 @@ import kotlinx.serialization.Serializable
 @Serializable enum class VersionChannel {
     @SerialName("release") Release, @SerialName("beta") Beta, @SerialName("alpha") Alpha;
     fun allowsUpdate(next: VersionChannel): Boolean = next.ordinal <= ordinal
-    val updateChannels: List<VersionChannel> get() = entries.filter { allowsUpdate(it) }
     companion object { fun from(raw: String?): VersionChannel = entries.firstOrNull { it.name.equals(raw, true) } ?: Release }
 }
 

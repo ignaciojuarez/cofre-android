@@ -1,7 +1,6 @@
 package com.ignacio.cofre.kit.content
 
 import com.ignacio.cofre.kit.common.ContentKind
-import com.ignacio.cofre.kit.common.Loader
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
@@ -37,10 +36,6 @@ class ContentTest {
     @Test fun propertiesSupportEscapesAndContinuations() {
         val p = ContentStore.properties("# comment\nshaderPack:My\\ Pack.zip\nkey=first\\\n second\nunicode=\\u0041")
         assertEquals("My Pack.zip", p["shaderPack"]); assertEquals("firstsecond", p["key"]); assertEquals("A", p["unicode"])
-    }
-    @Test fun updateLoadersFollowContentKinds() {
-        assertEquals(listOf("quilt", "fabric"), ContentKind.Mods.updateLoaders(Loader.Quilt)); assertEquals(listOf("neoforge"), ContentKind.Mods.updateLoaders(Loader.NeoForge))
-        assertEquals(listOf("minecraft"), ContentKind.ResourcePacks.updateLoaders(Loader.NeoForge)); assertEquals(listOf("datapack"), ContentKind.DataPacks.updateLoaders(Loader.NeoForge)); assertTrue(ContentKind.Modpacks.updateLoaders(Loader.NeoForge).isEmpty())
     }
     @Test fun jarMetadataReadsFabricQuiltAndNeoForge() {
         jar("mods/f.jar", mapOf("fabric.mod.json" to """{"id":"f","name":"Fabric Name","version":"1"}"""))
