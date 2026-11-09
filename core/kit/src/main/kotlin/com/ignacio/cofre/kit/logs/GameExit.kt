@@ -55,8 +55,14 @@ data class GameExitReport(val code: Int, val reason: ExitReason, val clue: Strin
             val vulkan = (report + lines).lastOrNull { l -> vulkanSigns.any { it in l.lowercase() } }
                 ?: (report + lines).lastOrNull { "failed to create backend vulkan" in it.lowercase() }?.takeIf { all.none { "vk_error_native_window_in_use_khr" in it } }
             if (vulkan != null) return result(ExitReason.VulkanUnsupported, vulkan, vulkanMissing((report + lines).joinToString("\n")))
+            // A SIGKILL leaves no crash report; whatever the log said last (a mixin warning, say) isn't why it stopped.
+            val killed = (report + lines).lastOrNull { l -> listOf("low memory killer", "lowmemorykiller", "lmkd", "killed by the system", "killed by android", "sigkill").any { it in l.lowercase() } }
+            if (crashReport == null && code in setOf(137, -9, 9)) return result(ExitReason.SystemKilled, killed)
             if (dependencies.isNotEmpty()) return result(ExitReason.MissingDependency, dependencies.joinToString("; ") { "${modName(it.requestedBy)} needs ${it.modId}" })
             val loader = (report + lines).firstOrNull { "Failure message: " in it || "Error during pre-loading phase: " in it }
+            // A native crash in the driver: hs_err's "Internal exceptions" would otherwise read as a mod error.
+            val fatal = (report + lines).indexOfFirst { "SIGSEGV" in it || "SIGBUS" in it }
+            if (fatal >= 0 && (report + lines).drop(fatal).any { "libvulkan" in it || "vulkan.adreno" in it }) return result(ExitReason.Renderer, "The Vulkan driver crashed.")
             val rules = rules()
             for (source in listOf(report, errors)) {
                 for ((reason, signs) in rules) {
@@ -66,11 +72,8 @@ data class GameExitReport(val code: Int, val reason: ExitReason, val clue: Strin
                 }
             }
             if (loader != null) return result(ExitReason.Mods, loader.substringAfter("Failure message: ").substringAfter("Error during pre-loading phase: "))
-            val killed = (report + lines).lastOrNull { l -> listOf("low memory killer", "lowmemorykiller", "lmkd", "killed by the system", "killed by android", "sigkill").any { it in l.lowercase() } }
             if (killed != null || code in setOf(137, -9, 9)) return result(ExitReason.SystemKilled, killed)
             val cache = lines.firstOrNull { "CodeCache is full" in it }; if (cache != null) return result(ExitReason.Java, cache)
-            val fatal = (report + lines).indexOfFirst { "SIGSEGV" in it || "SIGBUS" in it }
-            if (fatal >= 0 && (report + lines).drop(fatal).any { "libvulkan" in it || "vulkan.adreno" in it }) return result(ExitReason.Renderer, "The Vulkan driver crashed.")
             val java = (report + errors).firstOrNull { "Exception" in it || "java.lang." in it } ?: report.firstOrNull { it.startsWith("Description:") }?.substringAfter("Description:")
             return when { java != null || report.isNotEmpty() -> result(ExitReason.Java, java); code == 0 -> result(ExitReason.Quit); else -> result(ExitReason.Unknown, errors.lastOrNull()) }
         }

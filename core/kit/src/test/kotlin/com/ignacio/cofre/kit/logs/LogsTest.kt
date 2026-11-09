@@ -135,6 +135,14 @@ class LogsTest {
         val r = GameExitReport.diagnose(134, log = "CodeCache is full. Compiler has been disabled.\nSIGILL"); assertEquals(ExitReason.Java, r.reason); assertTrue(r.explanation.contains("compiled code"))
         assertEquals(ExitReason.Renderer, GameExitReport.diagnose(134, log = "# SIGSEGV\n# libvulkan.so+123").reason)
         assertNotEquals(ExitReason.Renderer, GameExitReport.diagnose(1, log = "libvulkan.so loaded").reason)
+        val hsErr = "#  SIGSEGV (0xb) at pc=0x7a1b2c, pid=4242, tid=4300\n# Problematic frame:\n# C  [libvulkan.so+0x1234]\nInternal exceptions (2 events):\n" +
+            "Event: 1.2 Thread 0x1 Exception <a 'java/lang/NoSuchMethodError'{0x2}: 'void a.b()'>\nEvent: 1.3 Thread 0x1 Exception <a 'java/lang/ClassNotFoundException'{0x3}: x.Y>"
+        assertEquals(ExitReason.Renderer, GameExitReport.diagnose(134, crashReport = hsErr).reason)
+    }
+    @Test fun aSigkillWithoutACrashReportIsTheSystemNotTheLastWarning() {
+        val log = "[12:00] [main/WARN] [mixin/]: Error loading class: net.x.Y (java.lang.ClassNotFoundException: net.x.Y)\n[12:01] [Render thread/INFO]: Loaded 4 shaders"
+        for (code in listOf(-9, 137)) assertEquals(ExitReason.SystemKilled, GameExitReport.diagnose(code, log = log).reason)
+        assertEquals(ExitReason.MissingLibrary, GameExitReport.diagnose(1, log = log).reason)
     }
     @Test fun normalShutdownAndUnknownExitAreDistinguished() {
         assertEquals(ExitReason.Quit, GameExitReport.diagnose(0).reason); assertEquals(ExitReason.Unknown, GameExitReport.diagnose(1).reason)
