@@ -47,9 +47,12 @@ class Downloads(private val graph: AppGraph) {
 
     fun start() {
         if (job?.isActive == true) return
+        // A paused run may still be unwinding and holding the queue; the next run waits for it.
+        val paused = job
         running = true
         error = null
         job = graph.work({ error = it; running = false }) {
+            paused?.join()
             val result = withContext(graph.io) { queue.run(metered()) }
             if (result is DownloadQueue.Result.NeedsMeteredApproval) {
                 asking = summary.items.filter { it.id in result.ids }
@@ -60,7 +63,6 @@ class Downloads(private val graph: AppGraph) {
 
     fun pause() {
         job?.cancel()
-        job = null
         running = false
     }
 
