@@ -25,8 +25,7 @@ dependencies {
     api(libs.kotlinx.coroutines.core)
     api(libs.kotlinx.serialization.json)
     api(libs.okhttp)
-    api(libs.okio)
-    implementation(libs.xz)
+    implementation(libs.okio)
     implementation(libs.bouncycastle)
     implementation(libs.minidns)
 
@@ -36,7 +35,6 @@ dependencies {
     testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.okhttp.mockwebserver)
-    testImplementation(libs.turbine)
 }
 
 tasks.test {
