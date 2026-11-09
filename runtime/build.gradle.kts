@@ -51,9 +51,11 @@ dependencies {
 
 /**
  * Generated assets under runtime/: the GLFW shim jar, and the JRE as jre-25.tar.xz with a
- * jre-25.version stamp (its SHA-256) that JreManager installs from. Binaries stay out of git:
- * the JRE comes from -Pcofre.jre=<tar.xz>, or in debug builds from scripts/dev/fetch-dev-jre.sh.
- * Without one the build still works; JreManager.bundledVersion() is then null.
+ * jre-25.version stamp (its SHA-256) that JreManager installs from. Binaries stay out of git.
+ * The JRE and the game's .so files come from the pinned natives release (`cofre.natives` in
+ * gradle.properties, fetched with scripts/natives/fetch.sh <tag>). -Pcofre.jre=<tar.xz> overrides
+ * the JRE; debug builds fall back to scripts/dev/fetch-dev-jre.sh. Without any, the build still
+ * works; JreManager.bundledVersion() is then null and the game can't start.
  */
 abstract class RuntimeAssets : DefaultTask() {
     @get:InputFiles @get:PathSensitive(PathSensitivity.NAME_ONLY)
@@ -86,6 +88,9 @@ abstract class RuntimeAssets : DefaultTask() {
     }
 }
 
+val nativesTag = providers.gradleProperty("cofre.natives").get()
+val nativesDir = rootProject.layout.projectDirectory.dir(".work/natives/$nativesTag").asFile
+val releaseJre = File(nativesDir, "jre25-android-arm64.tar.xz")
 val jreOverride = providers.gradleProperty("cofre.jre").map { file(it) }
 val devJre = rootProject.layout.projectDirectory.file(".work/dev-jre/jre-25.tar.xz").asFile
 
@@ -95,8 +100,21 @@ androidComponents {
         val task = tasks.register<RuntimeAssets>("${variant.name}RuntimeAssets") {
             jars.from(glfwShim)
             if (debug) jars.from(probe)
-            jre.from(jreOverride.orElse(provider { if (debug) devJre else file("no-bundled-jre") }))
+            jre.from(jreOverride.orElse(provider {
+                when {
+                    releaseJre.isFile -> releaseJre
+                    debug -> devJre
+                    else -> file("no-bundled-jre")
+                }
+            }))
         }
         variant.sources.assets?.addGeneratedSourceDirectory(task, RuntimeAssets::outputDir)
+        // LWJGL 3.4.1, OpenAL, shaderc, SPIRV-Cross, freetype and JNA, as lib/arm64-v8a/*.so.
+        val nativeLibs = File(nativesDir, "lib")
+        if (nativeLibs.isDirectory) {
+            variant.sources.jniLibs?.addStaticSourceDirectory(nativeLibs.path)
+        } else {
+            logger.warn("cofre: natives $nativesTag not fetched; run scripts/natives/fetch.sh $nativesTag (the game can't start without them)")
+        }
     }
 }
