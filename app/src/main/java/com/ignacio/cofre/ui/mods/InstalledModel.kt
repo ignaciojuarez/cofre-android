@@ -219,7 +219,7 @@ class InstalledModel(
         val entries = withContext(io) { index.read() }
         val tracked = mutable.value.rows.mapNotNull { row ->
             val mod = row.mod ?: return@mapNotNull null
-            val entry = entries[row.item.urlName]?.takeIf { it.source == "modrinth" } ?: return@mapNotNull null
+            val entry = entries[ModIndex.key(row.item.urlName)]?.takeIf { it.source == "modrinth" } ?: return@mapNotNull null
             mod to entry
         }
         for ((mod, entry) in tracked) {
