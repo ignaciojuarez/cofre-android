@@ -1,0 +1,196 @@
+package com.ignacio.cofre.ui.mods
+
+import androidx.compose.runtime.Immutable
+import com.ignacio.cofre.kit.common.Kit
+import com.ignacio.cofre.kit.common.Loader
+import com.ignacio.cofre.kit.common.Target
+import com.ignacio.cofre.kit.curseforge.CurseForge
+import com.ignacio.cofre.kit.downloads.DownloadItem
+import com.ignacio.cofre.kit.downloads.DownloadQueue
+import com.ignacio.cofre.kit.instances.Instance
+import com.ignacio.cofre.kit.instances.InstanceStore
+import com.ignacio.cofre.kit.modpacks.Modpack
+import com.ignacio.cofre.kit.modpacks.ModpackInstallPlan
+import com.ignacio.cofre.kit.modpacks.Modpacks
+import com.ignacio.cofre.kit.modpacks.PackRejected
+import com.ignacio.cofre.kit.modrinth.Modrinth
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import java.io.File
+import java.util.UUID
+
+/** Where an import is. */
+sealed interface ImportPhase {
+    data object Idle : ImportPhase
+
+    data class Working(val title: String) : ImportPhase
+
+    /** Inspected. [plan] is null when the pack can't run here, and [rejected] says why. */
+    @Immutable
+    data class Ready(val archive: File, val pack: Modpack, val plan: ModpackInstallPlan?, val rejected: String?) : ImportPhase {
+        val mods: Int get() = pack.files.count { it.path.startsWith("mods/") }
+        val other: Int get() = pack.files.size - mods
+    }
+
+    data class Installing(val name: String, val files: Int, val totalFiles: Int, val fraction: Float?) : ImportPhase
+
+    data class Done(val instance: Instance) : ImportPhase
+
+    data class Failed(val reason: String) : ImportPhase
+}
+
+/**
+ * Import pack: a file, a link or a share from another app → inspect → a new instance. Everything lands in a
+ * staged folder under the instances root first; a failure rolls the stage back, so no half instance is left.
+ */
+class ImportModel(
+    private val scope: CoroutineScope,
+    private val instances: InstanceStore,
+    private val modrinth: Modrinth,
+    private val curseForge: () -> CurseForge?,
+    private val cache: File,
+    private val io: CoroutineDispatcher = Dispatchers.IO,
+) {
+    private val mutable = MutableStateFlow<ImportPhase>(ImportPhase.Idle)
+    val phase: StateFlow<ImportPhase> = mutable.asStateFlow()
+    private var job: Job? = null
+
+    /** A local archive; [load] copies it out of a content URI first when it came from the picker or another app. */
+    fun open(name: String, load: () -> File) = begin("Reading $name") { inspect(withContext(io) { load() }) }
+
+    /** A pasted link: a Modrinth modpack page, or a direct `.mrpack`/`.zip` link. */
+    fun openLink(text: String) = begin("Fetching the pack") {
+        val url = text.trim().let { if ("://" in it) it else "https://$it" }.toHttpUrlOrNull()
+        require(url != null && url.isHttps) { "Paste a Modrinth modpack page or an https .mrpack link." }
+        val segments = url.pathSegments.filter { it.isNotBlank() }
+        val direct = when {
+            url.encodedPath.endsWith(".mrpack") || url.encodedPath.endsWith(".zip") -> url.toString()
+            url.host.endsWith("modrinth.com") && segments.size >= 2 && segments[0] == "modpack" -> {
+                val versions = modrinth.versions(segments[1], listOf(Target.LOADER.modrinthId), listOf(Target.GAME_VERSION), includeChangelog = false)
+                    .ifEmpty { modrinth.versions(segments[1], includeChangelog = false) }
+                requireNotNull(versions.firstOrNull()?.primaryFile?.url) { "That pack has no files." }
+            }
+            else -> throw IllegalArgumentException("Paste a Modrinth modpack page or an https .mrpack link.")
+        }
+        val name = direct.substringAfterLast('/').substringBefore('?').takeIf { it.endsWith(".mrpack") || it.endsWith(".zip") } ?: "pack.mrpack"
+        inspect(fetch(direct, name))
+    }
+
+    fun install() {
+        val ready = mutable.value as? ImportPhase.Ready ?: return
+        val plan = ready.plan ?: return
+        begin("Installing ${plan.name}") {
+            val instance = installPack(ready.archive, plan)
+            mutable.value = ImportPhase.Done(instance)
+        }
+    }
+
+    fun reset() {
+        job?.cancel()
+        mutable.value = ImportPhase.Idle
+    }
+
+    private suspend fun inspect(archive: File) {
+        val pack = withContext(io) { Modpacks.inspect(archive) }
+        val (plan, rejected) = try {
+            Modpacks.plan(pack) to null
+        } catch (e: PackRejected) {
+            null to describe(e.reason)
+        }
+        mutable.value = ImportPhase.Ready(archive, pack, plan, rejected)
+    }
+
+    private suspend fun fetch(url: String, name: String): File = withContext(io) {
+        val dir = File(cache, "imports/${UUID.randomUUID()}").apply { mkdirs() }
+        val file = File(dir, name)
+        val queue = DownloadQueue(File(dir, "queue.json"))
+        queue.enqueue(DownloadItem(url, file.path, name))
+        check(queue.run() == DownloadQueue.Result.Completed) { "Couldn't download the pack." }
+        file
+    }
+
+    private suspend fun installPack(archive: File, plan: ModpackInstallPlan): Instance = withContext(io) {
+        val stage = plan.stage(instances.root)
+        val journal = File(cache, "imports/${UUID.randomUUID()}.json").apply { parentFile?.mkdirs() }
+        try {
+            val queue = DownloadQueue(journal)
+            for (file in plan.filesToFetch) {
+                val (url, path, size) = source(file)
+                queue.enqueue(DownloadItem(url, File(stage.directory, path).path, path.substringAfterLast('/'), size, file.hashes["sha1"], file.hashes["sha512"]))
+            }
+            val progress = launch {
+                queue.progress.collectLatest { p ->
+                    val fraction = if (p.totalBytes > 0) p.bytes.toFloat() / p.totalBytes else null
+                    mutable.value = ImportPhase.Installing(plan.name, p.files, p.totalFiles, fraction)
+                }
+            }
+            val result = try { queue.run() } finally { progress.cancel() }
+            check(result == DownloadQueue.Result.Completed) { "Some of the pack's files didn't download. Nothing was installed." }
+            plan.copyOverrides(archive, stage)
+            val instance = Instance(newId(plan.name), uniqueName(plan.name), loader = Loader.NeoForge, loaderVersion = plan.loaderVersion)
+            File(stage.directory, "cofre.json").writeText(Kit.json.encodeToString(instance))
+            stage.commit(File(instances.root, instance.id))
+            instances.get(instance.id)
+        } catch (e: Exception) {
+            stage.rollback()
+            throw e
+        } finally {
+            journal.delete()
+        }
+    }
+
+    /** Download URL, path in the instance and size for one pack file. CurseForge files need the key. */
+    private suspend fun source(file: com.ignacio.cofre.kit.modpacks.PackFile): Triple<String, String, Long?> {
+        file.downloads.firstOrNull()?.let { return Triple(it, file.path, file.fileSize.takeIf { s -> s > 0 }) }
+        val project = requireNotNull(file.projectID) { "A pack file has no download." }
+        val client = curseForge() ?: throw IllegalStateException("This is a CurseForge pack. Add a CurseForge key in Settings first.")
+        val cf = client.file(project, requireNotNull(file.fileID))
+        return when (val download = client.download(cf, "https://www.curseforge.com/projects/$project")) {
+            is CurseForge.Download.Available -> Triple(download.url, "mods/${cf.fileName}", cf.fileLength)
+            is CurseForge.Download.Disabled -> throw IllegalStateException("${cf.displayName} can only be downloaded on the CurseForge website.")
+        }
+    }
+
+    private fun uniqueName(name: String): String {
+        val taken = instances.list().map { it.name }.toSet()
+        return generateSequence(1) { it + 1 }.map { if (it == 1) name else "$name $it" }.first { it !in taken }
+    }
+
+    private fun newId(name: String): String {
+        val base = name.lowercase().replace(Regex("[^a-z0-9_-]+"), "-").trim('-').take(60).ifEmpty { "pack" }
+        return "$base-${UUID.randomUUID().toString().take(8)}"
+    }
+
+    private fun begin(title: String, block: suspend () -> Unit) {
+        job?.cancel()
+        mutable.value = ImportPhase.Working(title)
+        job = scope.launch {
+            try {
+                block()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                mutable.value = ImportPhase.Failed(e.message ?: e.javaClass.simpleName)
+            }
+        }
+    }
+
+    companion object {
+        fun describe(reason: PackRejected.Reason): String = when (reason) {
+            is PackRejected.Reason.GameVersion -> "It's for Minecraft ${reason.actual ?: "an unknown version"}. Cofre runs ${Target.GAME_VERSION} only."
+            is PackRejected.Reason.LoaderType -> "It's a ${reason.actual.displayName} pack. Cofre runs NeoForge only."
+            PackRejected.Reason.LoaderVersionMissing -> "It doesn't say which NeoForge version it needs."
+            is PackRejected.Reason.Invalid -> reason.detail
+        }
+    }
+}
