@@ -1,0 +1,35 @@
+[
+  {
+    "id": "v-new",
+    "project_id": "project",
+    "name": "New build",
+    "version_number": "2.0.0",
+    "game_versions": ["1.20.4"],
+    "loaders": ["fabric"],
+    "version_type": "release",
+    "dependencies": [],
+    "files": [{"hashes": {"sha1": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}, "url": "https://cdn.modrinth.com/new.jar", "filename": "new.jar", "size": 200, "primary": true}]
+  },
+  {
+    "id": "v-match",
+    "project_id": "project",
+    "name": "Matching build",
+    "version_number": "1.0.0",
+    "game_versions": ["1.21.1"],
+    "loaders": ["fabric"],
+    "version_type": "release",
+    "dependencies": [],
+    "files": [{"hashes": {"sha1": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}, "url": "https://cdn.modrinth.com/match.jar", "filename": "match.jar", "size": 100, "primary": true}]
+  },
+  {
+    "id": "v-old",
+    "project_id": "project",
+    "name": "Old build",
+    "version_number": "0.9.0",
+    "game_versions": ["1.19.2"],
+    "loaders": ["fabric"],
+    "version_type": "release",
+    "dependencies": [],
+    "files": [{"hashes": {"sha1": "cccccccccccccccccccccccccccccccccccccccc"}, "url": "https://cdn.modrinth.com/old.jar", "filename": "old.jar", "size": 90, "primary": true}]
+  }
+]

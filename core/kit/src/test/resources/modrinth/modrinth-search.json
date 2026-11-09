@@ -1,0 +1,4 @@
+[
+  {"project_id":"project","slug":"project","title":"Project","description":"A project","project_type":"mod","categories":["fabric"],"downloads":42,"icon_url":""},
+  {"project_id":"with-icon","slug":"with-icon","title":"With icon","description":"Another project","project_type":"mod","categories":[],"downloads":7,"icon_url":"https://cdn.modrinth.com/icon.png","versions":["1.21.1"]}
+]
