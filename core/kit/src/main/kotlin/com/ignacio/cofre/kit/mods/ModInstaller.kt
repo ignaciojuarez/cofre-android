@@ -174,7 +174,7 @@ class ModInstaller(
                 val candidate = all.getValue(project)
                 val old = before.filter { it.projectId == project || it.file.removeSuffix(".disabled") == file.name || it.projectId == null && it.matches(project, candidate.title) }
                 for (item in old) {
-                    move(File(folder, item.file), File(backup, "${undo.size}-${item.file}")); entries.remove(item.file)
+                    move(File(folder, item.file), File(backup, "${undo.size}-${item.file}")); entries.remove(ModIndex.key(item.file))
                 }
                 move(file, File(folder, file.name))
                 entries[file.name] = ModIndex.Entry(project, candidate.versionId, candidate.source, candidate.channel,
@@ -183,10 +183,9 @@ class ModInstaller(
             for (mod in turningOn) {
                 val from = File(folder, mod.file)
                 if (!from.exists() || mod.file.removeSuffix(".disabled") in staged.values.map { it.name }) continue
-                val name = mod.file.removeSuffix(".disabled"); move(from, File(folder, name))
-                entries.remove(mod.file)?.let { entries[name] = it }
+                move(from, File(folder, ModIndex.key(mod.file)))
             }
-            entries.keys.retainAll(index.jars().map { it.name }.toSet())
+            entries.keys.retainAll(index.jars().map { ModIndex.key(it.name) }.toSet())
             index.write(entries)
         } catch (failure: Exception) {
             var rollbackFailure: Exception? = null

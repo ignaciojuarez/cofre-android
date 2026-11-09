@@ -144,6 +144,17 @@ class InstallerTest {
             index.identifyUnknown(Modrinth(baseUrl = server.url("/v2/"))); assertEquals(1, server.requestCount)
         }
     }
+    @Test fun aTurnedOffModKeepsItsIdentity() = runBlocking {
+        MockWebServer().use { server ->
+            server.start(); val bytes = modJar("a"); val hash = Hashes.sha1(bytes)
+            File(mods(), "a.jar").writeBytes(bytes); val index = ModIndex(root)
+            index.write(mapOf("a.jar" to ModIndex.Entry("123", "456", source = "curseforge", sha1 = hash)))
+            File(mods(), "a.jar").renameTo(File(mods(), "a.jar.disabled")) // ContentStore.setEnabled(false)
+            server.enqueue(MockResponse(body = "{}")) // Modrinth doesn't know a CurseForge jar
+            index.identifyUnknown(Modrinth(baseUrl = server.url("/v2/")))
+            assertEquals("123", index.read()["a.jar"]?.projectId); assertEquals("123", index.installed().single().projectId)
+        }
+    }
     @Test fun filenamesCannotEscapeTheInstance() = runBlocking {
         MockWebServer().use { server ->
             server.start()

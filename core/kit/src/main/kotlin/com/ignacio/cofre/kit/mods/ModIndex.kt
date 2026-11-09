@@ -11,11 +11,14 @@ import kotlinx.serialization.Serializable
 import java.io.File
 import java.io.FileOutputStream
 
-/** Instance-local identities. The files, including disabled jars, remain the source of truth. */
+/**
+ * Instance-local identities. The files, including disabled jars, remain the source of truth. Entries are keyed by
+ * the jar's [key], so turning a mod off and on keeps its identity.
+ */
 class ModIndex(val instance: File) {
     @Serializable data class Entry(val projectId: String, val versionId: String, val source: String = "modrinth", val channel: VersionChannel = VersionChannel.Release, val installedDirectly: Boolean = true, val sha1: String? = null)
     val file: File get() = File(instance, "cofre-mods.json")
-    fun read(): Map<String, Entry> = if (file.isFile) Kit.json.decodeFromString<Map<String, Entry>>(file.readText()).also { index -> index.keys.forEach(::safeFilename) } else emptyMap()
+    fun read(): Map<String, Entry> = if (file.isFile) Kit.json.decodeFromString<Map<String, Entry>>(file.readText()).onEach { safeFilename(it.key) }.mapKeys { key(it.key) } else emptyMap()
     fun write(entries: Map<String, Entry>) {
         entries.keys.forEach(::safeFilename); instance.mkdirs()
         val temp = File(instance, "cofre-mods.json.tmp")
@@ -26,7 +29,7 @@ class ModIndex(val instance: File) {
     fun installed(): List<InstalledMod> {
         val entries = read()
         return jars().map { jar ->
-            val metadata = ModJarMetadata.read(jar); val entry = entries[jar.name]
+            val metadata = ModJarMetadata.read(jar); val entry = entries[key(jar.name)]
             InstalledMod(jar.name, metadata?.name ?: jar.name.removeSuffix(".disabled").removeSuffix(".jar"), entry?.projectId, entry?.versionId, metadata?.version,
                 metadata?.modIds.orEmpty(), !jar.name.endsWith(".disabled"), metadata?.dependencies.orEmpty(), entry?.installedDirectly ?: true, channel = entry?.channel ?: VersionChannel.Release)
         }
@@ -34,18 +37,22 @@ class ModIndex(val instance: File) {
     suspend fun identifyUnknown(client: Modrinth): Map<String, Entry> = withContext(Dispatchers.IO) {
         InstanceStore.lock(instance).lock()
         try {
-            val entries = read().toMutableMap(); val jars = jars()
-            val hashes = jars.associateWith { Hashes.sha1(it) }
-            hashes.forEach { (jar, sha) -> entries[jar.name]?.takeIf { it.sha1 == null }?.let { entries[jar.name] = it.copy(sha1 = sha) } }
-            val unknown = hashes.filter { (jar, sha) -> entries[jar.name]?.sha1 != sha }
+            val entries = read().toMutableMap()
+            val hashes = jars().associate { key(it.name) to Hashes.sha1(it) }
+            hashes.forEach { (name, sha) -> entries[name]?.takeIf { it.sha1 == null }?.let { entries[name] = it.copy(sha1 = sha) } }
+            val unknown = hashes.filter { (name, sha) -> entries[name]?.sha1 != sha }
             val found = unknown.values.distinct().chunked(500).flatMap { client.versionFiles(it).entries }.associate { it.key to it.value }
-            for ((jar, hash) in unknown) {
-                entries.remove(jar.name)
+            for ((name, hash) in unknown) {
+                entries.remove(name)
                 val version = found[hash] ?: continue
-                entries[jar.name] = Entry(version.projectId, version.id, channel = VersionChannel.from(version.versionType), sha1 = hash)
+                entries[name] = Entry(version.projectId, version.id, channel = VersionChannel.from(version.versionType), sha1 = hash)
             }
-            entries.keys.retainAll(jars.map { it.name }.toSet()); write(entries); entries
+            entries.keys.retainAll(hashes.keys); write(entries); entries
         } finally { InstanceStore.lock(instance).unlock() }
+    }
+    companion object {
+        /** The index key of a jar in `mods/`: its name without `.disabled`. */
+        fun key(jar: String): String = jar.removeSuffix(".disabled")
     }
 }
 /** A single file name (no folders, no `..`): mod files from APIs and indexes go through this before touching disk. */
