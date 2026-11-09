@@ -73,14 +73,18 @@ class InstancesProvider : DocumentsProvider() {
     }
 
     override fun isChildDocument(parentDocumentId: String, documentId: String): Boolean =
-        documentId.startsWith("$parentDocumentId/")
+        documentId.startsWith("$parentDocumentId/") && runCatching { file(documentId) }.isSuccess
 
     override fun getDocumentType(documentId: String): String = mime(file(documentId))
 
-    /** The file for [id], refusing anything that resolves outside the instances folder. */
+    /**
+     * The file for [id], refusing anything that resolves outside the instances folder. IDs are plain paths: an empty,
+     * `.` or `..` segment is refused, so a grant for `root/A` can't reach `root/A/../B` through [isChildDocument].
+     */
     private fun file(id: String): File {
         val base = root.canonicalFile
         if (id != ROOT_DOC && !id.startsWith("$ROOT_DOC/")) throw FileNotFoundException(id)
+        if (id.split('/').any { it.isEmpty() || it == "." || it == ".." }) throw FileNotFoundException(id)
         val file = if (id == ROOT_DOC) base else File(base, id.removePrefix("$ROOT_DOC/")).canonicalFile
         if (file != base && !file.path.startsWith(base.path + File.separator)) throw FileNotFoundException(id)
         // Cofre's own folders (trash, temp writes) stay private even when a caller knows the path.
