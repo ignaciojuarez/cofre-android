@@ -86,7 +86,8 @@ object ContentCompatibility {
         GlRisk.May -> CompatibilityIssue(id, name, ContentKind.Mods, "Uses OpenGL code paths, may not work on Vulkan.", "may", file)
         GlRisk.Likely -> CompatibilityIssue(id, name, ContentKind.Mods, "Calls OpenGL directly, likely to crash on Vulkan.", "likely", file)
     }
-    fun playIssues(gameDirectory: File): List<CompatibilityIssue> {
+    /** What "Before you play" checks: enabled mods and the active shader pack. Jars are graded through [scans], shared with the Installed tab. */
+    fun playIssues(gameDirectory: File, scans: GlScanCache): List<CompatibilityIssue> {
         val store = ContentStore(gameDirectory)
         val mods = store.list(ContentKind.Mods).filter { it.enabled }
         val issues = mods.mapNotNull { m -> issue(m.modID ?: m.id, m.name, ContentKind.Mods, m.version)?.copy(file = m.id) }.toMutableList()
@@ -94,7 +95,10 @@ object ContentCompatibility {
         for (m in mods) {
             if (issues.any { it.file == m.id } || vouched(m.modID ?: m.id, m.name, m.version)) continue
             val jar = store.file(m)
-            if (jar.isFile && jar.name.endsWith(".jar")) glIssue(m.modID ?: m.id, m.name, GlUsageScanner.scan(jar).risk, m.id)?.let(issues::add)
+            if (!jar.isFile || !jar.name.endsWith(".jar")) continue
+            // A jar the scanner can't read isn't graded; if it breaks the game, the crash report names it.
+            val risk = runCatching { scans.scan(jar) }.getOrNull() ?: continue
+            glIssue(m.modID ?: m.id, m.name, risk, m.id)?.let(issues::add)
         }
         return issues
     }

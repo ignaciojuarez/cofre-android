@@ -144,6 +144,9 @@
     <string name="preflight_title">Before you play</string>
     <string name="preflight_body">These mods need other mods that aren\'t installed. Without them the game stops while loading.</string>
     <string name="preflight_play_anyway">Play anyway</string>
+    <string name="preflight_issues_body">These mods are known or likely to crash on Vulkan.</string>
+    <string name="preflight_issue">%1$s · %2$s</string>
+    <string name="preflight_turn_off">Turn off these mods</string>
     <string name="stopped_play_again_to">Play again · %1$s</string>
     <string name="stopped_share">Share report</string>
     <string name="stopped_details">Details</string>

@@ -2,13 +2,10 @@ package com.ignacio.cofre.ui.mods
 
 import androidx.compose.runtime.Immutable
 import com.ignacio.cofre.kit.common.ContentKind
-import com.ignacio.cofre.kit.common.Hashes
-import com.ignacio.cofre.kit.common.Kit
 import com.ignacio.cofre.kit.common.Target
 import com.ignacio.cofre.kit.compat.CompatibilityIssue
 import com.ignacio.cofre.kit.compat.ContentCompatibility
-import com.ignacio.cofre.kit.compat.GlRisk
-import com.ignacio.cofre.kit.compat.GlUsageScanner
+import com.ignacio.cofre.kit.compat.GlScanCache
 import com.ignacio.cofre.kit.content.ContentStore
 import com.ignacio.cofre.kit.mods.InstalledMod
 import com.ignacio.cofre.kit.mods.ModCandidate
@@ -28,7 +25,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
 import com.ignacio.cofre.kit.instances.InstanceStore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -287,40 +283,4 @@ private suspend fun <T> silently(block: suspend () -> T): T? = try {
     throw cancelled
 } catch (_: Exception) {
     null
-}
-
-/**
- * The OpenGL risk per jar, cached on disk by SHA-1 so a jar is scanned once. The scan reads every class; it's slow
- * on big jars, which is why it runs in the background.
- */
-class GlScanCache(private val file: File) {
-    private val lock = Mutex()
-    private var entries: MutableMap<String, GlRisk>? = null
-
-    /** The cached finding for this jar, or null when it hasn't been scanned or isn't a file (a folder in `mods/`). */
-    fun cached(jar: File): GlRisk? = if (!jar.isFile) null else synchronized(this) { load()[hashOf(jar)] }
-
-    suspend fun scan(jar: File): GlRisk = lock.withLock {
-        val hash = hashOf(jar)
-        synchronized(this) { load()[hash] }?.let { return it }
-        val found = GlUsageScanner.scan(jar).risk
-        synchronized(this) {
-            load()[hash] = found
-            file.parentFile?.mkdirs()
-            file.writeText(Kit.json.encodeToString(load().toMap()))
-        }
-        found
-    }
-
-    private fun load(): MutableMap<String, GlRisk> = entries ?: runCatching {
-        Kit.json.decodeFromString<Map<String, GlRisk>>(file.readText()).toMutableMap()
-    }.getOrDefault(mutableMapOf()).also { entries = it }
-
-    /** Hashing a jar is cheap next to scanning it, but still remembered per path, size and time. */
-    private val hashes = mutableMapOf<String, String>()
-
-    private fun hashOf(jar: File): String {
-        val key = "${jar.path}|${jar.length()}|${jar.lastModified()}"
-        return synchronized(hashes) { hashes.getOrPut(key) { Hashes.sha1(jar) } }
-    }
 }

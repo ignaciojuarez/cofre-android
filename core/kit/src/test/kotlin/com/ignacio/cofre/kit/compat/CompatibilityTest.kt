@@ -1,6 +1,7 @@
 package com.ignacio.cofre.kit.compat
 
 import com.ignacio.cofre.kit.common.ContentKind
+import com.ignacio.cofre.kit.common.Hashes
 import com.ignacio.cofre.kit.common.Loader
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -13,6 +14,7 @@ import kotlin.test.*
 
 class CompatibilityTest {
     @TempDir lateinit var root: File
+    private val scans by lazy { GlScanCache(File(root, "gl-risk.json")) }
     private fun clazz(reference: String, classReference: Boolean = true): ByteArray = ByteArrayOutputStream().also { buffer -> DataOutputStream(buffer).use { o ->
         o.writeInt(0xCAFEBABE.toInt()); o.writeShort(0); o.writeShort(69); o.writeShort(7)
         o.writeByte(1); o.writeUTF("example/Caller"); o.writeByte(7); o.writeShort(1)
@@ -82,11 +84,11 @@ class CompatibilityTest {
         jar("mods/modernfix-neoforge-5.27.21+mc26.2.jar", mapOf("META-INF/neoforge.mods.toml" to toml("modernfix", "5.27.21+mc26.2"),
             "org/embeddedt/modernfix/neoforge/util/AsyncLoadingScreen.class" to clazz("org/lwjgl/opengl/GLCapabilities")))
         assertEquals(GlRisk.May, GlUsageScanner.scan(File(root, "mods/sodium-neoforge-0.9.2+mc26.2.jar")).risk) // What the scan alone would say.
-        assertEquals(emptyList(), ContentCompatibility.playIssues(root))
+        assertEquals(emptyList(), ContentCompatibility.playIssues(root, scans))
     }
     @Test fun vouchingNeedsTheModIdAndMinimumVersion() {
         sodium("0.8.0+mc26.2")
-        assertEquals("may", ContentCompatibility.playIssues(root).single().severity)
+        assertEquals("may", ContentCompatibility.playIssues(root, scans).single().severity)
         assertTrue(ContentCompatibility.vouched("sodium", "Sodium", "0.9.0")); assertFalse(ContentCompatibility.vouched("sodium", "Sodium", null))
         assertFalse(ContentCompatibility.vouched("not_sodium", "Sodium", "0.9.2")); assertTrue(ContentCompatibility.vouched("ferritecore", "FerriteCore", null))
         assertFalse(ContentCompatibility.vouched("modernfix", "ModernFix", "5.27.17"))
@@ -99,12 +101,12 @@ class CompatibilityTest {
     @Test fun irisIsAHardErrorEvenThoughItUsesTheNeutralApi() {
         jar("mods/iris-neoforge-1.11.4+mc26.2.jar", mapOf("META-INF/neoforge.mods.toml" to toml("iris", "1.11.4+mc26.2"),
             "net/irisshaders/iris/Iris.class" to clazz("com/mojang/blaze3d/opengl/GlDevice"), "net/irisshaders/iris/gl/IrisRenderSystem.class" to clazz(device)))
-        val issue = ContentCompatibility.playIssues(root).single(); assertEquals("broken", issue.severity); assertEquals("Iris", issue.name)
+        val issue = ContentCompatibility.playIssues(root, scans).single(); assertEquals("broken", issue.severity); assertEquals("Iris", issue.name)
     }
     @Test fun unknownGlOnlyJarIsLikelyAndMixedJarMay() {
         jar("mods/glonly.jar", mapOf("META-INF/neoforge.mods.toml" to toml("glonly", "1.0"), "a/Draw.class" to clazz(gl)))
         jar("mods/mixed.jar", mapOf("META-INF/neoforge.mods.toml" to toml("mixed", "1.0"), "b/GlPath.class" to clazz(gl), "b/Device.class" to clazz(device)))
-        val issues = ContentCompatibility.playIssues(root).associateBy { it.id }
+        val issues = ContentCompatibility.playIssues(root, scans).associateBy { it.id }
         assertEquals("likely", issues.getValue("glonly").severity); assertTrue(issues.getValue("glonly").reason.contains("likely to crash"))
         assertEquals("may", issues.getValue("mixed").severity); assertTrue(issues.getValue("mixed").reason.contains("may not work"))
         assertTrue(issues.values.none { it.reason.contains("will crash") })
@@ -113,12 +115,22 @@ class CompatibilityTest {
         jar("mods/iris-1.jar", mapOf("x.class" to clazz("org/lwjgl/opengl/GL11C")))
         jar("mods/unknown.jar", mapOf("unsafe/Caller.class" to clazz("com/mojang/blaze3d/opengl/GlTexture")))
         jar("mods/off.jar.disabled", mapOf("x.class" to clazz("org/lwjgl/opengl/GL11C")))
-        val issues = ContentCompatibility.playIssues(root); assertEquals(2, issues.size); assertEquals("likely", issues.single { it.file == "unknown.jar" }.severity)
-        ContentCompatibility.turnOff(issues, root); assertTrue(ContentCompatibility.playIssues(root).isEmpty())
+        val issues = ContentCompatibility.playIssues(root, scans); assertEquals(2, issues.size); assertEquals("likely", issues.single { it.file == "unknown.jar" }.severity)
+        ContentCompatibility.turnOff(issues, root); assertTrue(ContentCompatibility.playIssues(root, scans).isEmpty())
+    }
+    @Test fun playIssuesUseTheSharedScanCacheAndSkipFolders() {
+        val clean = jar("mods/clean.jar", mapOf("META-INF/neoforge.mods.toml" to toml("clean", "1.0"), "a/A.class" to clazz("java/lang/Object")))
+        File(root, "gl-risk.json").writeText("""{"${Hashes.sha1(clean)}":"Likely"}""")
+        assertEquals("likely", ContentCompatibility.playIssues(root, scans).single().severity, "the cached finding, not a rescan")
+        val glOnly = jar("mods/glonly.jar", mapOf("META-INF/neoforge.mods.toml" to toml("glonly", "1.0"), "a/Draw.class" to clazz(gl)))
+        File(root, "mods/folder-mod").mkdirs()
+        assertEquals(2, ContentCompatibility.playIssues(root, scans).size)
+        assertEquals(GlRisk.Likely, GlScanCache(File(root, "gl-risk.json")).cached(glOnly), "saved for the Installed tab and the next start")
+        assertNull(scans.cached(File(root, "mods/folder-mod")))
     }
     @Test fun activeShaderIsReportedOnceWhenItsModIsAlreadyBlocked() {
         jar("mods/iris.jar", emptyMap()); File(root, "shaderpacks").mkdir(); File(root, "shaderpacks/Pack.zip").writeText("")
         File(root, "config").mkdir(); File(root, "config/iris.properties").writeText("enableShaders=true\nshaderPack=Pack.zip")
-        assertEquals(1, ContentCompatibility.playIssues(root).size)
+        assertEquals(1, ContentCompatibility.playIssues(root, scans).size)
     }
 }

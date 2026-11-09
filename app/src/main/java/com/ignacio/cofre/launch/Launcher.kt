@@ -16,6 +16,8 @@ import com.ignacio.cofre.design.LogLine
 import com.ignacio.cofre.kit.common.ContentKind
 import com.ignacio.cofre.kit.common.Kit
 import com.ignacio.cofre.kit.common.Target
+import com.ignacio.cofre.kit.compat.CompatibilityIssue
+import com.ignacio.cofre.kit.compat.ContentCompatibility
 import com.ignacio.cofre.kit.content.ContentStore
 import com.ignacio.cofre.kit.instances.Instance
 import com.ignacio.cofre.kit.instances.InstanceStore
@@ -94,16 +96,21 @@ class Launcher(private val graph: AppGraph) {
         val fixError: String? = null,
     )
 
-    /** "Before you play": installed mods require mods that aren't installed. */
+    /** "Before you play": installed mods require mods that aren't installed, or are known or likely to crash on Vulkan. */
     data class Preflight(
         val instance: Instance,
         val quickPlay: QuickPlay?,
         val missing: List<ModRequirement>,
         /** "Controlify needs yet_another_config_lib_v3", one per requirement. */
         val lines: List<String>,
+        /** Enabled mods (or the active shader pack) a rule calls broken, or whose jar calls OpenGL directly. */
+        val issues: List<CompatibilityIssue> = emptyList(),
         val gettingMods: Boolean = false,
+        val turningOff: Boolean = false,
         val error: String? = null,
-    )
+    ) {
+        val busy: Boolean get() = gettingMods || turningOff
+    }
 
     @Serializable
     private data class Pending(val instance: String, val spec: String, val quickPlay: QuickPlay? = null)
@@ -128,21 +135,26 @@ class Launcher(private val graph: AppGraph) {
     /** True while a game started by Cofre is still running: worlds and servers are read-only then. */
     val gameRunning: Boolean get() = pendingFile.isFile && gameProcessAlive()
 
-    /** Checks the instance's mods first (cached per jar, so it's quick); a missing requirement opens "Before you play". */
+    /**
+     * Checks the instance's mods first (cached per jar, so it's quick once the Installed tab has seen them): a missing
+     * requirement, or a mod that will or likely will crash on Vulkan, opens "Before you play". "May not work" doesn't.
+     */
     fun play(instance: Instance, quickPlay: QuickPlay? = null) {
         if (job?.isActive == true || preflight != null) return
         graph.library.select(instance.id)
         job = graph.work({ start(instance, quickPlay) }) {
-            val mods = File(graph.instances.directory(instance), "mods")
-            val missing = graph.onIo { ModRequirements.missing(mods.parentFile!!) }
-            if (missing.isEmpty()) return@work start(instance, quickPlay)
+            val dir = graph.instances.directory(instance)
+            val mods = File(dir, "mods")
+            val missing = graph.onIo { ModRequirements.missing(dir) }
+            val issues = graph.onIo { ContentCompatibility.playIssues(dir, graph.glScans) }.filter { it.severity == "broken" || it.severity == "likely" }
+            if (missing.isEmpty() && issues.isEmpty()) return@work start(instance, quickPlay)
             val lines = graph.onIo {
                 missing.map { req ->
                     val by = req.neededBy?.let { ModJarMetadata.read(File(mods, it))?.name ?: it } ?: return@map req.name
                     graph.context.getString(R.string.mods_needs, by, req.name)
                 }
             }
-            preflight = Preflight(instance, quickPlay, missing, lines)
+            preflight = Preflight(instance, quickPlay, missing, lines, issues)
         }
     }
 
@@ -163,17 +175,29 @@ class Launcher(private val graph: AppGraph) {
     }
 
     fun dismissPreflight() {
-        if (preflight?.gettingMods != true) preflight = null
+        if (preflight?.busy != true) preflight = null
     }
 
-    /** "Before you play" → "Get missing mods", then play. */
+    /** "Before you play" → "Turn off these mods", then check again: turning one off can leave another without its library. */
+    fun turnOffPreflightMods() {
+        val current = preflight?.takeIf { !it.busy && it.issues.isNotEmpty() } ?: return
+        preflight = current.copy(turningOff = true, error = null)
+        graph.work({ preflight = current.copy(error = it) }) {
+            val dir = graph.instances.directory(current.instance)
+            InstanceStore.lock(dir).withLock { graph.onIo { ContentCompatibility.turnOff(current.issues, dir) } }
+            preflight = null
+            play(current.instance, current.quickPlay)
+        }
+    }
+
+    /** "Before you play" → "Get missing mods", then check again (the new mods are checked for Vulkan too). */
     fun getPreflightMods() {
-        val current = preflight?.takeIf { !it.gettingMods } ?: return
+        val current = preflight?.takeIf { !it.busy && it.missing.isNotEmpty() } ?: return
         preflight = current.copy(gettingMods = true, error = null)
         graph.work({ preflight = current.copy(error = it) }) {
             getMissing(current.instance, current.missing)
             preflight = null
-            start(current.instance, current.quickPlay)
+            play(current.instance, current.quickPlay)
         }
     }
 

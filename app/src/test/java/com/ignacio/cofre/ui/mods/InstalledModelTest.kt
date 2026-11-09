@@ -1,5 +1,6 @@
 package com.ignacio.cofre.ui.mods
 
+import com.ignacio.cofre.kit.compat.GlScanCache
 import com.ignacio.cofre.kit.modrinth.Modrinth
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

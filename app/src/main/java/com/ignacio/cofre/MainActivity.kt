@@ -146,7 +146,9 @@ fun CofreRoot(
                         else -> Shell(graph)
                     }
                 }
-                launcher.preflight?.let { PreflightSheet(it, onGetMods = launcher::getPreflightMods, onPlayAnyway = launcher::playAnyway, onDismiss = launcher::dismissPreflight) }
+                launcher.preflight?.let {
+                    PreflightSheet(it, onGetMods = launcher::getPreflightMods, onTurnOff = launcher::turnOffPreflightMods, onPlayAnyway = launcher::playAnyway, onDismiss = launcher::dismissPreflight)
+                }
                 if (nav.downloads) DownloadsSheet(graph.downloadsModel, onDismiss = { nav.downloads = false })
                 if (nav.newInstance) NewInstanceSheet(graph, onDismiss = { nav.newInstance = false })
             }

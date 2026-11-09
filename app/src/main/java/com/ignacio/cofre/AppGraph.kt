@@ -3,6 +3,7 @@ package com.ignacio.cofre
 import android.app.ActivityManager
 import android.content.Context
 import com.ignacio.cofre.accounts.Accounts
+import com.ignacio.cofre.kit.compat.GlScanCache
 import com.ignacio.cofre.kit.downloads.DownloadQueue
 import com.ignacio.cofre.kit.instances.InstanceStore
 import com.ignacio.cofre.kit.modrinth.Modrinth
@@ -50,6 +51,8 @@ class AppGraph(
     val modrinth = Modrinth()
     val downloads by lazy { DownloadQueue(File(home, "downloads/queue.json").apply { parentFile?.mkdirs() }) }
     val launcherLog = File(home, "logs/launcher.log")
+    /** Each jar's OpenGL grade, shared by the Installed tab and "Before you play" so a jar is scanned once. */
+    val glScans = GlScanCache(File(context.cacheDir, "mods/gl-risk.json"))
     val nav = AppNav()
 
     /** The device's Vulkan driver against 26.2's needs, probed once per process. */
