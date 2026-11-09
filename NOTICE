@@ -1,7 +1,11 @@
 Cofre for Android
 Copyright (C) 2026 Ignacio Juarez. Licensed under the GNU General Public License v3.0 (see LICENSE).
 
-This product includes or adapts work from the projects below.
+This product includes or adapts work from the projects below. Full license texts for everything
+bundled with the app, the native libraries and the Java runtime are in Settings > Licenses > "Show
+every license text" (from the APK's assets/legal; the Java runtime's own copy is also in its legal/
+folder once installed). Source for every native binary, with exact pins, is published with the
+natives release named in runtime/NATIVES.md.
 
 LWJGL 3 (https://github.com/LWJGL/lwjgl3), BSD-3-Clause, Copyright (c) 2012-present Lightweight Java Game Library.
   runtime/glfw-shim: the org.lwjgl.glfw class names, method signatures and GLFW constants follow
@@ -12,6 +16,42 @@ PojavLauncher (https://github.com/PojavLauncherTeam/PojavLauncher), LGPL-3.0.
   native event queue shared with ART, and the JRE start-up sequence (library load order,
   LD_LIBRARY_PATH update, JLI_Launch on our own thread), are modelled on jre_lwjgl3glfw,
   jre_launcher.c, utils.c and JREUtils.java.
+
+Bundled Java runtime, unpacked on first launch:
+  OpenJDK 25.0.5 (jdk-25.0.5-ga, https://github.com/openjdk/jdk25u), GPL-2.0 with the Classpath
+  Exception where designated; HotSpot GPL-2.0. Its bundled third-party components keep their
+  notices in legal/java/<module>. Android port patches follow the MojoLauncher /
+  PojavLauncher OpenJDK patch lineage under the OpenJDK source licenses; one bionic snippet keeps
+  its AOSP BSD-2-Clause notice (legal/java/cofre-port).
+
+Native libraries in lib/arm64-v8a, built from pinned source (runtime/NATIVES.md):
+  LWJGL 3.4.1 natives (liblwjgl, _stb, _vma, _tinyfd, _opengl JNI), BSD-3-Clause,
+    Copyright (c) 2012-present Lightweight Java Game Library. Bundled: stb (MIT or public domain),
+    Vulkan Memory Allocator (MIT), Vulkan headers (Apache-2.0 or MIT), tinyfiledialogs (zlib).
+  libffi 3.5.2 (https://github.com/libffi/libffi), MIT, Copyright (c) 1996-2025 Anthony Green,
+    Red Hat, Inc and others. Linked into liblwjgl.so and libjnidispatch.so.
+  OpenAL Soft 1.24.3 (https://github.com/kcat/openal-soft), LGPL-2.0-or-later, a separate shared
+    library (libopenal.so) you can replace; with Oboe 1.10.0 (https://github.com/google/oboe),
+    Apache-2.0.
+  shaderc v2026.1 (https://github.com/google/shaderc), Apache-2.0, with glslang (BSD-3-Clause and
+    others, see legal/natives/shaderc/third_party/glslang/LICENSE.txt), SPIRV-Tools (Apache-2.0) and SPIRV-Headers (MIT-style).
+  SPIRV-Cross (https://github.com/KhronosGroup/SPIRV-Cross), Apache-2.0.
+  FreeType 2.14.1 (https://freetype.org), under the FreeType License (FTL). Portions of this
+    software are copyright (C) 2025 The FreeType Project (www.freetype.org). All rights reserved.
+  JNA 5.17.0 libjnidispatch (https://github.com/java-native-access/jna), Apache-2.0 (dual-licensed
+    Apache-2.0 / LGPL-2.1; used under Apache-2.0).
+
+Java and Android libraries in the app, all Apache-2.0 unless noted:
+  Kotlin standard library, kotlinx.coroutines and kotlinx.serialization (JetBrains s.r.o. and
+    Kotlin contributors).
+  AndroidX and Jetpack Compose (The Android Open Source Project).
+  OkHttp 5.5.1 and Okio 3.18.2 (Square, Inc.).
+  Coil 3.6.3 (https://github.com/coil-kt/coil, Coil Contributors).
+  MiniDNS 1.1.3 (https://github.com/MiniDNS/minidns), triple-licensed Apache-2.0 / LGPL-2.1+ /
+    WTFPL; used under Apache-2.0.
+  Bouncy Castle 1.86 bcprov (https://www.bouncycastle.org), MIT, Copyright (c) 2000-2026 The
+    Legion of the Bouncy Castle Inc.
+  XZ for Java 1.12 (https://tukaani.org/xz/java.html), 0BSD.
 
 Fonts in core/design/src/main/res/font, under the SIL Open Font License 1.1 (full text in
 core/design/src/main/res/raw/ofl.txt, shown in the app's licenses screen; no Reserved Font Names):

@@ -316,6 +316,8 @@
     <string name="about_note">Cofre is free software under the GPL-3.0. Not an official Minecraft product; not approved by or associated with Mojang or Microsoft.</string>
     <string name="licenses_show_ofl">Show the font license (OFL 1.1)</string>
     <string name="licenses_hide_ofl">Hide the font license</string>
+    <string name="licenses_show_texts">Show every license text</string>
+    <string name="licenses_hide_texts">Hide the license texts</string>
 
     <!-- Files provider -->
     <string name="files_root_summary">Instances: mods, worlds, packs</string>

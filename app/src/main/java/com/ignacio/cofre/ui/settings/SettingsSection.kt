@@ -1,5 +1,6 @@
 package com.ignacio.cofre.ui.settings
 
+import android.content.res.AssetManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -65,8 +66,10 @@ import com.ignacio.cofre.kit.logs.LogFile
 import com.ignacio.cofre.kit.options.JavaHeap
 import com.ignacio.cofre.ui.common.Fmt
 import com.ignacio.cofre.ui.common.Note
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.withContext
 
 /** Settings: a pane list beside the open pane (pushed on phones). */
 @Composable
@@ -318,4 +321,26 @@ private fun LicensesPane() {
     CofreText(notice, CofreTheme.type.code, Modifier.fillMaxWidth().block(BlockKind.Well).padding(horizontal = 12.dp))
     BlockButton(stringResource(if (showOfl) R.string.licenses_hide_ofl else R.string.licenses_show_ofl), { showOfl = !showOfl }, size = ButtonSize.Small, fullWidth = false)
     if (showOfl) CofreText(ofl, CofreTheme.type.code, Modifier.fillMaxWidth().block(BlockKind.Well).padding(horizontal = 12.dp))
+    // The native libraries' and the Java runtime's license texts (assets/legal, from the natives release).
+    val texts by produceState(emptyList<String>()) { value = withContext(Dispatchers.IO) { runCatching { legalFiles(resources.assets, "legal") }.getOrDefault(emptyList()) } }
+    var showTexts by rememberSaveable { mutableStateOf(false) }
+    var open by rememberSaveable { mutableStateOf<String?>(null) }
+    if (texts.isEmpty()) return
+    BlockButton(stringResource(if (showTexts) R.string.licenses_hide_texts else R.string.licenses_show_texts), { showTexts = !showTexts }, size = ButtonSize.Small, fullWidth = false)
+    if (!showTexts) return
+    ListSection {
+        texts.forEach { path ->
+            ValueRow(path.removePrefix("legal/"), "", { open = path.takeIf { open != path } }, chevron = open != path)
+            if (open == path) {
+                val text by produceState("", path) { value = withContext(Dispatchers.IO) { runCatching { resources.assets.open(path).bufferedReader().use { it.readText() } }.getOrDefault("") } }
+                CofreText(text, CofreTheme.type.code, Modifier.fillMaxWidth().block(BlockKind.Well).padding(horizontal = 12.dp))
+            }
+        }
+    }
+}
+
+/** Every file under [dir] in the APK's assets, depth first. */
+private fun legalFiles(assets: AssetManager, dir: String): List<String> = assets.list(dir).orEmpty().sorted().flatMap { name ->
+    val path = "$dir/$name"
+    if (assets.list(path).isNullOrEmpty()) listOf(path) else legalFiles(assets, path)
 }

@@ -1,4 +1,6 @@
 // Runs the game: Java runtime, native libraries, launch arguments, the :game and :installer processes.
+import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.security.MessageDigest
 
 plugins {
@@ -64,11 +66,22 @@ abstract class RuntimeAssets : DefaultTask() {
     @get:InputFiles @get:PathSensitive(PathSensitivity.NONE)
     abstract val jre: ConfigurableFileCollection
 
+    /** License folders, as `assets/legal/<name>` (name → folder): the licenses screen shows every file in them. */
+    @get:Input
+    abstract val legal: MapProperty<String, String>
+
     @get:OutputDirectory
     abstract val outputDir: DirectoryProperty
 
     @TaskAction
     fun run() {
+        val legalOut = outputDir.get().asFile.resolve("legal")
+        legalOut.deleteRecursively()
+        legal.get().forEach { (name, path) ->
+            val source = File(path)
+            source.walkTopDown().filter { Files.isRegularFile(it.toPath(), LinkOption.NOFOLLOW_LINKS) }
+                .forEach { it.copyTo(legalOut.resolve(name).resolve(it.relativeTo(source).path)) }
+        }
         val out = outputDir.get().asFile.resolve("runtime")
         out.deleteRecursively()
         out.mkdirs()
@@ -100,6 +113,8 @@ androidComponents {
         val task = tasks.register<RuntimeAssets>("${variant.name}RuntimeAssets") {
             jars.from(glfwShim)
             if (debug) jars.from(probe)
+            // The natives release's license texts, and its JRE's legal/ (the one release builds bundle).
+            legal.set(mapOf("natives" to File(nativesDir, "legal"), "java" to File(nativesDir, "jre25/legal")).filterValues { it.isDirectory }.mapValues { it.value.path })
             jre.from(jreOverride.orElse(provider {
                 when {
                     releaseJre.isFile -> releaseJre
