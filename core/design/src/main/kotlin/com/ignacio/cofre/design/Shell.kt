@@ -23,7 +23,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,8 +62,9 @@ public enum class NavStyle { TabBar, Rail, Sidebar }
 
 /**
  * The app frame. Bottom tab bar under 700 dp, rail under 1100 dp, sidebar above (or a rail when
- * [preferRail]). L1/R1 cycle sections. Each section keeps its saved state and its last focused item, and the
- * controller hint bar sits under the content.
+ * [preferRail]). L1/R1 cycle sections and move focus into the new one's content (its last focused item, else
+ * its first); picking a section in the rail or sidebar leaves focus there. Each section keeps its saved state
+ * and its last focused item, and the controller hint bar sits under the content.
  *
  * [navFooter] fills the bottom of the rail and sidebar (account, status).
  */
@@ -77,13 +80,23 @@ public fun AdaptiveShell(
 ) {
     val sections = ShellSection.entries
     val holder = rememberSaveableStateHolder()
+    // How the section last changed: by shoulder button (focus goes into the content) or from the nav chrome.
+    var byShoulder by remember { mutableStateOf(false) }
+    fun shoulder(step: Int) {
+        byShoulder = true
+        onSectionChange(sections.cycle(section, step))
+    }
+    val pick: (ShellSection) -> Unit = {
+        byShoulder = false
+        onSectionChange(it)
+    }
     BoxWithConstraints(
         modifier
             .fillMaxSize()
             .pageBackground()
             .controllerActions(
-                ControllerAction(Pad.L1, "Sections") { onSectionChange(sections.cycle(section, -1)) },
-                ControllerAction(Pad.R1, "Sections") { onSectionChange(sections.cycle(section, 1)) },
+                ControllerAction(Pad.L1, "Sections") { shoulder(-1) },
+                ControllerAction(Pad.R1, "Sections") { shoulder(1) },
             ),
     ) {
         val widthClass = WidthClass.of(maxWidth)
@@ -98,12 +111,12 @@ public fun AdaptiveShell(
                 Column(Modifier.fillMaxSize()) {
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                         holder.SaveableStateProvider(section) {
-                            ScreenFocus(Modifier.fillMaxSize()) { content(section) }
+                            ScreenFocus(claim = byShoulder, Modifier.fillMaxSize()) { content(section) }
                         }
                     }
                     ControllerHintBar()
                 }
-                NavChrome(style, section, onSectionChange, modsBadge, navFooter)
+                NavChrome(style, section, pick, modsBadge, navFooter)
             }
         }
     }

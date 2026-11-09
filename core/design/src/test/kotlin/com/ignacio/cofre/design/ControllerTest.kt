@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.performTouchInput
@@ -132,6 +133,33 @@ class ControllerTest {
         press(KeyEvent.KEYCODE_BUTTON_L1)
         press(KeyEvent.KEYCODE_BUTTON_L1)
         assertEquals(ShellSection.Settings, section)
+    }
+
+    @Test
+    @Config(qualifiers = "w1280dp-h800dp")
+    fun shoulderButtonsMoveFocusIntoTheNewSection() {
+        var section by mutableStateOf(ShellSection.Play)
+        content {
+            AdaptiveShell(section, { section = it }) { s ->
+                Column {
+                    BlockButton("${s.title} 1", {}, Modifier.testTag("content-${s.name}"))
+                    BlockButton("${s.title} 2", {}, Modifier.testTag("content-${s.name}-2"))
+                }
+            }
+        }
+        press(KeyEvent.KEYCODE_BUTTON_A)
+        rule.onNodeWithTag("content-Play").assertIsFocused()
+        press(KeyEvent.KEYCODE_BUTTON_R1)
+        assertEquals(ShellSection.Instances, section)
+        rule.onNodeWithTag("content-Instances").assertIsFocused()
+        // From the sidebar too: R1 leaves it for the next section's content.
+        press(KeyEvent.KEYCODE_DPAD_LEFT)
+        rule.onNodeWithTag("content-Instances").assertIsNotFocused()
+        press(KeyEvent.KEYCODE_BUTTON_R1)
+        assertEquals(ShellSection.Mods, section)
+        rule.onNodeWithTag("content-Mods").assertIsFocused()
+        press(KeyEvent.KEYCODE_BUTTON_L1)
+        rule.onNodeWithTag("content-Instances").assertIsFocused()
     }
 
     @Test
