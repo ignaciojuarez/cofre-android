@@ -351,8 +351,11 @@ private class ControllerInputNode(var onBack: (() -> Unit)?) :
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
-        val pad = padFor(event.nativeKeyEvent.keyCode, state.swapConfirmBack)
-        val action = state.fallback(pad, currentValueOf(LocalView), onBack) ?: return false
+        val code = event.nativeKeyEvent.keyCode
+        val action = state.fallback(padFor(code, state.swapConfirmBack), currentValueOf(LocalView), onBack)
+            // A button nothing used is still swallowed: unhandled, Android resends Y as Space and L3/R3 as D-pad
+            // center (Generic.kcm), and those click the focused item. D-pad keys go on to focus navigation.
+            ?: return AndroidKeyEvent.isGamepadButton(code)
         if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) action()
         return true
     }

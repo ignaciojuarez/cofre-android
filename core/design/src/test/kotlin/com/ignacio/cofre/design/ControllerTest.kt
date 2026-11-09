@@ -120,6 +120,23 @@ class ControllerTest {
     }
 
     @Test
+    fun unusedButtonsAreSwallowedSoAndroidDoesNotResendThemAsAClick() {
+        var clicks = 0
+        content { ScreenFocus { BlockButton("One", { clicks++ }, Modifier.testTag("one")) } }
+        press(KeyEvent.KEYCODE_BUTTON_A)
+        rule.onNodeWithTag("one").assertIsFocused()
+        for (code in listOf(KeyEvent.KEYCODE_BUTTON_Y, KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_BUTTON_THUMBL, KeyEvent.KEYCODE_BUTTON_THUMBR)) {
+            var handled = false
+            rule.runOnUiThread {
+                handled = view.rootView.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, code)) and
+                    view.rootView.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, code))
+            }
+            assertTrue("${KeyEvent.keyCodeToString(code)} is consumed, so no fallback key is sent", handled)
+        }
+        assertEquals(0, clicks)
+    }
+
+    @Test
     fun shoulderButtonsSwitchSections() {
         var section by mutableStateOf(ShellSection.Play)
         content {
