@@ -1,6 +1,6 @@
 # Cofre for Android: plan
 
-Status (2026-11-08): the Gradle skeleton builds; phases 1–3 are in progress. Facts marked ✔︎ were checked against the game jars, Maven, Modrinth or real devices.
+Status (2026-11-09): phases 1, 2 and 5 are built and emulator-tested; phases 3 and 4 run on the emulator up to Minecraft's own Vulkan device check, which the emulator fails (as expected). The first frame waits for the Odin 3. Facts marked ✔︎ were checked against the game jars, Maven, Modrinth or real devices.
 
 ## 🎯 Goal
 A native Android launcher for **Minecraft Java 26.2 + NeoForge**, rendering with **Mojang's Vulkan backend on the device's own driver**. It's controller-first on the **AYN Odin 3 / Odin 3 Portal**. It carries Cofre's look and mod features, and nothing that's iOS-only.
@@ -177,28 +177,28 @@ New on Android:
   - Google's developer verification for sideloaded apps arrives in 2027.
 
 ## 🗺️ Phases
-| # | Phase | Done when |
-|---|---|---|
-| 0 | 🚦 Hardware check (Odin 3 arrives) | Dump `cmd gpu vkjson`. Run ZL2 and FCL with 26.2 vanilla and NeoForge on Vulkan; record FPS and crashes |
-| 1 | Repo skeleton, design system, every screen on sample data | Fully controller-navigable on the emulator; screenshot tests pass |
-| 2 | `core/kit` port | Ported tests pass on the Mac JVM |
-| 3 | Runtime: JRE, natives, GLFW shim, `:game` | Vanilla 26.2 shows a first frame on Vulkan on the Odin 3 |
-| 4 | NeoForge install + launch, Sodium, Controlify | Modded 26.2 is playable with the built-in controller |
-| 5 | Accounts, mod browse/install/update, modpacks, worlds, servers, logs, crash screen | Same features as iOS |
-| 6 | Handheld polish, release pipeline | A signed GitHub release that self-updates |
+| # | Phase | Done when | State (2026-11-09) |
+|---|---|---|---|
+| 0 | 🚦 Hardware check (Odin 3 arrives) | `cmd gpu vkjson` shows 26.2's needs; our app reaches a first frame | 🔜 waits for the Odin 3 |
+| 1 | Repo skeleton, design system, every screen | Fully controller-navigable on the emulator; screenshot tests pass | ✅ |
+| 2 | `core/kit` port | Ported tests pass on the Mac JVM | ✅ ~270 kit tests |
+| 3 | Runtime: JRE, natives, GLFW shim, `:game` | Vanilla 26.2 shows a first frame on Vulkan on the Odin 3 | 🟡 Our JRE 25 + LWJGL 3.4.1 natives (`natives-20261109-7`, all 16 KB-aligned) boot the game; it reaches Minecraft's Vulkan device check on the emulator |
+| 4 | NeoForge install + launch, Sodium, Controlify | Modded 26.2 is playable with the built-in controller | 🟡 NeoForge 26.2.0.93 installs in `:installer` and launches to the Vulkan check; the handheld preset installs; controller play needs the Odin 3 |
+| 5 | Accounts, mod browse/install/update, modpacks, worlds, servers, logs, crash screen | Same features as iOS | ✅ built; Microsoft sign-in needs an approved client ID |
+| 6 | Handheld polish, release pipeline | A signed GitHub release that self-updates | ⏳ |
 
-Phases 1–2 don't need the Odin 3.
+What to run first on the Odin 3: `runtime/README.md` → "Needs the real device".
 
 ## ⏳ Long-lead items (start now)
 1. Azure app plus Mojang approval for Microsoft sign-in.
-2. Ask MojoLauncher's author for a license on the JDK build scripts, or plan to write our own.
+2. ~~JDK build scripts~~ ✅ our own scripts and patches (`scripts/natives/`, `runtime/NATIVES.md`).
 3. CurseForge API key policy: Modrinth-only at first; add CurseForge later through a user-supplied key or a small proxy.
 4. Decide whether to sign up for Google's developer verification for sideloaded apps.
 
 ## ❓ Open questions
-- Reuse the iOS Azure client ID, or register a new one?
-- App ID: `com.ignacio.cofre` (same as iOS), or something Android-specific?
+- Reuse the iOS Azure client ID (add an Android redirect `cofre://auth`), or register a new one? Either way it needs Mojang's approval before sign-in works.
 - Does the Odin driver expose everything 26.2 needs? Phase 0 answers this.
+- When to add 26.3/26.4 (SDL3 instead of GLFW): only the runtime's window/input layer changes.
 
 ## 🔗 References
 - Zalith Launcher 2: https://github.com/ZalithLauncher/ZalithLauncher2 (window/SDL hooks, `:game` process, Vulkan requirement table)

@@ -4,7 +4,7 @@ Cofre for Android is a native Kotlin + Jetpack Compose launcher for Minecraft: J
 
 ## Status (update when it changes)
 - Read `PLAN.md` for decisions, verified facts and phases.
-- The Gradle skeleton builds (`app`, `core/kit`, `core/design`, `runtime`). Phases 1–3 are in progress.
+- Launcher, kit, design system and runtime are built and emulator-tested. The game reaches Minecraft's Vulkan device check on the emulator; the first frame waits for the Odin 3 (`runtime/README.md` → "Needs the real device").
 
 ## Hard rules
 1. **Scope:** MC 26.2, NeoForge, Vulkan only. Never add GL translation layers (Zink, GL4ES, MobileGlues, ANGLE) or other game versions without asking.
