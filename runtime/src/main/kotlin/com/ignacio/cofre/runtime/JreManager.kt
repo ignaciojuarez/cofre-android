@@ -59,6 +59,8 @@ class JreManager(private val context: Context) {
 internal fun untarXz(input: InputStream, dest: File) {
     val tar = DataInputStream(BufferedInputStream(XZInputStream(BufferedInputStream(input, 1 shl 16)), 1 shl 16))
     val root = dest.canonicalFile.apply { mkdirs() }
+    // Physically inside: an earlier symlink entry can't redirect a later write or link out of root.
+    fun inside(file: File) = file.canonicalFile.toPath().startsWith(root.toPath())
     val header = ByteArray(512)
     val buffer = ByteArray(1 shl 16)
     var nextName: String? = null
@@ -81,13 +83,15 @@ internal fun untarXz(input: InputStream, dest: File) {
             skip(tar, size + padding(size))
             continue
         }
-        if (!target.toPath().startsWith(root.toPath())) throw IOException("tar entry escapes $dest: $name")
+        if (!target.toPath().startsWith(root.toPath()) || !inside(target)) throw IOException("tar entry escapes $dest: $name")
         when (type) {
             '5' -> target.mkdirs()
             '2' -> {
+                val link = field(header, 157, 100)
+                if (Paths.get(link).isAbsolute || !inside(File(target.parentFile, link))) throw IOException("tar link escapes $dest: $name -> $link")
                 target.parentFile?.mkdirs()
                 target.delete()
-                Files.createSymbolicLink(Paths.get(target.path), Paths.get(field(header, 157, 100)))
+                Files.createSymbolicLink(Paths.get(target.path), Paths.get(link))
             }
             '0', '\u0000', '7' -> {
                 target.parentFile?.mkdirs()

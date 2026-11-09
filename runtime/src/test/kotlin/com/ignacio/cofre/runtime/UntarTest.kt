@@ -60,4 +60,19 @@ class UntarTest {
         val tar = Tar().apply { entry("../evil", '0', "x".toByteArray()) }
         assertFailsWith<IOException> { untarXz(ByteArrayInputStream(tar.xz()), Files.createTempDirectory("untar").toFile()) }
     }
+
+    @Test
+    fun refusesSymlinksThatLeadOutsideTheDestination() {
+        val parent = Files.createTempDirectory("untar").toFile()
+        val dest = parent.resolve("jre")
+        fun untar(vararg entries: Tar.() -> Unit) = assertFailsWith<IOException> {
+            untarXz(ByteArrayInputStream(Tar().apply { entries.forEach { it() } }.xz()), dest)
+        }
+        untar({ entry("abs", '2', link = parent.path) })
+        untar({ entry("up", '2', link = "../outside") })
+        // Each link alone resolves inside, together they escape: "here" is the root, so "here/up/.." is its parent.
+        untar({ entry("here", '2', link = ".") }, { entry("here/up", '2', link = "..") })
+        untar({ entry("here", '2', link = ".") }, { entry("dot", '2', link = "here/..") }, { entry("dot/evil", '0', "x".toByteArray()) })
+        assertEquals(listOf("jre"), parent.list()!!.toList())
+    }
 }
