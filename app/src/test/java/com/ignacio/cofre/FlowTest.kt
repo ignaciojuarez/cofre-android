@@ -15,6 +15,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.ignacio.cofre.design.ShellSection
+import com.ignacio.cofre.ui.instances.Library
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -62,7 +63,7 @@ class FlowTest {
         val dir = graph.instances.directory(made)
         assertTrue(File(dir, "options.txt").readText().contains("preferredGraphicsBackend:vulkan"))
         assertTrue(File(dir, "config/fml.toml").readText().contains("earlyWindowControl = false"))
-        assertEquals(6, graph.downloads.progress.value.items.size, "the preset's pinned mods are queued")
+        assertEquals(Library.handheld.pinnedMods.size, graph.downloads.progress.value.items.size, "the preset's pinned mods are queued")
         assertEquals(made.id, graph.library.active?.id)
         assertEquals(false, graph.nav.newInstance)
     }

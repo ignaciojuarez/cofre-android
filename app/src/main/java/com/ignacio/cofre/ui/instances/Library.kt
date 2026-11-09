@@ -9,12 +9,9 @@ import com.ignacio.cofre.R
 import com.ignacio.cofre.copyToCache
 import com.ignacio.cofre.kit.common.ContentKind
 import com.ignacio.cofre.kit.content.ContentStore
-import com.ignacio.cofre.kit.downloads.DownloadItem
 import com.ignacio.cofre.kit.instances.Instance
 import com.ignacio.cofre.kit.instances.InstanceStore
 import com.ignacio.cofre.kit.options.CofrePreset
-import com.ignacio.cofre.kit.options.FMLConfig
-import com.ignacio.cofre.kit.options.GameOptions
 import com.ignacio.cofre.kit.options.PresetCatalog
 import com.ignacio.cofre.kit.options.Storage
 import com.ignacio.cofre.kit.versions.Versions
@@ -148,20 +145,11 @@ class Library(private val graph: AppGraph) {
         error = null
     }
 
-    /** Vulkan options, NeoForge's early window off, and the preset's options and mods. Belongs in kit next. */
+    /** The instance's first files; the preset's pinned mods go to the download queue. */
     private fun prepare(instance: Instance, preset: CofrePreset?) {
-        val dir = store.directory(instance)
-        val options = GameOptions(dir)
-        if (preset != null) options.seedPreset(preset, graph.physicalMB)
-        options.seedDefaults(graph.physicalMB)
-        options.useVulkan()
-        FMLConfig.disableEarlyWindow(dir)
-        if (preset == null) return
-        val metered = graph.downloadsModel.metered()
-        preset.pinnedMods.forEach { mod ->
-            val item = DownloadItem(mod.url, File(dir, "mods/${mod.file}").path, title = mod.file, sha512 = mod.sha512)
-            graph.downloads.enqueue(item, metered)
-        }
+        val mods = PresetCatalog.apply(preset, store.directory(instance), graph.physicalMB)
+        if (mods.isEmpty()) return
+        graph.downloads.enqueue(mods, graph.downloadsModel.metered())
         if (graph.autoStartDownloads) graph.downloadsModel.start()
     }
 

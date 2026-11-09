@@ -71,4 +71,19 @@ class OptionsTest {
         val c = StorageCleanup(home, listOf(game), temp); assertEquals(12, c.reclaimableBytes); assertEquals(12, c.clear()); assertEquals(0, c.reclaimableBytes)
         assertTrue(disposable.none { it.exists() }); assertTrue(keep.all { it.exists() })
     }
+    @Test fun presetInstanceGetsOptionsEarlyWindowOffAndPinnedMods() {
+        val preset = PresetCatalog.presets.single()
+        val downloads = PresetCatalog.apply(preset, root, 12000)
+        val o = GameOptions(root)
+        assertEquals("vulkan", o.get("preferredGraphicsBackend")); preset.options(12000).forEach { (k, v) -> assertEquals(v, o.get(k), k) }
+        assertTrue("earlyWindowControl = false" in File(root, "config/fml.toml").readText())
+        assertEquals(preset.pinnedMods.map { File(root, "mods/${it.file}").path }, downloads.map { it.destination })
+        assertEquals(preset.pinnedMods.map { it.sha512 }, downloads.map { it.sha512 })
+    }
+    @Test fun plainInstanceGetsDefaultsAndNoMods() {
+        assertEquals(emptyList(), PresetCatalog.apply(null, root, 4000))
+        val o = GameOptions(root)
+        assertEquals("vulkan", o.get("preferredGraphicsBackend")); assertEquals("6", o.get("renderDistance"))
+        assertTrue(File(root, "config/fml.toml").isFile)
+    }
 }
