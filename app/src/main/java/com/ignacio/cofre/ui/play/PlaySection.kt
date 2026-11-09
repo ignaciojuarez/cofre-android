@@ -35,6 +35,7 @@ import com.ignacio.cofre.design.Spinner
 import com.ignacio.cofre.design.Stat
 import com.ignacio.cofre.design.Tone
 import com.ignacio.cofre.design.WidthClass
+import com.ignacio.cofre.kit.common.Target
 import com.ignacio.cofre.kit.instances.Instance
 import com.ignacio.cofre.ui.common.Fmt
 import com.ignacio.cofre.ui.common.SceneHeader
@@ -125,7 +126,7 @@ private fun Home(graph: AppGraph, active: Instance?, hero: Dp) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Stat(Fmt.memory(graph.launcher.heapMB(active)), stringResource(R.string.play_memory), Modifier.weight(1f))
                 Stat(Fmt.ago(active.lastPlayedAt) ?: stringResource(R.string.instance_never), stringResource(R.string.instance_played), Modifier.weight(1f))
-                Stat("26.2", stringResource(R.string.play_version), Modifier.weight(1f))
+                Stat(Target.GAME_VERSION, stringResource(R.string.play_version), Modifier.weight(1f))
             }
             BlockButton(stringResource(R.string.play_manage), { nav.openInstance(active.id) }, size = ButtonSize.Small, fullWidth = false)
         }
