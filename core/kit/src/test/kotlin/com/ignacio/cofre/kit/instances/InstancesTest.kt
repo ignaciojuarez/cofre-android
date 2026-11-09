@@ -1,0 +1,77 @@
+package com.ignacio.cofre.kit.instances
+
+import com.ignacio.cofre.kit.common.Loader
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.io.TempDir
+import java.io.File
+import java.nio.file.Files
+import kotlin.test.*
+
+class InstancesTest {
+    @TempDir lateinit var root: File
+    @Test fun createAndReloadVersionedRelativeMetadata() {
+        val store = InstanceStore(root); val i = store.create("Main", loaderVersion = "26.2.0.93")
+        assertEquals("26.2", i.gameVersion); assertEquals(Loader.NeoForge, i.loader)
+        val text = File(store.directory(i), "cofre.json").readText()
+        assertTrue(text.contains("\"schema\": 1")); assertFalse(text.contains(root.absolutePath))
+        assertEquals(i, InstanceStore(root).list().single())
+    }
+    @Test fun metadataEditsPersistAndGroupsAreDistinct() {
+        val s = InstanceStore(root); val a = s.create("A"); val b = s.create("B")
+        s.favorite(a.id, true); s.group(a.id, "Friends"); s.group(b.id, "Friends"); s.notes(a.id, "hello"); s.loaderVersion(a.id, "26.2.0.93"); s.rename(a.id, "Z")
+        assertEquals(listOf("Friends"), s.groups()); assertEquals(listOf("B", "Z"), s.list().map { it.name })
+        assertEquals("hello", s.get(a.id).notes); assertTrue(s.get(a.id).favorite)
+    }
+    @Test fun runtimeRollbackUsesSuccessfulSettings() {
+        val s = InstanceStore(root); val i = s.create("A")
+        s.runtime(i.id, 4096, "-Dsafe=true"); s.markLastGood(i.id); s.runtime(i.id, 8192, "-Dbad=true")
+        val restored = InstanceStore(root).rollbackRuntime(i.id)
+        assertEquals(4096, restored.memoryMB); assertFalse(restored.autoMemory); assertEquals("-Dsafe=true", restored.jvmArguments)
+    }
+    @Test fun duplicateCopiesSettingsAndCanExcludeWorldsAndOptions() {
+        val s = InstanceStore(root); val i = s.create("A", loaderVersion = "v")
+        val dir = s.directory(i); File(dir, "mods").mkdir(); File(dir, "mods/a.jar").writeText("a"); File(dir, "saves").mkdir(); File(dir, "saves/world").mkdir(); File(dir, "options.txt").writeText("lang:x")
+        s.favorite(i.id, true); s.notes(i.id, "note")
+        val a = s.duplicate(i.id); assertTrue(File(s.directory(a), "saves/world").exists()); assertFalse(a.favorite)
+        val b = s.duplicate(i.id, "B", includeWorlds = false, includeOptions = false)
+        assertFalse(File(s.directory(b), "saves").exists()); assertFalse(File(s.directory(b), "options.txt").exists())
+        assertEquals("note", b.notes); assertEquals("v", b.loaderVersion); assertTrue(File(s.directory(b), "mods/a.jar").isFile)
+    }
+    @Test fun trashRestoreWorksAcrossStoreReload() {
+        val s = InstanceStore(root); val i = s.create("A"); val token = s.trash(i.id)
+        assertTrue(s.list().isEmpty()); val reloaded = InstanceStore(root)
+        assertEquals(i, reloaded.recentlyDeleted().single().instance); assertEquals(i, reloaded.restore(token)); assertEquals(i, reloaded.list().single())
+    }
+    @Test fun restoreDoesNotOverwriteReusedFolder() {
+        val s = InstanceStore(root); val i = s.create("A"); val token = s.trash(i.id)
+        s.save(i.copy(name = "Other")); val restored = s.restore(token)
+        assertNotEquals(i.id, restored.id); assertEquals(2, s.list().size)
+    }
+    @Test fun exportImportRewritesIdentityAndKeepsFiles() {
+        val s = InstanceStore(File(root, "instances")); val i = s.create("A")
+        File(s.directory(i), "options.txt").writeText("lang:en_us")
+        val archive = s.export(i.id, File(root, "instance.zip")); val imported = s.import(archive, "Imported")
+        assertNotEquals(i.id, imported.id); assertEquals(imported.id, imported.gameDirectory)
+        assertEquals("lang:en_us", File(s.directory(imported), "options.txt").readText()); assertEquals(imported, s.get(imported.id))
+    }
+    @Test fun absoluteTraversalAndSymlinkPathsAreRejected() {
+        val s = InstanceStore(root)
+        for (p in listOf("/tmp/out", "../out", "nested/out", ".")) assertFails { s.save(Instance("x", "x", gameDirectory = p)) }
+        val outside = File(root, "outside").apply { mkdir() }; Files.createSymbolicLink(File(root, "link").toPath(), outside.toPath())
+        assertFails { s.save(Instance("link", "Link")) }; assertFalse(File(outside, "cofre.json").exists())
+    }
+    @Test fun unknownSchemaIsNotOverwritten() {
+        val s = InstanceStore(root); val i = s.create("A"); val file = File(s.directory(i), "cofre.json")
+        val text = file.readText().replace("\"schema\": 1", "\"schema\": 2"); file.writeText(text)
+        assertFails { s.list() }; assertFails { s.save(i) }; assertEquals(text, file.readText())
+    }
+    @Test fun duplicateNamesAndMissingProfilesFail() {
+        val s = InstanceStore(root); val i = s.create("A")
+        assertFails { s.create("A") }; assertFails { s.duplicate(i.id, "A") }; assertFails { s.get("absent") }
+    }
+    @Test fun exportWithoutWorldsDoesNotChangeOriginal() {
+        val s = InstanceStore(File(root, "instances")); val i = s.create("A"); File(s.directory(i), "saves").mkdir(); File(s.directory(i), "saves/x").writeText("a")
+        val archive = s.export(i.id, File(root, "a.zip"), includeWorlds = false)
+        val b = s.import(archive, "B"); assertFalse(File(s.directory(b), "saves").exists()); assertTrue(File(s.directory(i), "saves/x").exists())
+    }
+}
