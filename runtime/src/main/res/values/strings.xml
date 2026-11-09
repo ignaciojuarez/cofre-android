@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The NeoForge install's foreground-service notification. -->
+    <string name="installer_channel">Installs</string>
+    <string name="installer_title">Installing NeoForge</string>
+</resources>

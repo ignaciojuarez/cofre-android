@@ -1,8 +1,12 @@
 package com.ignacio.cofre
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -46,10 +50,12 @@ import com.ignacio.cofre.ui.play.LaunchScreen
 import com.ignacio.cofre.ui.play.PlaySection
 import com.ignacio.cofre.ui.settings.SettingsSection
 import com.ignacio.cofre.ui.setup.SetupFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val graph: AppGraph get() = (application as CofreApp).graph
+    private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -61,6 +67,14 @@ class MainActivity : ComponentActivity() {
                 val bars = WindowCompat.getInsetsController(window, window.decorView)
                 bars.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                 if (immersive) bars.hide(WindowInsetsCompat.Type.systemBars()) else bars.show(WindowInsetsCompat.Type.systemBars())
+            }
+        }
+        // Android 13+: the NeoForge install's progress notification needs permission, asked on the first Play.
+        // Denied, the install still runs, just without a notification.
+        lifecycleScope.launch {
+            snapshotFlow { graph.launcher.run != null }.first { it }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
         handle(intent)

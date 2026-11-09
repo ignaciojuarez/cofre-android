@@ -86,7 +86,7 @@ class NeoForgeInstaller(private val context: Context, private val files: GameFil
                 exitFile = File(work, "processor-${i + 1}.exit.json").path,
                 builtInController = false,
             )
-            val code = InstallerService.run(context, spec, File(work, "processor-${i + 1}.json"))
+            val code = InstallerService.run(context, spec, File(work, "processor-${i + 1}.json"), "Installing NeoForge $version", "Step ${i + 1} of ${steps.size}")
             Log.i(TAG, "[Cofre] neoforge processor ${i + 1}/${steps.size} exited code=$code")
             if (code != 0) throw IOException("NeoForge processor $mainClass failed ($code): ${log.takeIf { it.isFile }?.readLines()?.takeLast(5)?.joinToString(" | ")}")
             step.outputs.forEach { (file, hash) ->
