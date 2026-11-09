@@ -13,7 +13,7 @@ build_freetype
 mkdir -p "$WORK/compat-libs" "$WORK/headers"
 for lib in pthread rt thread_db; do "$AR" cr "$WORK/compat-libs/lib$lib.a"; done
 # Only headers: these desktop APIs are not linked into the headless Android build.
-for header in X11 fontconfig cups; do ln -sfn "/usr/include/$header" "$WORK/headers/$header"; done
+for header in X11 fontconfig cups alsa; do ln -sfn "/usr/include/$header" "$WORK/headers/$header"; done
 cd "$JDK"
 bash configure --with-conf-name=android-arm64 --openjdk-target=aarch64-linux-android \
     --with-toolchain-type=clang --with-sysroot="$TOOLCHAIN/sysroot" \
@@ -23,6 +23,7 @@ bash configure --with-conf-name=android-arm64 --openjdk-target=aarch64-linux-and
     --with-jvm-variants=server --with-jvm-features=-dtrace,-vm-structs \
     --with-freetype-include="$WORK/freetype/include/freetype2" \
     --with-freetype-lib="$WORK/freetype/lib" \
+    --with-alsa-include="$WORK/headers" \
     --with-cups-include="$WORK/headers" --with-fontconfig-include="$WORK/headers" \
     --x-includes="$WORK/headers" --x-libraries=/usr/lib \
     --with-extra-cflags="-DANDROID -DLE_STANDALONE -I$WORK/headers" \

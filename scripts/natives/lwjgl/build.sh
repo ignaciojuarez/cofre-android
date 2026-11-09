@@ -8,9 +8,14 @@ build_freetype
 (cd "$WORK/src/shaderc" && python3 utils/git-sync-deps)
 python3 "$NATIVE_SCRIPTS/lwjgl/patch.py" "$WORK/src/lwjgl"
 # libffi is linked statically; LWJGL's generated bindings use its public ABI.
-(cd "$WORK/src/libffi" && ./autogen.sh)
+# Release tarball includes the upstream-generated configure script (no libtool regeneration).
+mkdir -p "$WORK/inputs" "$WORK/libffi-release"
+curl -fL --retry 3 --retry-all-errors -o "$WORK/inputs/libffi-3.5.2.tar.gz" \
+    https://github.com/libffi/libffi/releases/download/v3.5.2/libffi-3.5.2.tar.gz
+printf '%s  %s\n' f3a3082a23b37c293a4fcd1053147b371f2ff91fa7ea1b2a52e335676bac82dc "$WORK/inputs/libffi-3.5.2.tar.gz" | sha256sum -c -
+tar -xf "$WORK/inputs/libffi-3.5.2.tar.gz" --strip-components=1 -C "$WORK/libffi-release"
 mkdir -p "$WORK/build/libffi"
-(cd "$WORK/build/libffi" && CFLAGS=-fPIC "$WORK/src/libffi/configure" \
+(cd "$WORK/build/libffi" && CFLAGS=-fPIC "$WORK/libffi-release/configure" \
     --host=aarch64-linux-android --prefix="$WORK/ffi" --disable-shared --enable-static && \
     make -j "$JOBS" && make install)
 cmake -S "$NATIVE_SCRIPTS/lwjgl" -B "$WORK/build/lwjgl" "${CMAKE_ANDROID[@]}" \

@@ -69,5 +69,6 @@ pack_sources() {
             printf '%s %s\n' "shaderc/third_party/$(basename "$dep")" "$(git -C "$dep" rev-parse HEAD)" >> "$stage/scripts/transitive-pins.txt"
         done
     fi
+    [[ ! -d "$WORK/inputs" ]] || cp -R "$WORK/inputs" "$stage/"
     tar -C "$stage" -cJf "$DIST/$name-sources.tar.xz" .
 }

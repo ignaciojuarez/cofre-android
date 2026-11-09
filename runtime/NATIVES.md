@@ -75,7 +75,7 @@ Mojo's Android diffs modify OpenJDK source files whose own license headers grant
 | jdk/patches/0001-android-bionic.patch | OpenJDK bionic port: libc/TLS/dynamic-loader differences, Android properties and networking, iconv and spawn compatibility, headless desktop linkage; excludes ARM32/x86-only changes |
 | jdk/patches/0002-android-ipv6.patch | Skip Android-incompatible proc/network availability probe |
 | jdk/patches/0003-statx-fallback.patch | Fall back when statx exists in libc but is blocked/missing in the kernel |
-| lwjgl/patch.py | Use direct process_vm_readv/writev syscalls at API 28; no ENOSYS success stubs |
+| lwjgl/patch.py | Use direct process_vm_readv/writev syscalls at API 28; use NDK UAPI structs instead of liburing compatibility duplicates; no ENOSYS success stubs |
 
 The upstream "ignore chmod failures" patch is deliberately **not** applied: permission errors must propagate. No upstream branding patch is applied.
 
@@ -89,3 +89,5 @@ JNA Maven Central AAR: `https://repo.maven.apache.org/maven2/net/java/dev/jna/jn
 | libjnidispatch.so (unmodified AAR bytes) | abc26e994517bcaa3309acdb0a27373864086c7569c89d3087b8626fada9ef06 | 0x4000, 0x4000 |
 
 `verify.py` runs `llvm-readelf -h` and `-lW` on every `.so` (including versioned names) and JRE `bin/java`, rejects non-aarch64 and every LOAD Align below 0x4000, and fails on an empty file set. `test_verify.py` exercises positive, 4 KB, mixed-segment and empty cases. CI also checks the JRE's full image layout, Java 25 release metadata and `file` output. Final released hashes and Mac verification will be recorded here after the release passes. No device execution is claimed.
+
+The libffi 3.5.2 release source tarball (SHA-256 `f3a3082a23b37c293a4fcd1053147b371f2ff91fa7ea1b2a52e335676bac82dc`) supplies its generated configure files, avoiding an incompatible host libtool macro. It is bundled in the corresponding sources.

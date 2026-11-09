@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import sys
+sys.dont_write_bytecode = True
 from verify import load_alignments
 
 assert load_alignments('  LOAD 0x00 0x00 0x00 0x10 0x10 R E 0x4000') == [16384]
