@@ -31,3 +31,6 @@ Builds bundle the pinned natives release's `jre25-android-arm64.tar.xz` (`script
 - Touch coordinates if the surface gets a fixed lower resolution (they're in view pixels today).
 - Clipboard is in-process only; no IME/preedit; no virtual cursor for the stick in menus (Controlify draws one).
 - Sleep and Home while the game renders. On the Odin 3, in a world and on the title screen: press power, wait 30 s, wake; press Home, wait, come back through Recents; both with the dock and with Bluetooth audio on. Expect the same session, a rebuilt swapchain, no `VK_ERROR_SURFACE_LOST_KHR`/`NATIVE_WINDOW_IN_USE` in logcat, `[Cofre] surface WxH` logged again, input still working, and no `:game` death. Also leave it in the background for 10 min to see whether the low-memory killer takes it.
+- Leaving during a first launch: press Play on a fresh instance, press Home while it downloads, come back. Expect the game to start, not a "Minecraft stopped" screen (Android may block the launch from the background).
+- In game, change the theme or bold-text setting (the activity is recreated in place): the built-in controller and mouse capture should keep working.
+- A world and a mod file with an emoji in the name: Quick Play and the mod list should show them unmangled (JNI passes arguments as modified UTF-8).
