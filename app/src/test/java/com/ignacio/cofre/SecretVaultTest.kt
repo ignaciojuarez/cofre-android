@@ -53,4 +53,16 @@ class SecretVaultTest {
         ready = true
         assertEquals("x", vault.get("token"))
     }
+
+    @Test fun aFailedWriteLeavesTheCachedSecretsAsTheyWere() {
+        val file = Files.createTempDirectory("vault").resolve("secrets.bin").toFile()
+        val key = key()
+        var ready = true
+        val vault = SecretVault(file) { if (ready) key else throw KeyStoreException("locked") }
+        vault.set("token", "x")
+        ready = false
+        assertFailsWith<KeyStoreException> { vault.set("token", "y") }
+        assertFailsWith<KeyStoreException> { vault.removeAll("tok") }
+        assertEquals("x", vault.get("token"))
+    }
 }

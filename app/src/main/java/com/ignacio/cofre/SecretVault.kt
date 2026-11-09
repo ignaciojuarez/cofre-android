@@ -22,37 +22,37 @@ import javax.crypto.spec.GCMParameterSpec
  */
 class SecretVault(private val file: File, private val key: () -> SecretKey = ::keystoreKey) {
     private val lock = Any()
-    private var cache: MutableMap<String, String>? = null
+    private var cache: Map<String, String>? = null
 
     fun get(name: String): String? = synchronized(lock) {
         try { load()[name] } catch (_: GeneralSecurityException) { null } // transient: try again next time
     }
 
     fun set(name: String, value: String?) = synchronized(lock) {
-        val map = load()
-        if (value == null) map.remove(name) else map[name] = value
-        write(map)
+        write(if (value == null) load() - name else load() + (name to value))
     }
 
     /** Removes every entry whose name starts with [prefix]. */
     fun removeAll(prefix: String) = synchronized(lock) {
         val map = load()
-        if (map.keys.removeAll { it.startsWith(prefix) }) write(map)
+        val kept = map.filterKeys { !it.startsWith(prefix) }
+        if (kept.size != map.size) write(kept)
     }
 
-    private fun load(): MutableMap<String, String> = cache ?: run {
-        val read = if (!file.isFile) mutableMapOf() else try {
+    private fun load(): Map<String, String> = cache ?: run {
+        val read = if (!file.isFile) emptyMap() else try {
             decrypt(file.readBytes())
         } catch (_: AEADBadTagException) {
             file.renameTo(File(file.parentFile, "${file.name}.bad-${System.currentTimeMillis()}"))
-            mutableMapOf()
+            emptyMap()
         }
         read.also { cache = it }
     }
 
+    /** The cache changes only once the encrypted file is written, so a failed write leaves both as they were. */
     private fun write(map: Map<String, String>) {
-        cache = map.toMutableMap()
         FileOps.atomic(file, encrypt(Kit.json.encodeToString(map).toByteArray()))
+        cache = map
     }
 
     private fun encrypt(plain: ByteArray): ByteArray {
@@ -61,12 +61,12 @@ class SecretVault(private val file: File, private val key: () -> SecretKey = ::k
         return byteArrayOf(iv.size.toByte()) + iv + cipher.doFinal(plain)
     }
 
-    private fun decrypt(data: ByteArray): MutableMap<String, String> {
+    private fun decrypt(data: ByteArray): Map<String, String> {
         val ivSize = data[0].toInt()
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, data, 1, ivSize))
         val plain = cipher.doFinal(data, 1 + ivSize, data.size - 1 - ivSize)
-        return Kit.json.decodeFromString<Map<String, String>>(plain.decodeToString()).toMutableMap()
+        return Kit.json.decodeFromString<Map<String, String>>(plain.decodeToString())
     }
 
     companion object {
