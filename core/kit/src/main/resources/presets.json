@@ -30,6 +30,15 @@
           "url": "https://cdn.modrinth.com/data/DOUdJVEm/versions/VDw4mGkG/controlify-3.5.3%2Bmc26.2-universal.jar"
         },
         {
+          "project": "1eAoo2KR",
+          "slug": "yacl",
+          "version": "3.9.7+26.2-neoforge",
+          "file": "yet_another_config_lib_v3-3.9.7+26.2-neoforge.jar",
+          "sha512": "7ffb9a55d5c6aedbe15bc70d0b3b28d5c9f7de9959c679e2f8e3756452faab3ca76a241f834f91f7a9f751fd9a2e742c7db6fa11aefff120ba1e4dbe6799e945",
+          "license": "LGPL-3.0-or-later",
+          "url": "https://cdn.modrinth.com/data/1eAoo2KR/versions/FfvwIZmI/yet_another_config_lib_v3-3.9.7%2B26.2-neoforge.jar"
+        },
+        {
           "project": "5ZwdcRci",
           "slug": "immediatelyfast",
           "version": "1.16.5+26.2-neoforge",

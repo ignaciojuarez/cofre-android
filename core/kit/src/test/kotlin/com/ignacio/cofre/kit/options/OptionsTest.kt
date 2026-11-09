@@ -41,9 +41,9 @@ class OptionsTest {
         for ((ram, expected) in listOf(8192 to 4096, 12288 to 6144, 16384 to 8192, 32768 to 8192, 6144 to 3072, 4096 to 2048, 2048 to 2048)) assertEquals(expected, JavaHeap.autoMB(ram))
         assertFails { JavaHeap.autoMB(0) }
     }
-    @Test fun bundledPresetPinsTheSixRequestedVersions() {
+    @Test fun bundledPresetPinsEveryModAndTheLibrariesTheyRequire() {
         val p = PresetCatalog.presets.single(); p.validate(); assertEquals("Handheld (NeoForge 26.2, Vulkan)", p.name)
-        assertEquals(listOf("mc26.2-0.9.2-neoforge", "3.5.3+mc26.2", "1.16.5+26.2-neoforge", "1.11.3", "9.0.0-neoforge", "5.27.21+mc26.2"), p.pinnedMods.map { it.version })
+        assertEquals(listOf("mc26.2-0.9.2-neoforge", "3.5.3+mc26.2", "3.9.7+26.2-neoforge", "1.16.5+26.2-neoforge", "1.11.3", "9.0.0-neoforge", "5.27.21+mc26.2"), p.pinnedMods.map { it.version })
         assertTrue(p.pinnedMods.all { it.url.startsWith("https://cdn.modrinth.com/") && it.sha512.length == 128 })
         assertEquals("6", p.options(4096)["renderDistance"]); assertEquals("10", p.options(8192)["renderDistance"])
     }
