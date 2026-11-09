@@ -35,7 +35,8 @@ class NeoForgeInstaller(private val context: Context, private val files: GameFil
         val vanilla = files.install(MINECRAFT, withAssets = false)
         files.step("Downloading the NeoForge installer")
         val installer = files.library("net.neoforged:neoforge:$version:installer")
-        val sha1 = withContext(Dispatchers.IO) { text("${neoforge.installerUrl}.sha1").trim() }
+        // Pinned for the version we ship; any other one (a modpack's) can only be checked against its server's .sha1.
+        val sha1 = if (version == VERSION) VERSION_SHA1 else withContext(Dispatchers.IO) { text("${neoforge.installerUrl}.sha1").trim() }
         files.download("NeoForge installer", listOf(DownloadItem(neoforge.installerUrl, installer.path, sha1 = sha1)))
 
         val (profile, versionText) = ZipFile(installer).use { zip ->
@@ -109,6 +110,8 @@ class NeoForgeInstaller(private val context: Context, private val files: GameFil
 
     companion object {
         const val VERSION = "26.2.0.93"
+        /** [VERSION]'s installer jar (maven.neoforged.net's .sha1 and the downloaded jar agreed, 2026-11-09). */
+        private const val VERSION_SHA1 = "97205829a020fc9389f504a77f590b54157c8dde"
         const val MINECRAFT = "26.2"
         const val SIDE = "client"
         private const val TAG = "Cofre"
