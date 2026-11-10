@@ -13,12 +13,10 @@ import com.ignacio.cofre.design.LogLevel
 import com.ignacio.cofre.design.LogLine
 import com.ignacio.cofre.design.ShellSection
 import com.ignacio.cofre.kit.common.ContentKind
-import com.ignacio.cofre.kit.compat.ContentCompatibility
-import com.ignacio.cofre.kit.compat.GlRisk
 import com.ignacio.cofre.kit.content.ContentStore
-import com.ignacio.cofre.kit.mods.ModRequirement
 import com.ignacio.cofre.launch.Launcher
 import com.ignacio.cofre.ui.play.GameStoppedScreen
+import com.ignacio.cofre.ui.play.HomeSamples
 import com.ignacio.cofre.ui.play.LaunchScreen
 import com.ignacio.cofre.ui.play.PreflightSheet
 import com.ignacio.cofre.ui.setup.DeviceReadiness
@@ -137,13 +135,7 @@ abstract class ScreenTest(private val device: String) {
     }
 
     @Test fun preflight() = screen("preflight") {
-        val instance = Samples.graph().instances.get("survival")
-        val issues = listOfNotNull(
-            ContentCompatibility.issue("iris", "Iris", ContentKind.Mods)?.copy(file = "iris-1.11.4+mc26.2.jar"),
-            ContentCompatibility.glIssue("minimap", "Minimap", GlRisk.Likely, "minimap-2.1.jar"),
-        )
-        val missing = listOf(ModRequirement("yet_another_config_lib_v3", "YetAnotherConfigLib", reason = "dependency", neededBy = "controlify-3.5.3+mc26.2.jar"))
-        PreflightSheet(Launcher.Preflight(instance, null, missing, listOf("Controlify needs YetAnotherConfigLib"), issues), {}, {}, {}, {})
+        PreflightSheet(HomeSamples.preflight(Samples.graph().instances.get("survival")), {}, {}, {}, {})
     }
 
     @Test fun gameStopped() = screen("game_stopped") {

@@ -149,6 +149,7 @@ fun CofreRoot(
                             onShare = launcher::shareReport,
                             onClose = launcher::dismissStopped,
                             onGetMods = launcher::getStoppedMods,
+                            onRollBack = launcher::rollBack,
                         )
                         run != null -> LaunchScreen(run, onCancel = launcher::cancel, onRetry = launcher::retry)
                         else -> Shell(graph)
