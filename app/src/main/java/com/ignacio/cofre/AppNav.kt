@@ -9,7 +9,7 @@ import com.ignacio.cofre.design.ShellSection
 /** Where the user is: the shell section, each section's selection and the open sheets (SwiftUI's `NavModel`). */
 class AppNav {
     var section by mutableStateOf(ShellSection.Play)
-    /** The instance open in Instances (detail column / pushed detail). */
+    /** The instance open in Instances (the detail column). */
     var instance by mutableStateOf<String?>(null)
     var settingsPane by mutableStateOf<SettingsPane?>(null)
     var newInstance by mutableStateOf(false)

@@ -14,6 +14,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import com.ignacio.cofre.design.ShellSection
 import com.ignacio.cofre.ui.instances.Library
 import org.junit.Rule
@@ -86,7 +87,8 @@ class FlowTest {
         rule.onNodeWithText("This device can't run Minecraft 26.2's Vulkan renderer").assertIsDisplayed()
         rule.onNodeWithText("Push descriptors").assertIsDisplayed()
         rule.onNodeWithText("Instanced vertex attributes").assertIsDisplayed()
-        rule.onNodeWithTag("setup.next").performClick()
+        // The list runs past a 640 dp screen: scroll to the button like a user would.
+        rule.onNodeWithTag("setup.next").performScrollTo().performClick()
         rule.onNodeWithTag("signin.notConfigured").assertIsDisplayed()
     }
 

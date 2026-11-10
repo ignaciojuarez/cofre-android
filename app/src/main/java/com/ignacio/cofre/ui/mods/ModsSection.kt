@@ -46,13 +46,12 @@ import com.ignacio.cofre.design.GalleryItem
 import com.ignacio.cofre.design.GalleryViewer
 import com.ignacio.cofre.design.Pad
 import com.ignacio.cofre.design.PixelGlyph
-import com.ignacio.cofre.design.WidthClass
 import com.ignacio.cofre.design.CofreTheme
 import com.ignacio.cofre.design.controllerActions
 import com.ignacio.cofre.ui.common.displayName
 
 /**
- * The Mods section: browse on the left, a mod page, Installed or Import on the right (pushed on compact). Y searches
+ * The Mods section: browse on the left, a mod page, Installed or Import on the right. Y searches
  * and X opens filters from anywhere in it; Get, removal and filters open as sheets over it.
  */
 @Composable
@@ -72,7 +71,6 @@ fun ModsSection(
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = LocalFocusManager.current
     val uri = LocalUriHandler.current
-    val compact = CofreTheme.widthClass == WidthClass.Compact
     val searchFocus = remember { FocusRequester() }
     var searchRequests by remember { mutableIntStateOf(0) }
     var filters by rememberSaveable { mutableStateOf(false) }
@@ -86,14 +84,13 @@ fun ModsSection(
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { picked -> picked?.let(::importUri) }
     IncomingPacks(onPack = ::importUri)
 
-    // Y: back to the list on compact, then focus the field and bring up the keyboard.
+    // Y: focus the field and bring up the keyboard.
     LaunchedEffect(searchRequests) {
         if (searchRequests == 0) return@LaunchedEffect
         runCatching { searchFocus.requestFocus() }
         keyboard?.show()
     }
     fun search() {
-        if (compact) model.select(null)
         searchRequests++
     }
 
@@ -114,7 +111,6 @@ fun ModsSection(
         } else {
             AdaptiveListDetail(
                 selection = route,
-                onSelectionChange = model::select,
                 list = {
                     BrowsePane(
                         state = browse,
@@ -137,7 +133,7 @@ fun ModsSection(
                 },
                 detail = { current ->
                     when (current) {
-                        ModsRoutes.INSTALLED -> installedModel?.let { InstalledRoute(it, instance?.name.orEmpty(), onBrowse = { model.select(null) }) }
+                        ModsRoutes.INSTALLED -> installedModel?.let { InstalledRoute(it, instance?.name.orEmpty()) }
                         ModsRoutes.IMPORT -> ImportRoute(
                             model.import,
                             onPickFile = { picker.launch(arrayOf("application/zip", "application/x-modrinth-modpack+zip", "application/octet-stream")) },
@@ -160,7 +156,7 @@ fun ModsSection(
                     }
                 },
                 placeholder = {
-                    installedModel?.let { InstalledRoute(it, instance?.name.orEmpty(), onBrowse = { model.select(null) }) }
+                    installedModel?.let { InstalledRoute(it, instance?.name.orEmpty()) }
                 },
             )
         }

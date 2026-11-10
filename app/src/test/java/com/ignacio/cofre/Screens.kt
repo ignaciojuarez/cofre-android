@@ -35,9 +35,6 @@ import org.robolectric.annotation.GraphicsMode
 /** Odin 3: 1920×1080 at 270 dpi, about 1138×640 dp in landscape. */
 private const val ODIN = "w1138dp-h640dp-land-270dpi"
 
-/** A phone in portrait (Pixel 9 class). */
-private const val PHONE = "w411dp-h914dp-port-xhdpi"
-
 @OptIn(ExperimentalRoborazziApi::class)
 /** Every main screen on sample data, as a controller user sees it (focus ring and hint bar on). */
 abstract class ScreenTest(private val device: String) {
@@ -160,8 +157,3 @@ abstract class ScreenTest(private val device: String) {
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [36], qualifiers = ODIN)
 class OdinScreens : ScreenTest("odin")
-
-@RunWith(RobolectricTestRunner::class)
-@GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [36], qualifiers = PHONE)
-class PhoneScreens : ScreenTest("phone")

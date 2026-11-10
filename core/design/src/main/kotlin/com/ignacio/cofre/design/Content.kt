@@ -114,32 +114,25 @@ public fun LogView(
     }
 }
 
-/** Set by layouts that push a detail ([AdaptiveListDetail] on compact); [ColumnHeader] shows a back button. */
-@Suppress("ComposeCompositionLocalUsage")
-public val LocalColumnBack: ProvidableCompositionLocal<(() -> Unit)?> = staticCompositionLocalOf { null }
-
-/** A column's title with trailing actions, and a back button when the column was pushed. */
+/** A column's title with trailing actions. */
 @Composable
 public fun ColumnHeader(
     title: String,
     modifier: Modifier = Modifier,
     trailing: @Composable RowScope.() -> Unit = {},
 ) {
-    val compact = CofreTheme.widthClass == WidthClass.Compact
-    val back = LocalColumnBack.current
     Row(
         modifier
             .fillMaxWidth()
-            .heightIn(min = if (compact) 46.dp else 56.dp)
-            .padding(horizontal = if (compact) 16.dp else 20.dp)
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 20.dp)
             .padding(top = 8.dp, bottom = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        back?.let { BackGlyphButton("Back", it) }
         CofreText(
             title,
-            if (compact) CofreTheme.type.headerCompact else CofreTheme.type.header,
+            CofreTheme.type.header,
             Modifier.weight(1f).semantics { heading() },
             maxLines = 1,
         )
@@ -184,7 +177,7 @@ public data class GalleryItem(
     val caption: String? = null,
 )
 
-/** A mod page's gallery: 2, 3 or 4 columns of 16:9 cells by width. Videos show a play block. */
+/** A mod page's gallery: 3 or 4 columns of 16:9 cells by width. Videos show a play block. */
 @Composable
 public fun GalleryGrid(
     items: List<GalleryItem>,
@@ -192,7 +185,6 @@ public fun GalleryGrid(
     modifier: Modifier = Modifier,
 ) {
     val columns = when (CofreTheme.widthClass) {
-        WidthClass.Compact -> 2
         WidthClass.Medium -> 3
         WidthClass.Expanded -> 4
     }

@@ -14,6 +14,7 @@ A native Android launcher for **Minecraft Java 26.2 + NeoForge**, rendering with
 | GPU driver | The device's Qualcomm driver by default; importing a Turnip driver comes later |
 | Runtime | **Our own, built from source.** Zalith Launcher 2 and FCL are reference designs only |
 | UI | New Kotlin + Compose app that reuses Cofre's design system and screens |
+| Orientation | **Landscape only** (`sensorLandscape`). No portrait or compact layouts: a landscape phone gets the rail, the Odin 3 the sidebar |
 | Repo | `cofre-android`, GPL-3.0. App id `com.ignacio.cofre` (Android and iOS ids live in separate stores, so it can match iOS) |
 | Test hardware | Odin 3 is ordered. Until it arrives, the emulator and the OnePlus 5 can test the launcher UI only |
 
@@ -164,7 +165,8 @@ New on Android:
 - 🧠 **Memory:** set `-Xmx` by RAM tier (8 GB → 4 GB heap, 12 GB → 6 GB, 16 GB+ → 8 GB). The low-memory killer SIGKILLs without warning.
 - 📦 **Platform**
   - 16 KB page devices: every `.so` must be aligned.
-  - `android:appCategory="game"` keeps landscape on large screens.
+  - Landscape only: `sensorLandscape` on both activities; `android:appCategory="game"` keeps Android 16+ honoring it on large screens.
+  - Short screens: a landscape phone is about 400 dp tall, so screens scroll or fit that height.
   - Edge-to-edge and immersive mode, predictive back.
   - Big downloads use user-initiated data-transfer jobs.
   - The launcher can die while the game runs: the game process must not depend on it.

@@ -34,7 +34,6 @@ import com.ignacio.cofre.design.CofreTheme
 import com.ignacio.cofre.design.ControllerHost
 import com.ignacio.cofre.design.IconButton
 import com.ignacio.cofre.design.LocalRemoteImage
-import com.ignacio.cofre.design.NavStyle
 import com.ignacio.cofre.design.PixelGlyph
 import com.ignacio.cofre.design.RemoteImageLoader
 import com.ignacio.cofre.design.ShellSection
@@ -183,8 +182,8 @@ private fun Shell(graph: AppGraph) {
     AdaptiveShell(
         nav.section,
         onSectionChange = { nav.section = it },
-        navFooter = { style ->
-            if (style != NavStyle.TabBar && graph.downloadsModel.summary.visible.isNotEmpty()) {
+        navFooter = {
+            if (graph.downloadsModel.summary.visible.isNotEmpty()) {
                 IconButton(PixelGlyph.Chest, stringResource(R.string.downloads_title), { nav.downloads = true })
             }
         },

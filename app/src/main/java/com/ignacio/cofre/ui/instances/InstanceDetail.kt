@@ -39,7 +39,6 @@ import com.ignacio.cofre.design.SelectButton
 import com.ignacio.cofre.design.Stat
 import com.ignacio.cofre.design.ToggleRow
 import com.ignacio.cofre.design.Tone
-import com.ignacio.cofre.design.WidthClass
 import com.ignacio.cofre.kit.instances.Instance
 import com.ignacio.cofre.kit.options.JavaHeap
 import com.ignacio.cofre.ui.common.Fmt
@@ -64,7 +63,7 @@ fun InstanceDetail(
             BlockButton(stringResource(R.string.play), { graph.launcher.play(instance) }, Modifier.testTag("instance.play"), role = ButtonRole.Primary, size = ButtonSize.Small, icon = PixelGlyph.Play)
         }
         PaneScroll {
-            SceneHeader(instance.seed, if (CofreTheme.widthClass == WidthClass.Compact) 100.dp else 130.dp) {
+            SceneHeader(instance.seed, 130.dp) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Badge("NeoForge ${instance.loaderVersion ?: instance.gameVersion}", tone = Tone.NeoForge)
                     Badge("Vulkan", tone = Tone.Success)

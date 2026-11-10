@@ -19,12 +19,11 @@ public data class TextRole(val style: TextStyle, val uppercase: Boolean = false)
  * heavier face where a role has one, for Android's Bold Text setting.
  */
 @Immutable
-public class CofreType internal constructor(bold: Boolean, compact: Boolean) {
-    public val display: TextRole = role(Pixelify, BOLD, if (compact) 31 else 34)
+public class CofreType internal constructor(bold: Boolean) {
+    public val display: TextRole = role(Pixelify, BOLD, 34)
     public val title: TextRole = role(Pixelify, SEMI, 26, lineSpacing = 2f)
     public val title2: TextRole = role(Pixelify, SEMI, 21)
     public val header: TextRole = role(Pixelify, SEMI, 22)
-    public val headerCompact: TextRole = role(Pixelify, SEMI, 17)
     public val buttonL: TextRole = role(Pixelify, MEDIUM, 19)
     public val button: TextRole = role(Pixelify, MEDIUM, 15)
     public val buttonS: TextRole = role(Pixelify, MEDIUM, 13)

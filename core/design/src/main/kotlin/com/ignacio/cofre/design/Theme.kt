@@ -32,7 +32,6 @@ public object CofreSpacing {
     public val field: Dp = 38.dp
     public val sidebar: Dp = 248.dp
     public val rail: Dp = 76.dp
-    public val tabBar: Dp = 56.dp
     public val readable: Dp = 720.dp
     public val card: Dp = 560.dp
     public val aside: Dp = 380.dp
@@ -49,7 +48,6 @@ public object CofreBlock {
     public val pressedLip: Dp = 1.dp
     public val pressDrop: Dp = 2.dp
     public val selectionBar: Dp = 4.dp
-    public val tabSelectionBar: Dp = 3.dp
     public val focusRing: Dp = 2.dp
     public val focusOffset: Dp = 2.dp
     public const val DISABLED_ALPHA: Float = 0.42f
@@ -62,20 +60,18 @@ public object CofreMotion {
     public const val TOGGLE: Int = 120
 }
 
-/** Width classes (§3.1), from the shell's measured width, never the device. */
+/**
+ * Width classes (§3.1), from the shell's measured width, never the device. Cofre is landscape only, so there's no
+ * compact (phone portrait) class: a landscape phone is medium, the Odin 3 is expanded.
+ */
 public enum class WidthClass {
-    Compact,
     Medium,
     Expanded,
     ;
 
     public companion object {
-        /** Compact under 700 dp, medium under 1100 dp, expanded from there. */
-        public fun of(width: Dp): WidthClass = when {
-            width < 700.dp -> Compact
-            width < 1100.dp -> Medium
-            else -> Expanded
-        }
+        /** Medium under 1100 dp, expanded from there. */
+        public fun of(width: Dp): WidthClass = if (width < 1100.dp) Medium else Expanded
     }
 }
 
@@ -83,10 +79,7 @@ public enum class WidthClass {
 internal val LocalCofreColors = staticCompositionLocalOf { CofreColors() }
 
 @Suppress("ComposeCompositionLocalUsage")
-internal val LocalCofreType = staticCompositionLocalOf { CofreType(bold = false, compact = false) }
-
-@Suppress("ComposeCompositionLocalUsage")
-internal val LocalCompactType = staticCompositionLocalOf { CofreType(bold = false, compact = true) }
+internal val LocalCofreType = staticCompositionLocalOf { CofreType(bold = false) }
 
 @Suppress("ComposeCompositionLocalUsage")
 internal val LocalReduceMotion = staticCompositionLocalOf { false }
@@ -94,7 +87,7 @@ internal val LocalReduceMotion = staticCompositionLocalOf { false }
 /** The width class of the container drawing this, set by [AdaptiveShell] and the other layouts. */
 @Suppress("ComposeCompositionLocalUsage")
 public val LocalWidthClass: ProvidableCompositionLocal<WidthClass> =
-    compositionLocalOf { WidthClass.Compact }
+    compositionLocalOf { WidthClass.Medium }
 
 /**
  * Cofre's theme. Dark only. Reads the system's high-contrast text, Bold Text and animation-scale settings unless
@@ -108,12 +101,10 @@ public fun CofreTheme(
 ) {
     val bold = LocalConfiguration.current.let { Build.VERSION.SDK_INT >= 31 && it.fontWeightAdjustment > 0 }
     val colors = remember(highContrast) { CofreColors(highContrast) }
-    val regular = remember(bold) { CofreType(bold, compact = false) }
-    val compact = remember(bold) { CofreType(bold, compact = true) }
+    val type = remember(bold) { CofreType(bold) }
     CompositionLocalProvider(
         LocalCofreColors provides colors,
-        LocalCofreType provides regular,
-        LocalCompactType provides compact,
+        LocalCofreType provides type,
         LocalReduceMotion provides reduceMotion,
         content = content,
     )
@@ -125,10 +116,10 @@ public object CofreTheme {
         @Composable @ReadOnlyComposable
         get() = LocalCofreColors.current
 
-    /** Type for the current width class: `display` is 31 sp on compact and 34 sp elsewhere (§1.2). */
+    /** Type roles (§1.2). */
     public val type: CofreType
         @Composable @ReadOnlyComposable
-        get() = if (LocalWidthClass.current == WidthClass.Compact) LocalCompactType.current else LocalCofreType.current
+        get() = LocalCofreType.current
 
     public val widthClass: WidthClass
         @Composable @ReadOnlyComposable

@@ -42,7 +42,6 @@ import com.ignacio.cofre.design.SheetHeader
 import com.ignacio.cofre.design.Spinner
 import com.ignacio.cofre.design.ToggleRow
 import com.ignacio.cofre.design.Tone
-import com.ignacio.cofre.design.WidthClass
 import com.ignacio.cofre.design.controllerActions
 import com.ignacio.cofre.design.cycle
 import com.ignacio.cofre.design.pageScroll
@@ -54,7 +53,6 @@ import com.ignacio.cofre.kit.mods.VersionLabel
 internal fun InstalledRoute(
     installed: InstalledModel,
     instanceName: String,
-    onBrowse: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val state by installed.state.collectAsStateWithLifecycle()
@@ -67,7 +65,6 @@ internal fun InstalledRoute(
         onUpdateAll = installed::updateAll,
         onUndo = installed::undo,
         onDismiss = installed::dismissMessage,
-        onBrowse = onBrowse,
         modifier = modifier,
     )
 }
@@ -84,11 +81,9 @@ internal fun InstalledPane(
     onUpdateAll: () -> Unit,
     onUndo: () -> Unit,
     onDismiss: () -> Unit,
-    onBrowse: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val compact = CofreTheme.widthClass == WidthClass.Compact
-    val margin = if (compact) 16.dp else 20.dp
+    val margin = 20.dp
     val tabs = InstalledTab.entries
     Column(
         modifier
@@ -129,7 +124,7 @@ internal fun InstalledPane(
                 stringResource(if (state.tab == InstalledTab.Mods) R.string.mods_none_yet else R.string.mods_nothing_yet),
                 stringResource(if (state.tab == InstalledTab.Data) R.string.mods_data_hint else R.string.mods_get_hint),
                 PixelGlyph.Chest,
-            ) { if (compact) BlockButton(stringResource(R.string.mods_get_mods), onBrowse, role = ButtonRole.Primary) }
+            )
             else -> InstalledList(state, margin, onToggle, onRemove, onUpdate, Modifier.weight(1f))
         }
     }

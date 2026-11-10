@@ -34,7 +34,6 @@ import com.ignacio.cofre.design.SelectButton
 import com.ignacio.cofre.design.Spinner
 import com.ignacio.cofre.design.Stat
 import com.ignacio.cofre.design.Tone
-import com.ignacio.cofre.design.WidthClass
 import com.ignacio.cofre.kit.common.Target
 import com.ignacio.cofre.kit.instances.Instance
 import com.ignacio.cofre.ui.common.Fmt
@@ -100,7 +99,6 @@ private fun Home(graph: AppGraph, active: Instance?, hero: Dp) {
             BlockButton(stringResource(R.string.instances_new_long), { nav.newInstance = true }, Modifier.testTag("play.new"), role = ButtonRole.Primary)
         }
         else -> {
-            val compact = CofreTheme.widthClass == WidthClass.Compact
             SceneHeader(active.seed, hero) {
                 CofreText(active.name, CofreTheme.type.display, maxLines = 2)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -108,20 +106,9 @@ private fun Home(graph: AppGraph, active: Instance?, hero: Dp) {
                     Badge("Vulkan", tone = if (graph.vulkan.suitable) Tone.Success else Tone.Danger)
                 }
             }
-            val picker = @Composable { m: Modifier ->
-                SelectButton(stringResource(R.string.play_instance), active.id, library::select, library.instances.map { it.id to it.name }, m)
-            }
-            val play = @Composable { m: Modifier ->
-                BlockButton(stringResource(R.string.play), { graph.launcher.play(active) }, m.testTag("play.play"), role = ButtonRole.Primary, size = ButtonSize.Large, icon = PixelGlyph.Play)
-            }
-            if (compact) {
-                play(Modifier)
-                picker(Modifier)
-            } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    play(Modifier.weight(1f))
-                    picker(Modifier.weight(1f))
-                }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                BlockButton(stringResource(R.string.play), { graph.launcher.play(active) }, Modifier.weight(1f).testTag("play.play"), role = ButtonRole.Primary, size = ButtonSize.Large, icon = PixelGlyph.Play)
+                SelectButton(stringResource(R.string.play_instance), active.id, library::select, library.instances.map { it.id to it.name }, Modifier.weight(1f))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Stat(Fmt.memory(graph.launcher.heapMB(active)), stringResource(R.string.play_memory), Modifier.weight(1f))

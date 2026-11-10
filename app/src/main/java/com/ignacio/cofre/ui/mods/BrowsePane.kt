@@ -52,7 +52,6 @@ import com.ignacio.cofre.design.SelectButton
 import com.ignacio.cofre.design.SheetHeader
 import com.ignacio.cofre.design.Spinner
 import com.ignacio.cofre.design.ToggleRow
-import com.ignacio.cofre.design.WidthClass
 import com.ignacio.cofre.design.outline
 import com.ignacio.cofre.design.pageScroll
 import com.ignacio.cofre.kit.common.ContentKind
@@ -107,7 +106,7 @@ internal fun BrowsePane(
     LaunchedEffect(field) {
         snapshotFlow { field.text.toString() }.distinctUntilChanged().collect { text -> change { it.copy(text = text) } }
     }
-    val margin = if (CofreTheme.widthClass == WidthClass.Compact) 16.dp else 20.dp
+    val margin = 20.dp
     Column(modifier.fillMaxSize()) {
         ColumnHeader(stringResource(R.string.mods_get_mods)) {
             BlockButton(stringResource(R.string.mods_import), onImport, size = ButtonSize.Small)

@@ -46,8 +46,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 
-// §3.2 AdaptiveShell and §2 #27 NavChrome: one section list drawn as a tab bar (compact), a 76 dp rail
-// (medium) or a 248 dp sidebar (expanded).
+// §3.2 AdaptiveShell and §2 #27 NavChrome: one section list drawn as a 76 dp rail (medium) or a 248 dp sidebar
+// (expanded). Cofre is landscape only, so there's no tab bar.
 
 /** The shell's sections. */
 public enum class ShellSection(public val title: String, public val glyph: PixelGlyph) {
@@ -58,11 +58,10 @@ public enum class ShellSection(public val title: String, public val glyph: Pixel
 }
 
 /** How the shell draws its navigation. */
-public enum class NavStyle { TabBar, Rail, Sidebar }
+public enum class NavStyle { Rail, Sidebar }
 
 /**
- * The app frame. Bottom tab bar under 700 dp, rail under 1100 dp, sidebar above (or a rail when
- * [preferRail]). L1/R1 cycle sections and move focus into the new one's content (its last focused item, else
+ * The app frame. Rail under 1100 dp, sidebar above (or a rail when [preferRail]). L1/R1 cycle sections and move focus into the new one's content (its last focused item, else
  * its first); picking a section in the rail or sidebar leaves focus there. Each section keeps its saved state
  * and its last focused item, and the controller hint bar sits under the content.
  *
@@ -100,14 +99,10 @@ public fun AdaptiveShell(
             ),
     ) {
         val widthClass = WidthClass.of(maxWidth)
-        val style = when {
-            widthClass == WidthClass.Compact -> NavStyle.TabBar
-            widthClass == WidthClass.Expanded && !preferRail -> NavStyle.Sidebar
-            else -> NavStyle.Rail
-        }
+        val style = if (widthClass == WidthClass.Expanded && !preferRail) NavStyle.Sidebar else NavStyle.Rail
         CompositionLocalProvider(LocalWidthClass provides widthClass) {
             // One layout for every width, so resizing moves the chrome without rebuilding the content.
-            ShellLayout(compact = style == NavStyle.TabBar) {
+            ShellLayout {
                 Column(Modifier.fillMaxSize()) {
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                         holder.SaveableStateProvider(section) {
@@ -122,29 +117,18 @@ public fun AdaptiveShell(
     }
 }
 
+/** The nav chrome on the leading edge, the body beside it. */
 @Composable
-private fun ShellLayout(
-    compact: Boolean,
-    content: @Composable () -> Unit,
-) {
+private fun ShellLayout(content: @Composable () -> Unit) {
     Layout(content) { measurables, constraints ->
         val (body, chrome) = measurables
         val w = constraints.maxWidth
         val h = constraints.maxHeight
-        if (compact) {
-            val bar = chrome.measure(Constraints(minWidth = w, maxWidth = w, maxHeight = h))
-            val main = body.measure(Constraints.fixed(w, h - bar.height))
-            layout(w, h) {
-                main.place(0, 0)
-                bar.place(0, h - bar.height)
-            }
-        } else {
-            val side = chrome.measure(Constraints(maxWidth = w, minHeight = h, maxHeight = h))
-            val main = body.measure(Constraints.fixed(w - side.width, h))
-            layout(w, h) {
-                main.placeRelative(side.width, 0)
-                side.placeRelative(0, 0)
-            }
+        val side = chrome.measure(Constraints(maxWidth = w, minHeight = h, maxHeight = h))
+        val main = body.measure(Constraints.fixed(w - side.width, h))
+        layout(w, h) {
+            main.placeRelative(side.width, 0)
+            side.placeRelative(0, 0)
         }
     }
 }
@@ -159,48 +143,37 @@ private fun NavChrome(
 ) {
     val c = CofreTheme.colors
     fun badge(s: ShellSection) = if (s == ShellSection.Mods) modsBadge else 0
-    when (style) {
-        NavStyle.TabBar -> Row(
-            Modifier
-                .fillMaxWidth()
-                .background(c.side)
-                .drawBehind { drawRect(c.outline, size = Size(size.width, CofreBlock.outline.toPx())) },
-        ) {
-            ShellSection.entries.forEach { s ->
-                NavItem(s, s == section, onSelect, NavStyle.TabBar, badge(s), Modifier.weight(1f))
+    val rail = style == NavStyle.Rail
+    Column(
+        Modifier
+            .width(if (rail) CofreSpacing.rail else CofreSpacing.sidebar)
+            .fillMaxHeight()
+            .background(c.side)
+            .drawBehind {
+                val o = CofreBlock.outline.toPx()
+                val x = if (layoutDirection == LayoutDirection.Ltr) size.width - o else 0f
+                drawRect(c.outline, Offset(x, 0f), Size(o, size.height))
+            }
+            .padding(horizontal = if (rail) 6.dp else 12.dp)
+            .padding(top = 10.dp, bottom = if (rail) 12.dp else 16.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+        horizontalAlignment = if (rail) Alignment.CenterHorizontally else Alignment.Start,
+    ) {
+        if (rail) {
+            AppIcon(Modifier.padding(top = 6.dp, bottom = 12.dp), size = 34.dp)
+        } else {
+            Row(
+                Modifier.padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AppIcon(size = 30.dp)
+                CofreText("Cofre", CofreTheme.type.title2)
             }
         }
-        NavStyle.Rail, NavStyle.Sidebar -> Column(
-            Modifier
-                .width(if (style == NavStyle.Rail) CofreSpacing.rail else CofreSpacing.sidebar)
-                .fillMaxHeight()
-                .background(c.side)
-                .drawBehind {
-                    val o = CofreBlock.outline.toPx()
-                    val x = if (layoutDirection == LayoutDirection.Ltr) size.width - o else 0f
-                    drawRect(c.outline, Offset(x, 0f), Size(o, size.height))
-                }
-                .padding(horizontal = if (style == NavStyle.Rail) 6.dp else 12.dp)
-                .padding(top = 10.dp, bottom = if (style == NavStyle.Rail) 12.dp else 16.dp),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
-            horizontalAlignment = if (style == NavStyle.Rail) Alignment.CenterHorizontally else Alignment.Start,
-        ) {
-            if (style == NavStyle.Rail) {
-                AppIcon(Modifier.padding(top = 6.dp, bottom = 12.dp), size = 34.dp)
-            } else {
-                Row(
-                    Modifier.padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 14.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    AppIcon(size = 30.dp)
-                    CofreText("Cofre", CofreTheme.type.title2)
-                }
-            }
-            ShellSection.entries.forEach { s -> NavItem(s, s == section, onSelect, style, badge(s)) }
-            Spacer(Modifier.weight(1f))
-            footer(style)
-        }
+        ShellSection.entries.forEach { s -> NavItem(s, s == section, onSelect, style, badge(s)) }
+        Spacer(Modifier.weight(1f))
+        footer(style)
     }
 }
 
@@ -217,7 +190,7 @@ private fun NavItem(
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     val ink = if (on) c.ink else c.muted
-    val bar = if (style == NavStyle.TabBar) CofreBlock.tabSelectionBar else if (style == NavStyle.Rail) 3.dp else 4.dp
+    val bar = if (style == NavStyle.Rail) 3.dp else 4.dp
     val base = modifier
         .blockClickable(interaction) { onSelect(s) }
         .semantics { selected = on }
@@ -225,26 +198,11 @@ private fun NavItem(
         .drawBehind {
             if (on) {
                 val b = bar.toPx()
-                if (style == NavStyle.TabBar) {
-                    drawRect(c.accent, size = Size(size.width, b))
-                } else {
-                    val x = if (layoutDirection == LayoutDirection.Ltr) 0f else size.width - b
-                    drawRect(c.accent, Offset(x, 0f), Size(b, size.height))
-                }
+                val x = if (layoutDirection == LayoutDirection.Ltr) 0f else size.width - b
+                drawRect(c.accent, Offset(x, 0f), Size(b, size.height))
             }
         }
     when (style) {
-        NavStyle.TabBar -> Column(
-            base.heightIn(min = CofreSpacing.tabBar),
-            verticalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterVertically),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Box {
-                PixelIcon(s.glyph, Modifier.alpha(if (on) 1f else 0.55f), size = 18.dp, foreground = ink)
-                CountBadge(badge, Modifier.align(Alignment.TopEnd).padding(start = 22.dp))
-            }
-            CofreText(s.title, CofreTheme.type.navSmall, color = ink, maxLines = 1)
-        }
         NavStyle.Rail -> Column(
             base.fillMaxWidth().heightIn(min = 62.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
