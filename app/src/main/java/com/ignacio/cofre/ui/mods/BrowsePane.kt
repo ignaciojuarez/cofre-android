@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.input.rememberTextFieldState
@@ -104,12 +105,24 @@ internal fun BrowsePane(
     onFolder: () -> Unit = {},
     /** Modrinth project id → its update's version (null when up to date), for what's already in the folder. */
     inFolder: Map<String, String?> = emptyMap(),
+    /** Holds the whole pane below the title, so short screens scroll the search and tabs away with the results. */
+    list: LazyListState = rememberLazyListState(),
 ) {
     val query = state.query
     val field = rememberTextFieldState(query.text)
     val change by rememberUpdatedState(onQueryChange)
     LaunchedEffect(field) {
         snapshotFlow { field.text.toString() }.distinctUntilChanged().collect { text -> change { it.copy(text = text) } }
+    }
+    // A new search starts at the top, with the field in view.
+    LaunchedEffect(query) { if (list.firstVisibleItemIndex > 0) list.scrollToItem(0) }
+    val more by rememberUpdatedState(onLoadMore)
+    val count by rememberUpdatedState(state.results.size)
+    // Ten rows before the end, fetch the next page so scrolling doesn't stop.
+    LaunchedEffect(list) {
+        snapshotFlow { list.layoutInfo.run { totalItemsCount - (visibleItemsInfo.lastOrNull()?.index ?: 0) } }
+            .distinctUntilChanged()
+            .collect { left -> if (count > 0 && left <= 10) more() }
     }
     val margin = 20.dp
     Column(modifier.fillMaxSize()) {
@@ -124,92 +137,76 @@ internal fun BrowsePane(
                 )
             }
         }
-        Column(Modifier.padding(horizontal = margin).padding(bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (folder != null) AddingTo(folder, onFolder)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Field(
-                    field,
-                    label = stringResource(R.string.mods_search_label, kindName(query.kind)),
-                    modifier = Modifier.weight(1f).focusRequester(searchFocus),
-                    kind = FieldKind.Search,
-                )
-                if (hasCurseForge) {
-                    val other = if (query.source == ProjectPage.Source.Modrinth) ProjectPage.Source.CurseForge else ProjectPage.Source.Modrinth
-                    BlockButton(sourceName(query.source) + " ⇄", { onQueryChange { it.copy(source = other) } }, size = ButtonSize.Small)
+        LazyColumn(
+            Modifier.weight(1f).fillMaxWidth().pageScroll(list),
+            state = list,
+            contentPadding = PaddingValues(start = margin, end = margin, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            item(key = "head") {
+                Column(Modifier.padding(bottom = 1.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (folder != null) AddingTo(folder, onFolder)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Field(
+                            field,
+                            label = stringResource(R.string.mods_search_label, kindName(query.kind)),
+                            modifier = Modifier.weight(1f).focusRequester(searchFocus),
+                            kind = FieldKind.Search,
+                        )
+                        if (hasCurseForge) {
+                            val other = if (query.source == ProjectPage.Source.Modrinth) ProjectPage.Source.CurseForge else ProjectPage.Source.Modrinth
+                            BlockButton(sourceName(query.source) + " ⇄", { onQueryChange { it.copy(source = other) } }, size = ButtonSize.Small)
+                        }
+                        BlockButton(
+                            if (query.activeFilters > 0) stringResource(R.string.mods_filters_count, query.activeFilters) else stringResource(R.string.mods_filters),
+                            onFilters,
+                            size = ButtonSize.Small,
+                        )
+                    }
+                    ChipGroup(
+                        selection = query.kind,
+                        onSelect = { kind -> onQueryChange { it.copy(kind = kind, filters = it.filters.copy(categories = emptySet())) } },
+                        options = Kinds.map { (kind, label) -> kind to stringResource(label) },
+                    )
+                    CofreText(filterSummary(query), CofreTheme.type.label, color = CofreTheme.colors.muted, maxLines = 1)
                 }
-                BlockButton(
-                    if (query.activeFilters > 0) stringResource(R.string.mods_filters_count, query.activeFilters) else stringResource(R.string.mods_filters),
-                    onFilters,
-                    size = ButtonSize.Small,
-                )
             }
-            ChipGroup(
-                selection = query.kind,
-                onSelect = { kind -> onQueryChange { it.copy(kind = kind, filters = it.filters.copy(categories = emptySet())) } },
-                options = Kinds.map { (kind, label) -> kind to stringResource(label) },
-            )
-            CofreText(filterSummary(query), CofreTheme.type.label, color = CofreTheme.colors.muted, maxLines = 1)
-        }
-        Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
-                !state.sourceReady -> EmptyState(
-                    stringResource(R.string.mods_needs_key),
-                    stringResource(R.string.mods_needs_key_message),
-                    PixelGlyph.Key,
-                ) { BlockButton(stringResource(R.string.mods_add_key), onAddKey, role = ButtonRole.Primary) }
-                state.error != null && state.results.isEmpty() && !state.searching -> EmptyState(
-                    stringResource(R.string.mods_offline, sourceName(query.source)),
-                    stringResource(R.string.mods_offline_message),
-                    PixelGlyph.Cross,
-                ) { BlockButton(stringResource(R.string.mods_try_again), onRetry, role = ButtonRole.Primary) }
-                state.results.isEmpty() && state.searching -> BlockRow(
-                    stringResource(R.string.mods_searching),
-                    Modifier.padding(horizontal = margin),
-                    leading = { Spinner() },
-                )
-                state.results.isEmpty() -> EmptyState(stringResource(R.string.mods_no_results), stringResource(R.string.mods_no_results_message), PixelGlyph.Book) {
-                    if (query.activeFilters > 0) {
-                        BlockButton(stringResource(R.string.mods_clear_filters), { onQueryChange { it.copy(filters = ProjectFilters()) } }, role = ButtonRole.Primary)
+                !state.sourceReady -> item(key = "state") {
+                    EmptyState(
+                        stringResource(R.string.mods_needs_key),
+                        stringResource(R.string.mods_needs_key_message),
+                        PixelGlyph.Key,
+                    ) { BlockButton(stringResource(R.string.mods_add_key), onAddKey, role = ButtonRole.Primary) }
+                }
+                state.error != null && state.results.isEmpty() && !state.searching -> item(key = "state") {
+                    EmptyState(
+                        stringResource(R.string.mods_offline, sourceName(query.source)),
+                        stringResource(R.string.mods_offline_message),
+                        PixelGlyph.Cross,
+                    ) { BlockButton(stringResource(R.string.mods_try_again), onRetry, role = ButtonRole.Primary) }
+                }
+                state.results.isEmpty() && state.searching -> item(key = "state") {
+                    BlockRow(stringResource(R.string.mods_searching), leading = { Spinner() })
+                }
+                state.results.isEmpty() -> item(key = "state") {
+                    EmptyState(stringResource(R.string.mods_no_results), stringResource(R.string.mods_no_results_message), PixelGlyph.Book) {
+                        if (query.activeFilters > 0) {
+                            BlockButton(stringResource(R.string.mods_clear_filters), { onQueryChange { it.copy(filters = ProjectFilters()) } }, role = ButtonRole.Primary)
+                        }
                     }
                 }
-                else -> ResultList(state, selected, margin, onOpen, onLoadMore, inFolder)
-            }
-        }
-    }
-}
-
-@Composable
-private fun ResultList(
-    state: BrowseState,
-    selected: String?,
-    margin: Dp,
-    onOpen: (ProjectSummary) -> Unit,
-    onLoadMore: () -> Unit,
-    inFolder: Map<String, String?>,
-    modifier: Modifier = Modifier,
-) {
-    val list = rememberLazyListState()
-    val more by rememberUpdatedState(onLoadMore)
-    val count by rememberUpdatedState(state.results.size)
-    // Ten rows before the end, fetch the next page so scrolling doesn't stop.
-    LaunchedEffect(list) {
-        snapshotFlow { list.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0 }
-            .distinctUntilChanged()
-            .collect { last -> if (last >= count - 10) more() }
-    }
-    LazyColumn(
-        modifier.fillMaxSize().pageScroll(list),
-        state = list,
-        contentPadding = PaddingValues(start = margin, end = margin, top = 4.dp, bottom = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp),
-    ) {
-        items(state.results, key = { it.source.name + it.id }) { project ->
-            val here = project.source == ProjectPage.Source.Modrinth && project.id in inFolder
-            ProjectRow(project, selected = project.route == selected, onClick = { onOpen(project) }, inFolder = here, update = if (here) inFolder[project.id] else null)
-        }
-        if (state.loadingMore) {
-            item(key = "more") {
-                Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) { Spinner() }
+                else -> {
+                    items(state.results, key = { it.source.name + it.id }) { project ->
+                        val here = project.source == ProjectPage.Source.Modrinth && project.id in inFolder
+                        ProjectRow(project, selected = project.route == selected, onClick = { onOpen(project) }, inFolder = here, update = if (here) inFolder[project.id] else null)
+                    }
+                    if (state.loadingMore) {
+                        item(key = "more") {
+                            Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) { Spinner() }
+                        }
+                    }
+                }
             }
         }
     }
