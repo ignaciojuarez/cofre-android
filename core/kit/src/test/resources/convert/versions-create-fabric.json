@@ -1,0 +1,33 @@
+[
+ {
+  "id": "create-f",
+  "project_id": "create-fabric",
+  "name": "6.0.6",
+  "version_number": "6.0.6",
+  "game_versions": [
+   "26.2"
+  ],
+  "loaders": [
+   "fabric"
+  ],
+  "version_type": "release",
+  "dependencies": [
+   {
+    "project_id": "fabric-api",
+    "dependency_type": "required"
+   }
+  ],
+  "files": [
+   {
+    "hashes": {
+     "sha1": "#create-fabric",
+     "sha512": "&create-fabric"
+    },
+    "url": "{{base}}/files/create-fabric.jar",
+    "filename": "create-fabric.jar",
+    "size": "%create-fabric",
+    "primary": true
+   }
+  ]
+ }
+]

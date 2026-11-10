@@ -1,0 +1,83 @@
+[
+ {
+  "id": "create",
+  "slug": "create",
+  "title": "Create",
+  "loaders": [
+   "neoforge",
+   "forge"
+  ],
+  "game_versions": [
+   "26.2"
+  ]
+ },
+ {
+  "id": "apotheosis",
+  "slug": "apotheosis",
+  "title": "Apotheosis",
+  "loaders": [
+   "neoforge"
+  ],
+  "game_versions": [
+   "26.2"
+  ]
+ },
+ {
+  "id": "distanthorizons",
+  "slug": "distanthorizons",
+  "title": "Distant Horizons",
+  "loaders": [
+   "neoforge",
+   "fabric"
+  ],
+  "game_versions": [
+   "26.1",
+   "26.2"
+  ]
+ },
+ {
+  "id": "neoload",
+  "slug": "neoloading-vulkan-fix",
+  "title": "NeoLoading Vulkan Fix",
+  "loaders": [
+   "neoforge"
+  ],
+  "game_versions": [
+   "26.2"
+  ]
+ },
+ {
+  "id": "fabric-api",
+  "slug": "fabric-api",
+  "title": "Fabric API",
+  "loaders": [
+   "fabric"
+  ],
+  "game_versions": [
+   "26.2"
+  ]
+ },
+ {
+  "id": "cloth-config",
+  "slug": "cloth-config",
+  "title": "Cloth Config API",
+  "loaders": [
+   "fabric",
+   "neoforge"
+  ],
+  "game_versions": [
+   "26.2"
+  ]
+ },
+ {
+  "id": "missing-lib",
+  "slug": "missing-lib",
+  "title": "Missing Lib",
+  "loaders": [
+   "fabric"
+  ],
+  "game_versions": [
+   "26.1"
+  ]
+ }
+]
