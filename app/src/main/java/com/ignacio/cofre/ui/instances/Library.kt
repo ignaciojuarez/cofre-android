@@ -11,7 +11,9 @@ import com.ignacio.cofre.kit.common.ContentKind
 import com.ignacio.cofre.kit.content.ContentStore
 import com.ignacio.cofre.kit.instances.Instance
 import com.ignacio.cofre.kit.instances.InstanceStore
+import com.ignacio.cofre.kit.modfolders.ModFolder
 import com.ignacio.cofre.kit.modfolders.ModFolderLink
+import com.ignacio.cofre.kit.modfolders.ModFolderStore
 import com.ignacio.cofre.kit.modfolders.ModFolderMigration
 import com.ignacio.cofre.kit.options.CofrePreset
 import com.ignacio.cofre.kit.options.PresetCatalog
@@ -46,8 +48,12 @@ class Library(private val graph: AppGraph) {
     var neoForgeVersions by mutableStateOf(listOf(handheld.loaderVersion))
         private set
 
-    data class Undo(val name: String, val token: InstanceStore.TrashToken)
+    /** [folder]: the mod folder deleted with it, restored with it. */
+    data class Undo(val name: String, val token: InstanceStore.TrashToken, val folder: ModFolderStore.TrashToken? = null)
     data class Stats(val mods: Int, val bytes: Long)
+
+    /** A mod folder with its mod count and the instances linked to it. */
+    data class FolderInfo(val folder: ModFolder, val mods: Int, val users: List<Instance>)
 
     /** Play's instance: the one picked last, else the one played last, else the first. */
     val active: Instance?
@@ -62,12 +68,28 @@ class Library(private val graph: AppGraph) {
 
     fun refresh() = edit { }
 
-    /** Makes a NeoForge 26.2 instance linked to a new empty mod folder; with [preset], its options and pinned mods (queued as downloads into the folder). */
-    fun create(name: String, neoForge: String, preset: CofrePreset?, done: (Instance) -> Unit) {
+    /**
+     * Makes a NeoForge 26.2 instance linked to existing folder [folderId] (it must fit and be playable), or to a new
+     * empty mod folder; with [preset], its options and pinned mods (queued as downloads into a new folder only).
+     */
+    fun create(name: String, neoForge: String, preset: CofrePreset?, folderId: String? = null, done: (Instance) -> Unit) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) {
             error = graph.context.getString(R.string.error_name_empty)
             return
+        }
+        if (folderId != null) return edit(done) {
+            val folder = graph.modFolders.get(folderId)
+            val made = store.save(store.create(trimmed, loaderVersion = neoForge).copy(modFolder = folder.id))
+            try {
+                require(folder.fits(made) && folder.playable) { graph.context.getString(R.string.folder_doesnt_fit) }
+                ModFolderLink.link(store.directory(made), graph.modFolders.directory(folder))
+                prepare(made, preset = null)
+            } catch (e: Exception) {
+                store.remove(made.id)
+                throw e
+            }
+            made
         }
         edit(done) {
             val folders = graph.modFolders
@@ -147,15 +169,61 @@ class Library(private val graph: AppGraph) {
         }
     }
 
-    fun trash(id: String) {
+    /**
+     * Gives instance [id] a new empty folder ("<instance> mods N", same game version and loader) and links it.
+     * Refused while the game runs.
+     */
+    fun newFolderFor(id: String, done: (Instance) -> Unit = {}) {
+        if (graph.launcher.gameRunning) {
+            error = graph.context.getString(R.string.error_game_running)
+            return
+        }
+        edit(done, owner = id) {
+            val instance = store.get(id)
+            val folders = graph.modFolders
+            val folder = folders.create(
+                folders.uniqueName(graph.context.getString(R.string.folder_default_name, instance.name)),
+                instance.gameVersion, instance.loader, instance.loaderVersion, createdFrom = instance.id,
+            )
+            try {
+                ModFolderLink.link(store.directory(instance), folders.directory(folder))
+                store.save(instance.copy(modFolder = folder.id))
+            } catch (e: Exception) {
+                runCatching { ModFolderLink.link(store.directory(instance), graph.folderOf(instance)?.let(folders::directory)) }
+                folders.remove(folder.id)
+                throw e
+            }
+        }
+    }
+
+    /** Every mod folder with its mod count and users, for pickers. */
+    suspend fun folders(): List<FolderInfo> = graph.onIo {
+        val all = store.list()
+        graph.modFolders.list().map { folder ->
+            val mods = runCatching { ContentStore(graph.modFolders.directory(folder)).list(ContentKind.Mods).size }.getOrDefault(0)
+            FolderInfo(folder, mods, graph.modFolders.usedBy(folder.id, all))
+        }
+    }
+
+    /**
+     * Moves instance [id] to Recently deleted. Its mod folder stays; with [alsoFolder], and only when no other
+     * instance uses it, the folder goes to the folders' Recently deleted too (Undo brings both back).
+     */
+    fun trash(id: String, alsoFolder: Boolean = false) {
         val name = instances.firstOrNull { it.id == id }?.name ?: return
-        edit({ token -> undo = Undo(name, token) }, owner = id) {
+        edit({ (token, folder): Pair<InstanceStore.TrashToken, ModFolderStore.TrashToken?> -> undo = Undo(name, token, folder) }, owner = id) {
+            val instance = store.get(id)
             // Queued preset or pack downloads would land in a folder that's gone.
-            val dir = store.directory(store.get(id)).canonicalPath + File.separator
+            val dir = store.directory(instance).canonicalPath + File.separator
             graph.downloads.progress.value.items
                 .filter { File(it.destination).canonicalPath.startsWith(dir) && it.state != DownloadItem.State.Finished }
                 .forEach { graph.downloads.cancel(it.id) }
-            store.trash(id)
+            val folder = graph.folderOf(instance)?.takeIf { alsoFolder && graph.modFolders.usedBy(it.id, store.list()).all { u -> u.id == id } }
+            val token = store.trash(id)
+            token to folder?.let { f ->
+                val folderDir = graph.modFolders.directory(f)
+                runBlocking { InstanceStore.lock(folderDir).withLock { graph.modFolders.trash(f.id) } }
+            }
         }
         if (graph.nav.instance == id) graph.nav.instance = null
     }
@@ -163,7 +231,13 @@ class Library(private val graph: AppGraph) {
     fun undoTrash() {
         val last = undo ?: return
         undo = null
-        restore(last.token)
+        if (last.folder == null) return restore(last.token)
+        edit {
+            val folder = graph.modFolders.restore(last.folder)
+            val instance = store.restore(last.token)
+            // Restore picks a new id when the old one was taken meanwhile: follow it.
+            if (instance.modFolder != folder.id) store.save(instance.copy(modFolder = folder.id)).also(::relink) else relink(instance)
+        }
     }
 
     fun restore(token: InstanceStore.TrashToken) = edit { store.restore(token) }

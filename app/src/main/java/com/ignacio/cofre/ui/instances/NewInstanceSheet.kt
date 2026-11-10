@@ -45,6 +45,9 @@ fun NewInstanceSheet(
     val name = rememberTextFieldState(defaultName)
     var version by rememberSaveable { mutableStateOf(preset.loaderVersion) }
     var usePreset by rememberSaveable { mutableStateOf(true) }
+    /** null: a new empty folder. */
+    var folderId by rememberSaveable { mutableStateOf<String?>(null) }
+    val fitting = rememberFolders(graph).orEmpty().filter { it.folder.playable }
     LaunchedEffect(Unit) {
         library.clearError()
         library.loadNeoForgeVersions()
@@ -58,21 +61,35 @@ fun NewInstanceSheet(
         ) {
             Field(name, stringResource(R.string.instance_name), Modifier.testTag("newInstance.name"))
             SelectButton(stringResource(R.string.instance_neoforge), version, { version = it }, library.neoForgeVersions.map { it to it })
-            ListSection(label = stringResource(R.string.new_preset)) {
-                ToggleRow(
-                    preset.name,
-                    usePreset,
-                    { usePreset = it },
-                    Modifier.testTag("newInstance.preset"),
-                    subtitle = stringResource(R.string.new_preset_note, preset.pitch, preset.pinnedMods.size),
-                )
+            ListSection(label = stringResource(R.string.new_folder)) {
+                Option(
+                    stringResource(R.string.new_folder_empty),
+                    stringResource(R.string.new_folder_empty_note, name.text.toString().trim()),
+                    PixelGlyph.Chest,
+                    folderId == null,
+                    Modifier.testTag("newInstance.folder.new"),
+                ) { folderId = null }
+                if (folderId == null) {
+                    ToggleRow(
+                        preset.name,
+                        usePreset,
+                        { usePreset = it },
+                        Modifier.testTag("newInstance.preset"),
+                        subtitle = stringResource(R.string.new_preset_note, preset.pitch, preset.pinnedMods.size),
+                    )
+                }
+                fitting.forEach { info ->
+                    Option(info.folder.name, usage(info, null), PixelGlyph.Chest, folderId == info.folder.id, Modifier.testTag("newInstance.folder.${info.folder.name}")) {
+                        folderId = info.folder.id
+                    }
+                }
             }
             Note(stringResource(R.string.new_only_target))
             library.error?.let { Banner(it, PixelGlyph.Cross, tone = Tone.Danger) }
             BlockButton(
                 stringResource(R.string.new_create),
                 {
-                    library.create(name.text.toString(), version, preset.takeIf { usePreset }) { made ->
+                    library.create(name.text.toString(), version, preset.takeIf { usePreset && folderId == null }, folderId) { made ->
                         graph.nav.instance = made.id
                         library.select(made.id)
                         onDismiss()

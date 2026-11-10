@@ -130,6 +130,7 @@ class FlowTest {
         graph.nav.instance = "skyblock"
         app(graph)
         rule.onNodeWithTag("instance.delete").performClick()
+        rule.onNodeWithTag("deleteInstance.confirm").performClick()
         rule.waitUntil(5_000) { graph.library.undo != null }
         assertTrue(graph.library.instances.none { it.id == "skyblock" })
         assertEquals("Skyblock", graph.library.deleted.single().instance.name)
