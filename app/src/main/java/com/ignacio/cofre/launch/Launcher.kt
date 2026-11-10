@@ -27,6 +27,7 @@ import com.ignacio.cofre.kit.logs.LogStore
 import com.ignacio.cofre.kit.logs.ReportBundle
 import com.ignacio.cofre.kit.logs.ReportContext
 import com.ignacio.cofre.kit.logs.ReportInstance
+import com.ignacio.cofre.kit.modfolders.ModFolderLink
 import com.ignacio.cofre.kit.mods.ModInstaller
 import com.ignacio.cofre.kit.mods.ModJarMetadata
 import com.ignacio.cofre.kit.mods.ModRequirement
@@ -147,9 +148,10 @@ class Launcher(private val graph: AppGraph) {
         run = Run(instance, quickPlay, stage = Stage.Mods)
         job = graph.work({ start(instance, quickPlay) }) {
             val dir = graph.instances.directory(instance)
-            val mods = File(dir, "mods")
-            val missing = graph.onIo { ModRequirements.missing(dir) }
-            val issues = graph.onIo { ContentCompatibility.playIssues(dir, graph.glScans) }.filter { it.severity == "broken" || it.severity == "likely" }
+            val content = graph.onIo { graph.contentDirectory(instance) }
+            val mods = File(content, "mods")
+            val missing = graph.onIo { ModRequirements.missing(content) }
+            val issues = graph.onIo { ContentCompatibility.playIssues(dir, graph.glScans, content) }.filter { it.severity == "broken" || it.severity == "likely" }
             if (missing.isEmpty() && issues.isEmpty()) return@work start(instance, quickPlay)
             val lines = graph.onIo {
                 missing.map { req ->
@@ -199,7 +201,8 @@ class Launcher(private val graph: AppGraph) {
         preflight = current.copy(turningOff = true, error = null)
         graph.work({ preflight = current.copy(error = it) }) {
             val dir = graph.instances.directory(current.instance)
-            InstanceStore.lock(dir).withLock { graph.onIo { ContentCompatibility.turnOff(current.issues, dir) } }
+            val content = graph.onIo { graph.contentDirectory(current.instance) }
+            InstanceStore.lock(content).withLock { graph.onIo { ContentCompatibility.turnOff(current.issues, dir, content) } }
             preflight = null
             play(current.instance, current.quickPlay)
         }
@@ -228,8 +231,9 @@ class Launcher(private val graph: AppGraph) {
 
     private suspend fun getMissing(instance: Instance, missing: List<ModRequirement>) {
         val dir = graph.instances.directory(instance)
-        ModInstaller(dir, modrinth = graph.modrinth).installMissing(missing)
-        val left = graph.onIo { ModRequirements.missing(dir) }.filter { req -> missing.any { it.modId == req.modId } }
+        val content = graph.onIo { graph.contentDirectory(instance) }
+        ModInstaller(content, dir, modrinth = graph.modrinth).installMissing(missing)
+        val left = graph.onIo { ModRequirements.missing(content) }.filter { req -> missing.any { it.modId == req.modId } }
         check(left.isEmpty()) { graph.context.getString(R.string.mods_still_missing, left.joinToString { it.name }) }
         graph.library.refresh()
     }
@@ -243,6 +247,7 @@ class Launcher(private val graph: AppGraph) {
 
     private suspend fun launch(instance: Instance, quickPlay: QuickPlay?) {
         log(graph.context.getString(R.string.log_launch_start, instance.name))
+        checkFolder(instance)
         stage(Stage.Device)
         val vulkan = graph.onIo { graph.vulkan }
         if (!vulkan.suitable && !skipVulkanCheck) error(graph.context.getString(R.string.launch_vulkan_unsuitable, vulkan.missing.joinToString { plainVulkan(graph.context.resources, it) }))
@@ -267,6 +272,17 @@ class Launcher(private val graph: AppGraph) {
         graph.library.refresh()
     }
 
+    /** Refuses before anything runs when the instance's mod folder is gone, isn't for this instance, or can't play yet. */
+    private suspend fun checkFolder(instance: Instance) {
+        val current = graph.onIo { graph.instances.get(instance.id) }
+        if (current.modFolder == null) return
+        val folder = graph.onIo { graph.folderOf(current) } ?: error(graph.context.getString(R.string.folder_missing))
+        if (!folder.playable) error(graph.context.getString(R.string.launch_folder_unplayable, folder.name, folder.loader.displayName, folder.gameVersion))
+        if (!folder.fits(current)) {
+            error(graph.context.getString(R.string.launch_folder_mismatch, folder.name, folder.loader.displayName, folder.gameVersion, current.loader.displayName, current.gameVersion))
+        }
+    }
+
     /** NeoForge, then the runtime's launch spec (game files and Java installed on the way) with this instance's heap, JVM arguments and quick play. */
     private suspend fun prepareGame(instance: Instance, session: Accounts.Session, quickPlay: QuickPlay?): File = coroutineScope {
         val game = GameLaunch(graph.context)
@@ -285,7 +301,14 @@ class Launcher(private val graph: AppGraph) {
             val account = GameAccount(session.name, session.uuid)
             val heap = heapMB(instance)
             val jvm = instance.jvmArguments.split(Regex("\\s+")).filter { it.isNotBlank() }
-            val file = InstanceStore.lock(dir).withLock { withContext(graph.io) { game.prepare(version, dir, account, heap, jvm, quickPlay?.args.orEmpty()) } }
+            val file = InstanceStore.lock(dir).withLock {
+                withContext(graph.io) {
+                    // Right before every launch: the game reads mods through these links.
+                    val current = graph.instances.get(instance.id)
+                    ModFolderLink.link(dir, current.modFolder?.let { graph.contentDirectory(current) })
+                    game.prepare(version, dir, account, heap, jvm, quickPlay?.args.orEmpty())
+                }
+            }
             log(graph.context.getString(R.string.log_files_ready), LogLevel.Success)
             log(graph.context.getString(R.string.log_heap, heap))
             file
@@ -327,12 +350,13 @@ class Launcher(private val graph: AppGraph) {
             return null
         }
         val missing = report.missingDependencies.map { ModRequirements.requirement(it.modId, "dependency:${it.modId}", it.requestedBy) }
-        return Stopped(report, instance, modFor(report, graph.instances.directory(instance)), quickPlay = pending.quickPlay, missing = missing)
+        val content = runCatching { graph.contentDirectory(instance) }.getOrNull()
+        return Stopped(report, instance, content?.let { modFor(report, graph.instances.directory(instance), it) }, quickPlay = pending.quickPlay, missing = missing)
     }
 
-    private fun modFor(report: GameExitReport, dir: File): ContentStore.Item? {
+    private fun modFor(report: GameExitReport, dir: File, content: File): ContentStore.Item? {
         val name = report.mod ?: return null
-        return runCatching { ContentStore(dir).list(ContentKind.Mods) }.getOrDefault(emptyList())
+        return runCatching { ContentStore(dir, content).list(ContentKind.Mods) }.getOrDefault(emptyList())
             .firstOrNull { it.enabled && (it.name.equals(name, ignoreCase = true) || it.modID.equals(name, ignoreCase = true)) }
     }
 
@@ -342,7 +366,8 @@ class Launcher(private val graph: AppGraph) {
         val mod = current.mod ?: return
         graph.work({}) {
             val dir = graph.instances.directory(current.instance)
-            InstanceStore.lock(dir).withLock { graph.onIo { ContentStore(dir).setEnabled(false, mod) } }
+            val content = graph.onIo { graph.contentDirectory(current.instance) }
+            InstanceStore.lock(content).withLock { graph.onIo { ContentStore(dir, content).setEnabled(false, mod) } }
             stopped = current.copy(modOff = true)
         }
     }

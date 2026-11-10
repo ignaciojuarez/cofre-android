@@ -11,6 +11,8 @@ import com.ignacio.cofre.kit.common.ContentKind
 import com.ignacio.cofre.kit.content.ContentStore
 import com.ignacio.cofre.kit.instances.Instance
 import com.ignacio.cofre.kit.instances.InstanceStore
+import com.ignacio.cofre.kit.modfolders.ModFolderLink
+import com.ignacio.cofre.kit.modfolders.ModFolderMigration
 import com.ignacio.cofre.kit.options.CofrePreset
 import com.ignacio.cofre.kit.options.PresetCatalog
 import com.ignacio.cofre.kit.options.Storage
@@ -20,6 +22,7 @@ import com.ignacio.cofre.onIo
 import com.ignacio.cofre.scratch
 import com.ignacio.cofre.work
 import com.ignacio.cofre.kit.downloads.DownloadItem
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -59,7 +62,7 @@ class Library(private val graph: AppGraph) {
 
     fun refresh() = edit { }
 
-    /** Makes a NeoForge 26.2 instance; with [preset], its options and pinned mods (queued as downloads). */
+    /** Makes a NeoForge 26.2 instance linked to a new empty mod folder; with [preset], its options and pinned mods (queued as downloads into the folder). */
     fun create(name: String, neoForge: String, preset: CofrePreset?, done: (Instance) -> Unit) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) {
@@ -67,11 +70,20 @@ class Library(private val graph: AppGraph) {
             return
         }
         edit(done) {
-            val made = store.create(trimmed, loaderVersion = neoForge)
+            val folders = graph.modFolders
+            val folder = folders.create(folders.uniqueName(graph.context.getString(R.string.folder_default_name, trimmed)), loaderVersion = neoForge)
+            val made = try {
+                store.save(store.create(trimmed, loaderVersion = neoForge).copy(modFolder = folder.id))
+            } catch (e: Exception) {
+                folders.remove(folder.id)
+                throw e
+            }
             try {
+                ModFolderLink.link(store.directory(made), folders.directory(folder))
                 prepare(made, preset)
             } catch (e: Exception) {
                 store.remove(made.id)
+                folders.remove(folder.id)
                 throw e
             }
             made
@@ -91,8 +103,9 @@ class Library(private val graph: AppGraph) {
 
     fun rollbackRuntime(id: String) = edit { store.rollbackRuntime(id) }
 
+    /** The copy links to the same mod folder. */
     fun duplicate(id: String, done: (Instance) -> Unit = {}) = edit(done, owner = id) {
-        store.duplicate(id, store.uniqueName(graph.context.getString(R.string.instance_copy_name, store.get(id).name)))
+        store.duplicate(id, store.uniqueName(graph.context.getString(R.string.instance_copy_name, store.get(id).name))).also(::relink)
     }
 
     fun trash(id: String) {
@@ -117,20 +130,28 @@ class Library(private val graph: AppGraph) {
     fun restore(token: InstanceStore.TrashToken) = edit { store.restore(token) }
     fun purge(token: InstanceStore.TrashToken) = edit { store.purge(token) }
 
+    /** A self-contained zip: the mod folder's real files take the place of the instance's links. */
     fun export(id: String, uri: Uri, includeWorlds: Boolean = true) = edit(owner = id) {
         val file = graph.scratch("instance.zip")
-        store.export(id, file, includeWorlds)
+        val instance = store.get(id)
+        val folder = instance.modFolder?.let { graph.contentDirectory(instance) }
+        if (folder == null) store.export(id, file, includeWorlds)
+        else runBlocking { InstanceStore.lock(folder).withLock { store.export(id, file, includeWorlds, folder) } }
         graph.moveToDocument(file, uri)
     }
 
+    /** The zip's mods become a new mod folder. */
     fun import(uri: Uri, done: (Instance) -> Unit = {}) = edit(done) {
         val file = graph.copyToCache(uri, "zip")
-        try { store.import(file) } finally { file.delete() }
+        val made = try { store.import(file) } finally { file.delete() }
+        // If this fails, the next start's migration finishes it: the instance still has its own mods.
+        runCatching { ModFolderMigration.adopt(made, store, graph.modFolders) }.getOrNull() ?: made
     }
 
     suspend fun stats(instance: Instance): Stats = graph.onIo {
         val dir = store.directory(instance)
-        Stats(runCatching { ContentStore(dir).list(ContentKind.Mods).size }.getOrDefault(0), Storage.bytes(dir))
+        val mods = runCatching { ContentStore(dir, graph.contentDirectory(instance)).list(ContentKind.Mods).size }.getOrDefault(0)
+        Stats(mods, Storage.bytes(dir))
     }
 
     /** NeoForge 26.2 builds from maven.neoforged.net; the handheld preset's pin until that answers. */
@@ -143,9 +164,14 @@ class Library(private val graph: AppGraph) {
         error = null
     }
 
-    /** The instance's first files; the preset's pinned mods go to the download queue. */
+    /** Points [instance]'s content folders at its mod folder again (after a copy, or any link change). */
+    private fun relink(instance: Instance) {
+        graph.folderOf(instance)?.let { ModFolderLink.link(store.directory(instance), graph.modFolders.directory(it)) }
+    }
+
+    /** The instance's first files; the preset's pinned mods go to the download queue, into its mod folder. */
     private fun prepare(instance: Instance, preset: CofrePreset?) {
-        val mods = PresetCatalog.apply(preset, store.directory(instance), graph.physicalMB)
+        val mods = PresetCatalog.apply(preset, store.directory(instance), graph.physicalMB, File(graph.contentDirectory(instance), "mods"))
         if (mods.isEmpty()) return
         graph.downloads.enqueue(mods, graph.downloadsModel.metered())
         if (graph.autoStartDownloads) graph.downloadsModel.start()

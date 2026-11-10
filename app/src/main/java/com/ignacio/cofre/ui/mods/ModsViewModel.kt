@@ -65,7 +65,7 @@ class ModsViewModel(private val graph: AppGraph) : ViewModel() {
     private val mutableInstall = MutableStateFlow<InstallModel?>(null)
     val install: StateFlow<InstallModel?> = mutableInstall.asStateFlow()
 
-    val import = ImportModel(viewModelScope, graph.instances, graph.modrinth, { curseForge() }, File(graph.context.cacheDir, "mods"))
+    val import = ImportModel(viewModelScope, graph.instances, graph.modFolders, graph.modrinth, { curseForge() }, File(graph.context.cacheDir, "mods"))
 
     private val glScans = graph.glScans
     private val projects = mutableMapOf<String, ProjectModel>()
@@ -102,15 +102,16 @@ class ModsViewModel(private val graph: AppGraph) : ViewModel() {
             return
         }
         val dir = directory() ?: return
+        val content = content() ?: return
         // The app's scope: leaving Mods mid-install must not cancel it halfway.
         mutableInstall.value = InstallModel(
             graph.scope, project, project.issue,
             plan = { optional ->
-                val mods = withContext(Dispatchers.IO) { ModIndex(dir).installed() }
+                val mods = withContext(Dispatchers.IO) { ModIndex(content).installed() }
                 catalog.value.resolver(project, mods).plan(project.id, versionId, optional)
             },
             install = { plan, onProgress ->
-                val installer = ModInstaller(dir, modrinth = graph.modrinth)
+                val installer = ModInstaller(content, dir, modrinth = graph.modrinth)
                 when (project.kind) {
                     ContentKind.Mods -> installer.install(plan, onProgress = onProgress)
                     else -> installer.install(requireNotNull(plan.target), project.kind, newestWorld(dir), onProgress = onProgress)
@@ -152,26 +153,34 @@ class ModsViewModel(private val graph: AppGraph) : ViewModel() {
     }
 
     private fun useInstance(instance: Instance?) {
-        if (instance?.id == mutableInstance.value?.id && mutableInstalled.value != null) return
+        val current = mutableInstance.value
+        if (instance?.id == current?.id && instance?.modFolder == current?.modFolder && mutableInstalled.value != null) return
         mutableInstance.value = instance
-        mutableInstalled.value = instance?.let { InstalledModel(viewModelScope, graph.instances.directory(it), graph.modrinth, glScans) }
+        mutableInstalled.value = instance?.let {
+            val folder = runCatching { graph.contentDirectory(it) }.getOrNull() ?: return@let null
+            InstalledModel(viewModelScope, graph.instances.directory(it), graph.modrinth, glScans, folder = folder)
+        }
         projects.values.forEach { it.refreshInstalled() }
     }
 
     private fun directory(): File? = instance.value?.let(graph.instances::directory)
+
+    /** The current instance's mod folder (where Get installs and Installed reads). */
+    private fun content(): File? = instance.value?.let { runCatching { graph.contentDirectory(it) }.getOrNull() }
 
     private fun curseForge(): CurseForge? = graph.curseForgeKey.value?.let(::CurseForge)
 
     /** The installed copy of [project] in the current instance: by Modrinth/CurseForge id for mods, by name otherwise. */
     private suspend fun installedCopy(project: ProjectSummary): InstalledRow? = withContext(Dispatchers.IO) {
         val dir = directory() ?: return@withContext null
+        val content = content() ?: return@withContext null
         if (project.kind == ContentKind.Mods) {
-            val mod = ModIndex(dir).installed().firstOrNull { it.matches(project.id, project.title) } ?: return@withContext null
-            val item = ContentStore(dir).list(ContentKind.Mods).firstOrNull { it.urlName == mod.file } ?: return@withContext null
+            val mod = ModIndex(content).installed().firstOrNull { it.matches(project.id, project.title) } ?: return@withContext null
+            val item = ContentStore(dir, content).list(ContentKind.Mods).firstOrNull { it.urlName == mod.file } ?: return@withContext null
             InstalledRow(item, mod)
         } else if (project.kind.folderName != null && project.kind != ContentKind.DataPacks) {
             val key = project.title.lowercase().filter(Char::isLetterOrDigit)
-            ContentStore(dir).list(project.kind)
+            ContentStore(dir, content).list(project.kind)
                 .firstOrNull { item -> key.isNotEmpty() && item.file.lowercase().filter(Char::isLetterOrDigit).startsWith(key) }
                 ?.let { InstalledRow(it) }
         } else {

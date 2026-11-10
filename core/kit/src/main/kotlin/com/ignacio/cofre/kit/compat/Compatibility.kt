@@ -87,8 +87,8 @@ object ContentCompatibility {
         GlRisk.Likely -> CompatibilityIssue(id, name, ContentKind.Mods, "Calls OpenGL directly, likely to crash on Vulkan.", "likely", file)
     }
     /** What "Before you play" checks: enabled mods and the active shader pack. Jars are graded through [scans], shared with the Installed tab. */
-    fun playIssues(gameDirectory: File, scans: GlScanCache): List<CompatibilityIssue> {
-        val store = ContentStore(gameDirectory)
+    fun playIssues(gameDirectory: File, scans: GlScanCache, contentDirectory: File = gameDirectory): List<CompatibilityIssue> {
+        val store = ContentStore(gameDirectory, contentDirectory)
         val mods = store.list(ContentKind.Mods).filter { it.enabled }
         val issues = mods.mapNotNull { m -> issue(m.modID ?: m.id, m.name, ContentKind.Mods, m.version)?.copy(file = m.id) }.toMutableList()
         if (issues.none { it.name in setOf("Iris", "Oculus", "OptiFine") }) store.list(ContentKind.Shaders).firstOrNull { it.inUse }?.let { s -> issue(s.id, s.name, ContentKind.Shaders)?.copy(file = s.id)?.let(issues::add) }
@@ -102,8 +102,8 @@ object ContentCompatibility {
         }
         return issues
     }
-    fun turnOff(issues: List<CompatibilityIssue>, gameDirectory: File) {
-        val store = ContentStore(gameDirectory)
+    fun turnOff(issues: List<CompatibilityIssue>, gameDirectory: File, contentDirectory: File = gameDirectory) {
+        val store = ContentStore(gameDirectory, contentDirectory)
         for (issue in issues) store.list(issue.kind).firstOrNull { it.id == issue.file && it.enabled }?.let { store.setEnabled(false, it) }
     }
 }

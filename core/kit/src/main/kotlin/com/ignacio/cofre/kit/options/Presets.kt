@@ -38,15 +38,15 @@ object PresetCatalog {
     /**
      * A new instance's first files in [gameDirectory]: [preset]'s options (none for a plain instance), Cofre's
      * defaults for [physicalMB], Vulkan, and NeoForge's GL early window off. Returns the preset's pinned mods,
-     * hash-checked downloads into `mods/`.
+     * hash-checked downloads into [mods] (the instance's mod folder's `mods/`).
      */
-    fun apply(preset: CofrePreset?, gameDirectory: File, physicalMB: Int): List<DownloadItem> {
+    fun apply(preset: CofrePreset?, gameDirectory: File, physicalMB: Int, mods: File = File(gameDirectory, "mods")): List<DownloadItem> {
         val options = GameOptions(gameDirectory)
         if (preset != null) options.seedPreset(preset, physicalMB)
         options.seedDefaults(physicalMB)
         options.useVulkan()
         FMLConfig.disableEarlyWindow(gameDirectory)
-        return preset?.pinnedMods.orEmpty().map { DownloadItem(it.url, File(gameDirectory, "mods/${it.file}").path, title = it.file, sha512 = it.sha512) }
+        return preset?.pinnedMods.orEmpty().map { DownloadItem(it.url, File(mods, it.file).path, title = it.file, sha512 = it.sha512) }
     }
     val presets: List<CofrePreset> by lazy { decode(requireNotNull(javaClass.getResourceAsStream("/presets.json")).bufferedReader().use { it.readText() }).presets }
 }

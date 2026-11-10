@@ -72,7 +72,8 @@ data class InstalledState(
 }
 
 /**
- * The Installed pane for one instance. The files are the truth: every action re-reads them. Network work (update
+ * The Installed pane for one instance: its mods, resource and shader packs live in [folder] (its mod folder); data
+ * packs and which packs are active, in [directory]. The files are the truth: every action re-reads them. Network work (update
  * checks, identifying unknown jars) and the OpenGL scan run in the background and fill rows in as they finish.
  */
 class InstalledModel(
@@ -81,11 +82,12 @@ class InstalledModel(
     private val modrinth: Modrinth,
     private val glScans: GlScanCache,
     private val io: CoroutineDispatcher = Dispatchers.IO,
+    val folder: File = directory,
 ) {
     private val mutable = MutableStateFlow(InstalledState())
     val state: StateFlow<InstalledState> = mutable.asStateFlow()
-    private val store = ContentStore(directory)
-    private val index = ModIndex(directory)
+    private val store = ContentStore(directory, folder)
+    private val index = ModIndex(folder)
     private var loading: Job? = null
     private var identified = false
     /** Latest update candidate per project, from the last check. */
@@ -149,7 +151,7 @@ class InstalledModel(
         val note = mutable.value.undo ?: return
         mutable.update { it.copy(undo = null) }
         scope.launch {
-            quietly { InstanceStore.lock(directory).withLock { withContext(io) { note.tokens.asReversed().forEach(store::restore) } } }
+            quietly { InstanceStore.lock(folder).withLock { withContext(io) { note.tokens.asReversed().forEach(store::restore) } } }
             reload()
         }
     }
@@ -160,7 +162,7 @@ class InstalledModel(
         val candidate = row.update ?: return
         busy(row.key) {
             val plan = ModResolver.modrinth(modrinth, mods()).plan(candidate.projectId, candidate.versionId)
-            ModInstaller(directory, modrinth = modrinth).install(plan)
+            ModInstaller(folder, directory, modrinth = modrinth).install(plan)
             updates.remove(candidate.projectId)
         }
     }
@@ -171,7 +173,7 @@ class InstalledModel(
             for (row in rows) {
                 val candidate = row.update ?: continue
                 val plan = ModResolver.modrinth(modrinth, mods()).plan(candidate.projectId, candidate.versionId)
-                ModInstaller(directory, modrinth = modrinth).install(plan)
+                ModInstaller(folder, directory, modrinth = modrinth).install(plan)
                 updates.remove(candidate.projectId)
             }
         }
@@ -240,7 +242,7 @@ class InstalledModel(
 
     private fun trash(rows: List<InstalledRow>) {
         scope.launch {
-            val tokens = quietly { InstanceStore.lock(directory).withLock { withContext(io) { rows.map { store.trash(it.item) } } } } ?: return@launch
+            val tokens = quietly { InstanceStore.lock(folder).withLock { withContext(io) { rows.map { store.trash(it.item) } } } } ?: return@launch
             val text = if (rows.size == 1) "Removed ${rows[0].item.name}" else "Removed ${rows.size} items"
             mutable.update { it.copy(undo = UndoNote(text, tokens)) }
             refresh()
@@ -249,7 +251,7 @@ class InstalledModel(
 
     private fun act(row: InstalledRow, block: () -> Unit) {
         scope.launch {
-            quietly { InstanceStore.lock(directory).withLock { withContext(io) { block() } } }
+            quietly { InstanceStore.lock(folder).withLock { withContext(io) { block() } } }
             refresh()
         }
         // Flip at once so the switch answers the press; the reload confirms it.

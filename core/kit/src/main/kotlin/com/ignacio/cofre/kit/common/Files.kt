@@ -176,17 +176,20 @@ object Zip {
         }
     }
 
-    fun write(directory: File, destination: File, include: (String) -> Boolean = { true }) {
-        val files = FileOps.tree(directory).filter { include(it.relativeTo(directory).invariantSeparatorsPath) }
-        require(destination.canonicalFile.toPath().startsWith(directory.canonicalFile.toPath()).not()) { "ZIP destination is inside source" }
+    fun write(directory: File, destination: File, include: (String) -> Boolean = { true }) =
+        write(FileOps.tree(directory).map { it.relativeTo(directory).invariantSeparatorsPath to it }.filter { include(it.first) }, destination, listOf(directory))
+
+    /** Writes each `path → file` (folders as folder entries), atomically. [sources] are the folders the files come from. */
+    fun write(entries: List<Pair<String, File>>, destination: File, sources: List<File>) {
+        for (source in sources) require(!destination.canonicalFile.toPath().startsWith(source.canonicalFile.toPath())) { "ZIP destination is inside source" }
         destination.absoluteFile.parentFile.mkdirs()
         val temp = File(destination.absoluteFile.parentFile, ".cofre-zip-${UUID.randomUUID()}")
         try {
             ZipOutputStream(temp.outputStream().buffered()).use { out ->
                 var total = 0L
-                require(files.size <= MAX_ENTRIES)
-                for (file in files) {
-                    val path = file.relativeTo(directory).invariantSeparatorsPath + if (file.isDirectory) "/" else ""
+                require(entries.size <= MAX_ENTRIES)
+                for ((name, file) in entries) {
+                    val path = name + if (file.isDirectory) "/" else ""
                     require(file.length() <= MAX_ENTRY_BYTES)
                     if (file.isFile) total += file.length()
                     require(total <= MAX_TOTAL_BYTES)

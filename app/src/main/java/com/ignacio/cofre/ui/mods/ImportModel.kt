@@ -10,6 +10,8 @@ import com.ignacio.cofre.kit.downloads.DownloadQueue
 import com.ignacio.cofre.kit.instances.Instance
 import com.ignacio.cofre.kit.instances.InstanceStore
 import com.ignacio.cofre.kit.common.FileOps
+import com.ignacio.cofre.kit.modfolders.ModFolderMigration
+import com.ignacio.cofre.kit.modfolders.ModFolderStore
 import com.ignacio.cofre.kit.modpacks.Modpack
 import com.ignacio.cofre.kit.modpacks.ModpackInstallPlan
 import com.ignacio.cofre.kit.modpacks.Modpacks
@@ -53,12 +55,13 @@ sealed interface ImportPhase {
 }
 
 /**
- * Import pack: a file, a link or a share from another app → inspect → a new instance. Everything lands in a
+ * Import pack: a file, a link or a share from another app → inspect → a new instance linked to a new mod folder. Everything lands in a
  * staged folder under the instances root first; a failure rolls the stage back, so no half instance is left.
  */
 class ImportModel(
     private val scope: CoroutineScope,
     private val instances: InstanceStore,
+    private val folders: ModFolderStore,
     private val modrinth: Modrinth,
     private val curseForge: () -> CurseForge?,
     private val cache: File,
@@ -176,7 +179,8 @@ class ImportModel(
             instances.validate(instance) // once committed, a bad cofre.json can't be rolled back
             File(stage.directory, "cofre.json").writeText(Kit.json.encodeToString(instance))
             stage.commit(File(instances.root, instance.id))
-            instances.get(instance.id)
+            // The pack's mods and packs move to their own folder; if that fails, the next start's migration does it.
+            runCatching { ModFolderMigration.adopt(instances.get(instance.id), instances, folders) }.getOrNull() ?: instances.get(instance.id)
         } catch (e: Exception) {
             stage.rollback()
             throw e

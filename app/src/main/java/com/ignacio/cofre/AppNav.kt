@@ -11,6 +11,10 @@ class AppNav {
     var section by mutableStateOf(ShellSection.Play)
     /** The instance open in Instances (the detail column). */
     var instance by mutableStateOf<String?>(null)
+    /** The mod folder open in Mods. */
+    var modFolder by mutableStateOf<String?>(null)
+    /** The mod folder being converted to another loader or game version. */
+    var convertFolder by mutableStateOf<String?>(null)
     var settingsPane by mutableStateOf<SettingsPane?>(null)
     var newInstance by mutableStateOf(false)
     var downloads by mutableStateOf(false)
@@ -18,6 +22,11 @@ class AppNav {
     fun openInstance(id: String) {
         instance = id
         section = ShellSection.Instances
+    }
+
+    fun openFolder(id: String) {
+        modFolder = id
+        section = ShellSection.Mods
     }
 
     fun openSettings(pane: SettingsPane) {
