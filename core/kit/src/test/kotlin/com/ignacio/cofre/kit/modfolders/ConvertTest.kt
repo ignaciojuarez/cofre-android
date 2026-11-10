@@ -8,6 +8,11 @@ import com.ignacio.cofre.kit.mods.ModInstallFailure
 import com.ignacio.cofre.kit.mods.VersionChannel
 import com.ignacio.cofre.kit.mods.modJar
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
@@ -45,7 +50,8 @@ class ConvertTest {
                     path == "/v2/version_files/update" -> fixture("$scenario-latest", server)
                     path == "/v2/projects" -> fixture("projects", server)
                     path == "/v2/search" -> fixture("search", server)
-                    path.startsWith("/v2/project/") && path.endsWith("/version") -> fixture("versions-" + path.removePrefix("/v2/project/").removeSuffix("/version"), server)
+                    path.startsWith("/v2/project/") && path.endsWith("/version") ->
+                        fixture("versions-" + path.removePrefix("/v2/project/").removeSuffix("/version"), server)?.let { onLoaders(it, request.url.queryParameter("loaders")) }
                     path.startsWith("/files/") -> {
                         val name = path.removePrefix("/files/").removeSuffix(".jar")
                         return if (name in failing) MockResponse(code = 500) else MockResponse.Builder().body(Buffer().write(jar(name))).build()
@@ -55,6 +61,11 @@ class ConvertTest {
                 return body?.let { MockResponse(body = it) } ?: MockResponse(code = 404)
             }
         }
+    }
+    /** Like Modrinth: a `loaders` filter keeps only the versions for one of them. */
+    private fun onLoaders(versions: String, loaders: String?): String {
+        val wanted = loaders?.let { Json.parseToJsonElement(it).jsonArray.map { l -> l.jsonPrimitive.content } } ?: return versions
+        return JsonArray(Json.parseToJsonElement(versions).jsonArray.filter { v -> v.jsonObject["loaders"]!!.jsonArray.any { it.jsonPrimitive.content in wanted } }).toString()
     }
     private fun folder(vararg jars: String): File {
         val mods = File(source, "mods").apply { mkdirs() }
@@ -130,6 +141,15 @@ class ConvertTest {
             assertContentEquals(jar("sodium"), File(dest, "mods/sodium.jar").readBytes())
             assertTrue(File(dest, "mods/ferrite-beta.jar").isFile)
             assertEquals(1, requests.count { it.startsWith("/files/") })
+        }
+    }
+    @Test fun aTwoLoaderModDoesNotNeedTheOtherLoadersLibrary() = runBlocking {
+        MockWebServer().use { server ->
+            server.start(); serve(server, "dual")
+            // Controlify's one build is for Fabric and NeoForge; its "required" Fabric API is only for Fabric.
+            val plan = Convert.plan(folder("controlify.jar"), "26.2", Loader.NeoForge, ConvertTarget("26.2", Loader.NeoForge), Modrinth(baseUrl = server.url("/v2/")))
+            assertEquals(Ready, plan.row("controlify.jar").status)
+            assertTrue(plan.rows.none { it.status == Added })
         }
     }
     @Test fun applyWritesTheDefaultChoices() = runBlocking {

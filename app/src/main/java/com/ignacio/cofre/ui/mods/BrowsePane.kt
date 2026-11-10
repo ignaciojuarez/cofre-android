@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -258,7 +259,7 @@ private fun AddingTo(folder: FolderInfo, onClick: () -> Unit, modifier: Modifier
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 CofreText(stringResource(R.string.mods_adding_to), CofreTheme.type.label, color = CofreTheme.colors.muted, maxLines = 1)
                 CofreText(
-                    stringResource(R.string.mods_folder_line, folder.folder.label, folder.mods, folder.usedBy.size),
+                    pluralStringResource(R.plurals.mods_folder_line, folder.mods, folder.folder.label, folder.mods, folder.usedBy.size),
                     CofreTheme.type.caption, color = CofreTheme.colors.muted, maxLines = 1,
                 )
             }

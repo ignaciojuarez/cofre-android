@@ -41,7 +41,10 @@
     <string name="convert_missing">Missing ones</string>
     <string name="convert_leave_out">Leave out</string>
     <string name="convert_keep_off">Keep turned off</string>
-    <string name="convert_create">Create · %1$d mods · %2$s</string>
+    <plurals name="convert_create">
+        <item quantity="one">Create · %1$d mod · %2$s</item>
+        <item quantity="other">Create · %1$d mods · %2$s</item>
+    </plurals>
     <string name="convert_create_short">Create</string>
     <string name="convert_checking">Checking %1$s builds on Modrinth…</string>
     <string name="convert_applying">Building the folder… %1$d of %2$d files</string>

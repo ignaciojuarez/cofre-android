@@ -13,6 +13,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -116,7 +117,7 @@ fun SnapshotItem(row: SnapshotRow, onRestore: () -> Unit, modifier: Modifier = M
     BlockRow(
         "$reason · $time",
         modifier,
-        subtitle = if (row.changed == 0) stringResource(R.string.folders_snapshot_same) else stringResource(R.string.folders_snapshot_changed, row.changed),
+        subtitle = if (row.changed == 0) stringResource(R.string.folders_snapshot_same) else pluralStringResource(R.plurals.folders_snapshot_changed, row.changed, row.changed),
         leading = { PixelIcon(if (row.snapshot.reason == Snapshots.Reason.LastGood) PixelGlyph.Check else PixelGlyph.Book, size = 22.dp) },
         trailing = { BlockButton(stringResource(R.string.folders_restore), onRestore, size = ButtonSize.Small, enabled = row.changed > 0) },
     )

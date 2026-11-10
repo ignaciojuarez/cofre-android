@@ -51,7 +51,10 @@
     <string name="folders_snapshot_last_good">Last good launch</string>
     <string name="folders_snapshot_manual">Saved</string>
     <string name="folders_snapshot_same">Same as now</string>
-    <string name="folders_snapshot_changed">%1$d mods changed after it</string>
+    <plurals name="folders_snapshot_changed">
+        <item quantity="one">%1$d mod changed after it</item>
+        <item quantity="other">%1$d mods changed after it</item>
+    </plurals>
     <string name="folders_restore">Restore</string>
     <string name="folders_folder">Folder</string>
     <string name="folders_duplicate">Duplicate</string>

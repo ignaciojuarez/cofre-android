@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.ignacio.cofre.AppGraph
@@ -60,7 +61,7 @@ internal fun usage(info: Library.FolderInfo, instance: Instance?): String {
     val others = info.users.filter { it.id != instance?.id }.joinToString(", ") { it.name }
     val linked = instance != null && info.users.any { it.id == instance.id }
     return listOfNotNull(
-        stringResource(R.string.link_mods, info.mods),
+        pluralStringResource(R.plurals.folders_mods, info.mods, info.mods),
         when {
             linked && others.isNotEmpty() -> stringResource(R.string.link_shared_with, others)
             linked -> stringResource(R.string.link_current)
@@ -102,7 +103,7 @@ internal fun FolderBlock(
             val others = info.users.filter { it.id != instance.id }
             val subtitle = listOfNotNull(
                 "${info.folder.loader.displayName} ${info.folder.gameVersion}",
-                stringResource(R.string.link_mods, info.mods),
+                pluralStringResource(R.plurals.folders_mods, info.mods, info.mods),
                 others.takeIf { it.isNotEmpty() }?.let { stringResource(R.string.link_also_used_by, it.joinToString(", ") { u -> u.name }) },
             ).joinToString(" · ")
             BlockRow(

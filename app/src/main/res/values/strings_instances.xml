@@ -9,7 +9,6 @@
     <string name="link_no_mods_note">Plays plain %1$s</string>
     <string name="link_folder_gone">Its mod folder is gone</string>
     <string name="link_folder_gone_note">Restore it in Mod folders, or pick another</string>
-    <string name="link_mods">%1$d mods</string>
     <string name="link_also_used_by">also used by %1$s</string>
     <string name="link_used_by">used by %1$s</string>
     <string name="link_not_used">not used</string>

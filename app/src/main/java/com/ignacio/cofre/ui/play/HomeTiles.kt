@@ -157,6 +157,7 @@ private fun ReadyTile(model: HomeModel, onClick: () -> Unit, modifier: Modifier 
             check == null -> Unit
             check.account != Launcher.AccountState.Ready -> Badge(stringResource(R.string.accounts_sign_in), tone = Tone.Danger)
             check.modProblems -> Badge(stringResource(R.string.home_fix_all), tone = Tone.Warn)
+            check.blockers > 0 -> Unit // Vulkan: the value already says it won't launch; never "All good"
             check.firstPlayMB > 0 -> Badge(stringResource(R.string.home_first_play_badge), tone = Tone.Accent)
             else -> Badge(stringResource(R.string.home_good_to_go), tone = Tone.Success)
         }

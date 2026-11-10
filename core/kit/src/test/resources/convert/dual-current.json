@@ -1,0 +1,11 @@
+{
+ "@controlify": {
+  "id": "controlify-now",
+  "project_id": "controlify",
+  "name": "3.5.3",
+  "version_number": "3.5.3",
+  "game_versions": ["26.2"],
+  "loaders": ["fabric", "neoforge"],
+  "version_type": "release"
+ }
+}

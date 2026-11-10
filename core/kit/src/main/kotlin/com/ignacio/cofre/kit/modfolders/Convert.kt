@@ -175,11 +175,11 @@ object Convert {
             targeted += swap.projectId
             missing.copy(status = ConvertStatus.Swap, suggestion = swap)
         }
-        return withDependencies(ConvertPlan(dir, fromGameVersion, fromLoader, to, rows), modrinth, loaders)
+        return withDependencies(ConvertPlan(dir, fromGameVersion, fromLoader, to, rows), modrinth)
     }
 
     /** Runs [ModResolver] over everything that could convert: required dependencies not in the set become Added rows. */
-    private suspend fun withDependencies(plan: ConvertPlan, modrinth: Modrinth, loaders: List<String>): ConvertPlan {
+    private suspend fun withDependencies(plan: ConvertPlan, modrinth: Modrinth): ConvertPlan {
         val to = plan.to
         val possible = plan.rows.mapNotNull { row ->
             when (row.status) { ConvertStatus.Ready, ConvertStatus.BetaOnly -> row.target; ConvertStatus.Swap -> row.suggestion; else -> null }?.let { row to it }
@@ -194,7 +194,8 @@ object Convert {
             versionById = { id -> ModCandidate.from(modrinth.version(id)) },
             versions = { id ->
                 seeded[id] ?: if (id in noTarget) emptyList() else fetched.getOrPut(id) {
-                    try { modrinth.versions(id, loaders, listOf(to.gameVersion), includeChangelog = false).map { ModCandidate.from(it) } }
+                    // Every loader: ModResolver skips a two-loader mod's dependency that only has builds for the other one (Fabric API).
+                    try { modrinth.versions(id, gameVersions = listOf(to.gameVersion), includeChangelog = false).map { ModCandidate.from(it) } }
                     catch (failure: HttpFailure) { if (failure.status == 404) emptyList() else throw failure }
                 }
             },

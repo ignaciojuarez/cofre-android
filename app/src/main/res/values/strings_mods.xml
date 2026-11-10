@@ -133,7 +133,10 @@
     <!-- The mod folder Mods works on. -->
     <string name="mods_adding_to">Adding to</string>
     <string name="mods_adding_to_title">Adding to</string>
-    <string name="mods_folder_line">%1$s · %2$d mods · used by %3$d</string>
+    <plurals name="mods_folder_line">
+        <item quantity="one">%1$s · %2$d mod · used by %3$d</item>
+        <item quantity="other">%1$s · %2$d mods · used by %3$d</item>
+    </plurals>
     <string name="mods_folder_hint">Folder</string>
     <string name="mods_folder">Folder</string>
     <string name="mods_folder_updates">Folder · %1$d</string>

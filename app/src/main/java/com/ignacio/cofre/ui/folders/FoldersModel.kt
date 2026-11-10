@@ -57,6 +57,8 @@ data class FoldersState(
     val deleted: List<ModFolderStore.Deleted> = emptyList(),
     /** Just moved to Recently deleted, for the Undo banner. */
     val undo: ModFolderStore.Deleted? = null,
+    /** The instances that used [undo]'s folder: Undo links them back. */
+    val undoUsers: List<String> = emptyList(),
     val message: String? = null,
     val busy: Boolean = false,
 ) {
@@ -105,7 +107,7 @@ class FoldersModel(private val graph: AppGraph, private val scope: CoroutineScop
         scope.launch { loadSnapshots(id) }
     }
 
-    fun dismissMessage() = mutable.update { it.copy(message = null, undo = null) }
+    fun dismissMessage() = mutable.update { it.copy(message = null, undo = null, undoUsers = emptyList()) }
 
     fun autoUpdate(id: String, value: AutoUpdate) = edit { store.save(store.get(id).copy(autoUpdate = value)) }
     fun includeBeta(id: String, value: Boolean) = edit { store.save(store.get(id).copy(includeBeta = value)) }
@@ -128,15 +130,24 @@ class FoldersModel(private val graph: AppGraph, private val scope: CoroutineScop
         if (refuseWhileRunning()) return
         val users = mutable.value.cards.firstOrNull { it.id == id }?.usedBy.orEmpty()
         fun relink(rest: List<Instance>) {
-            val next = rest.firstOrNull() ?: return trash(id)
+            val next = rest.firstOrNull() ?: return trash(id, users.map { it.id })
             graph.library.linkFolder(next.id, moveTo) { relink(rest.drop(1)) }
         }
         relink(users)
     }
 
-    fun restoreDeleted(token: ModFolderStore.TrashToken) = edit {
-        val folder = store.restore(token)
-        mutable.update { it.copy(selected = folder.id, undo = null) }
+    fun restoreDeleted(token: ModFolderStore.TrashToken) {
+        val users = mutable.value.takeIf { it.undo?.token == token }?.undoUsers.orEmpty()
+        edit {
+            val folder = store.restore(token)
+            mutable.update { it.copy(selected = folder.id, undo = null, undoUsers = emptyList()) }
+            // Undo puts the instances back on it too (each link goes through Library, one at a time).
+            fun relink(rest: List<String>) {
+                val next = rest.firstOrNull() ?: return reload()
+                graph.library.linkFolder(next, folder.id) { relink(rest.drop(1)) }
+            }
+            scope.launch { relink(users) }
+        }
     }
 
     /** Links [instanceId] to [folderId] (it must fit and be playable; Library checks). */
@@ -241,12 +252,12 @@ class FoldersModel(private val graph: AppGraph, private val scope: CoroutineScop
         if (graph.autoStartDownloads) graph.downloadsModel.start()
     }
 
-    private fun trash(id: String) {
+    private fun trash(id: String, users: List<String>) {
         if (refuseWhileRunning()) return
         edit {
             val folder = store.get(id)
             val token = InstanceStore.lockBlocking(store.directory(folder)) { store.trash(id) }
-            mutable.update { s -> s.copy(undo = ModFolderStore.Deleted(token, folder), selected = s.selected.takeIf { it != id }) }
+            mutable.update { s -> s.copy(undo = ModFolderStore.Deleted(token, folder), undoUsers = users, selected = s.selected.takeIf { it != id }) }
             if (graph.nav.modFolder == id) graph.nav.modFolder = null
         }
     }

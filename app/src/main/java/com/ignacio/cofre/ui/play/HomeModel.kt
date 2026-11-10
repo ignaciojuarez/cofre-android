@@ -129,6 +129,8 @@ class HomeModel(private val graph: AppGraph, val instance: Instance) {
     private fun loadFolder(forceUpdates: Boolean = false) = graph.work({ error = it }) {
         val current = graph.onIo { runCatching { graph.instances.get(instance.id) }.getOrDefault(instance) }
         val found = graph.onIo { graph.folderOf(current) }
+        // Keep the rows in place after a toggle, so focus stays on the mod that was just switched.
+        val shown = folder?.takeIf { it.folder?.id == found?.id }?.quick?.map { it.name }.orEmpty()
         folder = graph.onIo {
             val all = graph.instances.list()
             val mods = if (found != null || current.modFolder == null) {
@@ -140,7 +142,7 @@ class HomeModel(private val graph: AppGraph, val instance: Instance) {
                 found, mods.count { it.enabled }, mods.count { !it.enabled },
                 found?.let { f -> graph.modFolders.usedBy(f.id, all).filter { it.id != instance.id } }.orEmpty(),
                 graph.modFolders.list().filter { it.fits(current) && it.playable },
-                mods.sortedBy { it.enabled }.take(QUICK_TOGGLES),
+                mods.sortedWith(compareBy({ shown.indexOf(it.name).takeIf { i -> i >= 0 } ?: Int.MAX_VALUE }, { it.enabled })).take(QUICK_TOGGLES),
             )
         }
         updates = if (found == null || found.autoUpdate == AutoUpdate.Off || !found.playable) null else FolderUpdates.get(graph, found, forceUpdates)

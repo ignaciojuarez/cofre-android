@@ -31,6 +31,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -417,7 +418,7 @@ private fun Footer(model: ConvertModel, plan: ConvertPlan, modifier: Modifier = 
                 compact = true,
             )
             BlockButton(
-                stringResource(R.string.convert_create, model.modCount(plan), Fmt.bytes(context, plan.downloadBytes(model.choices))),
+                model.modCount(plan).let { n -> pluralStringResource(R.plurals.convert_create, n, n, Fmt.bytes(context, plan.downloadBytes(model.choices))) },
                 { model.create() }, role = ButtonRole.Primary, fullWidth = false,
             )
         }
