@@ -1,6 +1,6 @@
 [
-  {"name": "NeoLoading Vulkan Fix", "loaders": ["neoforge"], "modIds": ["neoloading_vulkan_fix", "neoloadingvulkanfix"], "slugs": ["neoloading-vulkan-fix"]},
+  {"name": "NeoLoading Vulkan Fix", "loaders": ["neoforge"], "modIds": ["neoloading_vulkan_fix", "neoloadingvulkanfix"], "slugs": ["neoloading-vulkan-fix"], "projectIds": ["2XDbg6Zz"]},
   {"name": "Kotlin for Forge", "loaders": ["neoforge", "forge"], "modIds": ["kotlinforforge"], "slugs": ["kotlin-for-forge"], "projectIds": ["ordsPcFz"]},
-  {"name": "Sinytra Connector", "loaders": ["neoforge"], "modIds": ["connector"], "slugs": ["connector"]},
-  {"name": "Forgified Fabric API", "loaders": ["neoforge"], "slugs": ["forgified-fabric-api"]}
+  {"name": "Sinytra Connector", "loaders": ["neoforge", "forge"], "modIds": ["connector"], "slugs": ["connector"], "projectIds": ["u58R1TMW"]},
+  {"name": "Forgified Fabric API", "loaders": ["neoforge", "forge"], "slugs": ["forgified-fabric-api"], "projectIds": ["Aqlf1Shp"]}
 ]
