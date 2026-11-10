@@ -1,0 +1,182 @@
+{
+ "@sodium": {
+  "id": "sodium-f",
+  "project_id": "sodium",
+  "name": "0.9.2-fabric",
+  "version_number": "0.9.2-fabric",
+  "game_versions": [
+   "26.2"
+  ],
+  "loaders": [
+   "fabric"
+  ],
+  "version_type": "release",
+  "dependencies": [
+   {
+    "project_id": "fabric-api",
+    "dependency_type": "required"
+   }
+  ],
+  "files": [
+   {
+    "hashes": {
+     "sha1": "#sodium-fabric",
+     "sha512": "&sodium-fabric"
+    },
+    "url": "{{base}}/files/sodium-fabric.jar",
+    "filename": "sodium-fabric.jar",
+    "size": "%sodium-fabric",
+    "primary": true
+   }
+  ]
+ },
+ "@waystones": {
+  "id": "waystones-f",
+  "project_id": "waystones",
+  "name": "21.2.4",
+  "version_number": "21.2.4",
+  "game_versions": [
+   "26.2"
+  ],
+  "loaders": [
+   "fabric"
+  ],
+  "version_type": "release",
+  "dependencies": [
+   {
+    "project_id": "cloth-config",
+    "dependency_type": "required"
+   },
+   {
+    "project_id": "modmenu",
+    "dependency_type": "optional"
+   }
+  ],
+  "files": [
+   {
+    "hashes": {
+     "sha1": "#waystones-fabric",
+     "sha512": "&waystones-fabric"
+    },
+    "url": "{{base}}/files/waystones-fabric.jar",
+    "filename": "waystones-fabric.jar",
+    "size": "%waystones-fabric",
+    "primary": true
+   }
+  ]
+ },
+ "@jade": {
+  "id": "jade-f",
+  "project_id": "jade",
+  "name": "19.3.1",
+  "version_number": "19.3.1",
+  "game_versions": [
+   "26.2"
+  ],
+  "loaders": [
+   "fabric"
+  ],
+  "version_type": "release",
+  "dependencies": [
+   {
+    "project_id": "fabric-api",
+    "dependency_type": "required"
+   }
+  ],
+  "files": [
+   {
+    "hashes": {
+     "sha1": "#jade-fabric",
+     "sha512": "&jade-fabric"
+    },
+    "url": "{{base}}/files/jade-fabric.jar",
+    "filename": "jade-fabric.jar",
+    "size": "%jade-fabric",
+    "primary": true
+   }
+  ]
+ },
+ "@ferrite": {
+  "id": "ferrite-b",
+  "project_id": "ferritecore",
+  "name": "9.1.0-beta.1",
+  "version_number": "9.1.0-beta.1",
+  "game_versions": [
+   "26.2"
+  ],
+  "loaders": [
+   "fabric"
+  ],
+  "version_type": "beta",
+  "dependencies": [],
+  "files": [
+   {
+    "hashes": {
+     "sha1": "#ferrite-beta",
+     "sha512": "&ferrite-beta"
+    },
+    "url": "{{base}}/files/ferrite-beta.jar",
+    "filename": "ferrite-beta.jar",
+    "size": "%ferrite-beta",
+    "primary": true
+   }
+  ]
+ },
+ "@controlify": {
+  "id": "controlify-b",
+  "project_id": "controlify",
+  "name": "3.6.0-beta.2",
+  "version_number": "3.6.0-beta.2",
+  "game_versions": [
+   "26.2"
+  ],
+  "loaders": [
+   "fabric"
+  ],
+  "version_type": "beta",
+  "dependencies": [],
+  "files": [
+   {
+    "hashes": {
+     "sha1": "#controlify-beta",
+     "sha512": "&controlify-beta"
+    },
+    "url": "{{base}}/files/controlify-beta.jar",
+    "filename": "controlify-beta.jar",
+    "size": "%controlify-beta",
+    "primary": true
+   }
+  ]
+ },
+ "@jei": {
+  "id": "jei-f",
+  "project_id": "jei",
+  "name": "26.2.0.12",
+  "version_number": "26.2.0.12",
+  "game_versions": [
+   "26.2"
+  ],
+  "loaders": [
+   "fabric"
+  ],
+  "version_type": "release",
+  "dependencies": [
+   {
+    "project_id": "missing-lib",
+    "dependency_type": "required"
+   }
+  ],
+  "files": [
+   {
+    "hashes": {
+     "sha1": "#jei-fabric",
+     "sha512": "&jei-fabric"
+    },
+    "url": "{{base}}/files/jei-fabric.jar",
+    "filename": "jei-fabric.jar",
+    "size": "%jei-fabric",
+    "primary": true
+   }
+  ]
+ }
+}

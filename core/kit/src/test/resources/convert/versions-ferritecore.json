@@ -1,0 +1,28 @@
+[
+ {
+  "id": "ferrite-b",
+  "project_id": "ferritecore",
+  "name": "9.1.0-beta.1",
+  "version_number": "9.1.0-beta.1",
+  "game_versions": [
+   "26.2"
+  ],
+  "loaders": [
+   "fabric"
+  ],
+  "version_type": "beta",
+  "dependencies": [],
+  "files": [
+   {
+    "hashes": {
+     "sha1": "#ferrite-beta",
+     "sha512": "&ferrite-beta"
+    },
+    "url": "{{base}}/files/ferrite-beta.jar",
+    "filename": "ferrite-beta.jar",
+    "size": "%ferrite-beta",
+    "primary": true
+   }
+  ]
+ }
+]

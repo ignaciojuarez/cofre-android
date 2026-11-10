@@ -24,9 +24,6 @@ import org.robolectric.annotation.GraphicsMode
 /** Odin 3: 1920×1080 at 270 dpi, about 1138×640 dp in landscape. */
 private const val ODIN = "w1138dp-h640dp-land-270dpi"
 
-/** A phone in portrait (Pixel 9 class). */
-private const val PHONE = "w411dp-h914dp-port-xhdpi"
-
 abstract class ScreenshotTest(private val device: String) {
     @get:Rule val rule = createComposeRule()
     private lateinit var view: View
@@ -69,7 +66,7 @@ abstract class ScreenshotTest(private val device: String) {
 
     @Test fun listDetail() = shoot("list_detail") {
         AdaptiveShell(ShellSection.Mods, {}) {
-            AdaptiveListDetail("Sodium", {}, list = { SampleInstances() }, detail = { SampleDetail(it) })
+            AdaptiveListDetail("Sodium", list = { SampleInstances() }, detail = { SampleDetail(it) })
         }
     }
 }
@@ -92,11 +89,6 @@ class OdinScreenshots : ScreenshotTest("odin") {
         }
     }
 }
-
-@RunWith(RobolectricTestRunner::class)
-@GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [36], qualifiers = PHONE)
-class PhoneScreenshots : ScreenshotTest("phone")
 
 @Composable
 private fun SampleInstances() = Column {

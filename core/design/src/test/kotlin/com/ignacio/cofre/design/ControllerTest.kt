@@ -5,15 +5,21 @@ import android.view.View
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotFocused
 import androidx.compose.ui.test.click
@@ -180,6 +186,83 @@ class ControllerTest {
     }
 
     @Test
+    @Config(qualifiers = "w1138dp-h640dp")
+    fun shoulderButtonsReachContentInsideANestedScreen() {
+        var section by mutableStateOf(ShellSection.Play)
+        content {
+            AdaptiveShell(section, { section = it }, preferRail = true) { s ->
+                // Like SplitLayout: the section's content is its own screen.
+                ScreenFocus {
+                    Column {
+                        BlockButton("${s.title} 1", {}, Modifier.testTag("content-${s.name}"))
+                        BlockButton("${s.title} 2", {}, Modifier.testTag("content-${s.name}-2"))
+                    }
+                }
+            }
+        }
+        press(KeyEvent.KEYCODE_BUTTON_A)
+        rule.onNodeWithTag("content-Play").assertIsFocused()
+        press(KeyEvent.KEYCODE_BUTTON_R1)
+        assertEquals(ShellSection.Instances, section)
+        rule.onNodeWithTag("content-Instances").assertIsFocused()
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        press(KeyEvent.KEYCODE_BUTTON_R1)
+        rule.onNodeWithTag("content-Mods").assertIsFocused()
+        press(KeyEvent.KEYCODE_BUTTON_L1)
+        rule.onNodeWithTag("content-Instances-2").assertIsFocused()
+    }
+
+    @Test
+    fun selectMenuOpensOnTheCurrentChoice() {
+        content {
+            ScreenFocus {
+                SelectButton("Folder", "c", {}, listOf("a" to "Alpha", "b" to "Beta", "c" to "Gamma"), Modifier.testTag("select"))
+            }
+        }
+        press(KeyEvent.KEYCODE_BUTTON_A)
+        rule.onNode(androidx.compose.ui.test.hasContentDescription("Folder, Gamma") and isFocused()).assertExists()
+        press(KeyEvent.KEYCODE_BUTTON_A)
+        rule.onNode(androidx.compose.ui.test.hasText("Gamma") and isFocused() and SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.RadioButton)).assertExists()
+    }
+
+    @Test
+    @Config(qualifiers = "w1138dp-h640dp")
+    fun sectionActionsWorkFromTheRail() {
+        var section by mutableStateOf(ShellSection.Mods)
+        var picks = 0
+        content {
+            AdaptiveShell(section, { section = it }) { s ->
+                if (s == ShellSection.Mods) SectionActions(ControllerAction(Pad.L2, "Folder") { picks++ })
+                BlockButton(s.title, {}, Modifier.testTag("content-${s.name}"))
+            }
+        }
+        press(KeyEvent.KEYCODE_BUTTON_A)
+        press(KeyEvent.KEYCODE_DPAD_LEFT) // onto the rail
+        rule.onNodeWithTag("content-Mods").assertIsNotFocused()
+        press(KeyEvent.KEYCODE_BUTTON_L2)
+        assertEquals(1, picks)
+        press(KeyEvent.KEYCODE_BUTTON_R1)
+        press(KeyEvent.KEYCODE_BUTTON_L2)
+        assertEquals("only while Mods is on screen", 1, picks)
+    }
+
+    @Test
+    @Config(qualifiers = "w800dp-h360dp")
+    fun aShortRailReachesEverySectionAndTheFooter() {
+        content {
+            AdaptiveShell(ShellSection.Play, {}, navFooter = { BlockButton("Footer", {}, Modifier.testTag("footer")) }) {
+                BlockButton("Content", {}, Modifier.testTag("content"))
+            }
+        }
+        press(KeyEvent.KEYCODE_BUTTON_A)
+        press(KeyEvent.KEYCODE_DPAD_LEFT)
+        repeat(4) { press(KeyEvent.KEYCODE_DPAD_DOWN) }
+        rule.onNodeWithTag("footer").assertIsFocused().assertIsDisplayed()
+        repeat(2) { press(KeyEvent.KEYCODE_DPAD_UP) }
+        rule.onNode(androidx.compose.ui.test.hasText("Mods") and isFocused()).assertIsDisplayed()
+    }
+
+    @Test
     fun focusComesBackToTheSameItemOnReturn() {
         var screen by mutableStateOf("list")
         content {
@@ -233,6 +316,36 @@ class ControllerTest {
         rule.onNodeWithTag("inside").assertIsFocused()
         press(KeyEvent.KEYCODE_BUTTON_B, window = sheetView)
         assertEquals(false, open)
+        rule.onNodeWithTag("open").assertIsFocused()
+    }
+
+    @Test
+    fun aClosingSheetWinsOverTheWindowsDefaultPick() {
+        var open by mutableStateOf(false)
+        lateinit var sheetView: View
+        val first = FocusRequester()
+        content {
+            ScreenFocus {
+                Column {
+                    BlockButton("Import", {}, Modifier.testTag("import").focusRequester(first))
+                    BlockButton("Open", { open = true }, Modifier.testTag("open"))
+                }
+            }
+            if (open) {
+                BlockSheet({ open = false }) {
+                    sheetView = LocalView.current
+                    BlockButton("Inside", {}, Modifier.testTag("inside"))
+                }
+            } else {
+                // What Compose does when the window gets focus back: the first item.
+                LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+            }
+        }
+        press(KeyEvent.KEYCODE_BUTTON_A)
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        press(KeyEvent.KEYCODE_BUTTON_A)
+        rule.onNodeWithTag("inside").assertIsFocused()
+        press(KeyEvent.KEYCODE_BUTTON_B, window = sheetView)
         rule.onNodeWithTag("open").assertIsFocused()
     }
 

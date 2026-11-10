@@ -6,6 +6,7 @@ import com.ignacio.cofre.kit.instances.InstanceStore
 import com.ignacio.cofre.kit.common.FileOps
 import com.ignacio.cofre.kit.modrinth.Modrinth
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import java.io.File
@@ -15,7 +16,7 @@ import java.io.File
  * the jar's [key], so turning a mod off and on keeps its identity.
  */
 class ModIndex(val instance: File) {
-    @Serializable data class Entry(val projectId: String, val versionId: String, val source: String = "modrinth", val channel: VersionChannel = VersionChannel.Release, val installedDirectly: Boolean = true, val sha1: String? = null)
+    @Serializable data class Entry(val projectId: String, val versionId: String, val source: String = "modrinth", val channel: VersionChannel = VersionChannel.Release, val installedDirectly: Boolean = true, val sha1: String? = null, val pinned: Boolean = false)
     val file: File get() = File(instance, "cofre-mods.json")
     fun read(): Map<String, Entry> = if (file.isFile) Kit.json.decodeFromString<Map<String, Entry>>(file.readText()).onEach { safeFilename(it.key) }.mapKeys { key(it.key) } else emptyMap()
     fun write(entries: Map<String, Entry>) {
@@ -46,6 +47,18 @@ class ModIndex(val instance: File) {
             }
             entries.keys.retainAll(hashes.keys); write(entries); entries
         } finally { InstanceStore.lock(instance).unlock() }
+    }
+    /**
+     * Pins (or unpins) the jar with index [key]: [ModUpdates.check] skips pinned jars. False when the index doesn't know
+     * the jar (run [identifyUnknown] first).
+     */
+    suspend fun pin(key: String, pinned: Boolean = true): Boolean = withContext(Dispatchers.IO) {
+        InstanceStore.lock(instance).withLock {
+            val entries = read(); val name = key(key)
+            val entry = entries[name] ?: return@withLock false
+            if (entry.pinned != pinned) write(entries + (name to entry.copy(pinned = pinned)))
+            true
+        }
     }
     companion object {
         /** The index key of a jar in `mods/`: its name without `.disabled`. */

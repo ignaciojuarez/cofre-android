@@ -1,6 +1,7 @@
 package com.ignacio.cofre
 
 import android.app.Application
+import com.ignacio.cofre.kit.modfolders.ModFolderMigration
 import com.ignacio.cofre.kit.modpacks.PackStage
 
 class CofreApp : Application() {
@@ -12,12 +13,17 @@ class CofreApp : Application() {
         super.onCreate()
         if (getProcessName() != packageName) return
         graph = AppGraph(this)
-        // Disk housekeeping, once per start: pack imports a kill left half-done, and trash older than 30 days.
+        // Disk housekeeping, once per start: instances still holding their own mods move to mod folders, pack
+        // imports a kill left half-done go, and trash older than 30 days.
         graph.work({}) {
-            graph.onIo {
+            val moved = graph.onIo {
                 PackStage.cleanupAbandoned(graph.instances.root)
-                graph.instances.purgeOldTrash()
+                ModFolderMigration.run(graph.instances, graph.modFolders).also {
+                    graph.instances.purgeOldTrash()
+                    graph.modFolders.purgeOldTrash()
+                }
             }
+            if (moved > 0) graph.library.refresh()
         }
     }
 }

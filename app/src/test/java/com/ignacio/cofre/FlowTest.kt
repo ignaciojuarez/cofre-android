@@ -14,6 +14,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import com.ignacio.cofre.design.ShellSection
 import com.ignacio.cofre.ui.instances.Library
 import org.junit.Rule
@@ -86,7 +87,8 @@ class FlowTest {
         rule.onNodeWithText("This device can't run Minecraft 26.2's Vulkan renderer").assertIsDisplayed()
         rule.onNodeWithText("Push descriptors").assertIsDisplayed()
         rule.onNodeWithText("Instanced vertex attributes").assertIsDisplayed()
-        rule.onNodeWithTag("setup.next").performClick()
+        // The list runs past a 640 dp screen: scroll to the button like a user would.
+        rule.onNodeWithTag("setup.next").performScrollTo().performClick()
         rule.onNodeWithTag("signin.notConfigured").assertIsDisplayed()
     }
 
@@ -106,9 +108,8 @@ class FlowTest {
         press(KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_BUTTON_L1)
         assertEquals(ShellSection.Instances, graph.nav.section)
 
-        // L1/R1 leave focus on the sidebar (core/design's ScreenFocus); Right steps into the list, onto the first
-        // instance rather than the search field. A opens it, B goes back, B again to Play.
-        press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        // L1/R1 move focus into the section's content: the first instance rather than the search field. A opens it,
+        // B goes back, B again to Play.
         rule.onNodeWithTag("instance.Survival+").assert(SemanticsMatcher.expectValue(SemanticsProperties.Focused, true))
         press(KeyEvent.KEYCODE_BUTTON_A)
         assertEquals("survival", graph.nav.instance)
@@ -128,6 +129,7 @@ class FlowTest {
         graph.nav.instance = "skyblock"
         app(graph)
         rule.onNodeWithTag("instance.delete").performClick()
+        rule.onNodeWithTag("deleteInstance.confirm").performClick()
         rule.waitUntil(5_000) { graph.library.undo != null }
         assertTrue(graph.library.instances.none { it.id == "skyblock" })
         assertEquals("Skyblock", graph.library.deleted.single().instance.name)

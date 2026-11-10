@@ -94,22 +94,15 @@ internal fun GallerySectionContent(section: GallerySection) {
     }
 }
 
-/** Two columns on wide screens, one on compact. */
+/** Two columns. */
 @Composable
 private fun Columns(
     left: @Composable ColumnScope.() -> Unit,
     right: @Composable ColumnScope.() -> Unit,
 ) {
-    if (CofreTheme.widthClass == WidthClass.Compact) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            left()
-            right()
-        }
-    } else {
-        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp), content = left)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp), content = right)
-        }
+    Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp), content = left)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp), content = right)
     }
 }
 
@@ -419,7 +412,7 @@ private fun OverlaysPage() {
     Columns(
         left = {
             ListSection(label = "Sheet · card") {
-                SheetPanel(Modifier.fillMaxWidth(), compact = false, hugsContent = true) {
+                SheetPanel(Modifier.fillMaxWidth(), hugsContent = true) {
                     SheetHeader("New instance", {}) { BlockButton("Create", {}, role = ButtonRole.Primary, size = ButtonSize.Small) }
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         ValueRow("Version", "26.2", {})
@@ -427,19 +420,11 @@ private fun OverlaysPage() {
                     }
                 }
             }
-            ListSection(label = "Sheet · bottom") {
-                SheetPanel(compact = true, hugsContent = true) {
-                    SheetHeader("Filters", {})
-                    CofreText("Bottom sheet on compact widths.", CofreTheme.type.secondary, Modifier.padding(16.dp), color = CofreTheme.colors.inkSoft)
-                }
-            }
         },
         right = {
             ListSection(label = "Column header") {
                 Block(Modifier.fillMaxWidth()) {
-                    CompositionLocalProvider(LocalColumnBack provides {}) {
-                        ColumnHeader("Sodium") { IconButton(PixelGlyph.Gear, "Options", {}) }
-                    }
+                    ColumnHeader("Sodium") { IconButton(PixelGlyph.Gear, "Options", {}) }
                 }
             }
             ListSection(label = "Log") { LogView(SampleLog, Modifier.fillMaxWidth().height(130.dp), follow = false) }

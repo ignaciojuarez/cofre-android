@@ -14,6 +14,7 @@ import com.ignacio.cofre.accounts.Accounts
 import com.ignacio.cofre.design.LogLevel
 import com.ignacio.cofre.design.LogLine
 import com.ignacio.cofre.kit.common.ContentKind
+import com.ignacio.cofre.kit.common.FileOps
 import com.ignacio.cofre.kit.common.Kit
 import com.ignacio.cofre.kit.common.Target
 import com.ignacio.cofre.kit.compat.CompatibilityIssue
@@ -27,21 +28,30 @@ import com.ignacio.cofre.kit.logs.LogStore
 import com.ignacio.cofre.kit.logs.ReportBundle
 import com.ignacio.cofre.kit.logs.ReportContext
 import com.ignacio.cofre.kit.logs.ReportInstance
+import com.ignacio.cofre.kit.modfolders.AutoUpdate
+import com.ignacio.cofre.kit.modfolders.ModFolderLink
 import com.ignacio.cofre.kit.mods.ModInstaller
 import com.ignacio.cofre.kit.mods.ModJarMetadata
 import com.ignacio.cofre.kit.mods.ModRequirement
 import com.ignacio.cofre.kit.mods.ModRequirements
+import com.ignacio.cofre.kit.mods.ModUpdates
+import com.ignacio.cofre.kit.mods.Snapshots
+import com.ignacio.cofre.kit.mods.apply
+import com.ignacio.cofre.kit.mods.check
 import com.ignacio.cofre.kit.options.JavaHeap
 import com.ignacio.cofre.onIo
 import com.ignacio.cofre.runtime.GameActivity
 import com.ignacio.cofre.runtime.JreManager
+import com.ignacio.cofre.runtime.VulkanReport
 import com.ignacio.cofre.scratch
 import com.ignacio.cofre.share
+import com.ignacio.cofre.ui.play.FolderUpdates
 import com.ignacio.cofre.ui.setup.plainVulkan
 import com.ignacio.cofre.work
 import com.ignacio.cofre.runtime.launch.GameAccount
 import com.ignacio.cofre.runtime.launch.GameLaunch
 import com.ignacio.cofre.runtime.launch.NeoForgeInstaller
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -59,6 +69,7 @@ import java.time.format.DateTimeFormatter
  */
 class Launcher(private val graph: AppGraph) {
     enum class Stage(@param:StringRes val title: Int) {
+        Updates(R.string.stage_updates),
         Mods(R.string.stage_mods),
         Device(R.string.stage_device),
         Account(R.string.stage_account),
@@ -95,26 +106,86 @@ class Launcher(private val graph: AppGraph) {
         val gettingMods: Boolean = false,
         val modsGot: Boolean = false,
         val fixError: String? = null,
+        /** A before-update snapshot newer than the last clean run: the crash may be the update's. */
+        val rollback: Snapshots.Snapshot? = null,
+        /** The mods that changed since [rollback] ("FerriteCore 9.0.1"). */
+        val updatedMods: List<String> = emptyList(),
+        val rollingBack: Boolean = false,
+        val rolledBack: Boolean = false,
     )
 
-    /** "Before you play": installed mods require mods that aren't installed, or are known or likely to crash on Vulkan. */
-    data class Preflight(
+    /** Whether the selected account can start the game. */
+    enum class AccountState { Ready, SignedOut, None }
+
+    /**
+     * "Will it launch?": one check that Home's Ready tile, "Before you play" and Play all read. Blockers (account,
+     * Vulkan, the mod folder) stop the launch in its stages; mod problems open "Before you play" first. Java ships in
+     * the app and is unpacked by the launch itself, so it's not a step the player can act on.
+     */
+    data class ReadyCheck(
         val instance: Instance,
-        val quickPlay: QuickPlay?,
+        val account: AccountState,
+        val accountName: String?,
+        val vulkan: VulkanReport,
+        /** True when a debug build was told to run past an unsuitable device. */
+        val vulkanSkipped: Boolean,
+        val loaderVersion: String,
+        val loaderInstalled: Boolean,
+        /** Minecraft itself (client, libraries, assets) is installed. */
+        val gameInstalled: Boolean,
+        /** Why the instance's mod folder can't play, or null. */
+        val folderProblem: String?,
         val missing: List<ModRequirement>,
         /** "Controlify needs yet_another_config_lib_v3", one per requirement. */
         val lines: List<String>,
         /** Enabled mods (or the active shader pack) a rule calls broken, or whose jar calls OpenGL directly. */
-        val issues: List<CompatibilityIssue> = emptyList(),
+        val issues: List<CompatibilityIssue>,
+    ) {
+        val vulkanOk: Boolean get() = vulkan.suitable || vulkanSkipped
+        val modProblems: Boolean get() = missing.isNotEmpty() || issues.isNotEmpty()
+        /** What stops the launch outright. */
+        val blockers: Int get() = listOf(account != AccountState.Ready, !vulkanOk, folderProblem != null).count { it }
+        val toFix: Int get() = blockers + missing.size + issues.size
+        /** Roughly what the first Play downloads, in MB; 0 when it's all installed. An estimate: the real lists come with the install. */
+        val firstPlayMB: Int get() = (if (gameInstalled) 0 else GAME_MB) + (if (loaderInstalled) 0 else LOADER_MB)
+    }
+
+    /** "Before you play": installed mods require mods that aren't installed, or are known or likely to crash on Vulkan. */
+    data class Preflight(
+        val check: ReadyCheck,
+        val quickPlay: QuickPlay?,
         val gettingMods: Boolean = false,
         val turningOff: Boolean = false,
         val error: String? = null,
     ) {
+        val instance: Instance get() = check.instance
+        val missing: List<ModRequirement> get() = check.missing
+        val lines: List<String> get() = check.lines
+        val issues: List<CompatibilityIssue> get() = check.issues
         val busy: Boolean get() = gettingMods || turningOff
     }
 
+    /** How the last run of an instance went, for Home's Last session tile. */
     @Serializable
-    private data class Pending(val instance: String, val spec: String, val quickPlay: QuickPlay? = null)
+    data class Session(
+        val instance: String,
+        val startedAt: Long,
+        val endedAt: Long,
+        /** [ExitReason] name. */
+        val reason: String,
+        val clue: String? = null,
+        /** The mod the crash named. */
+        val mod: String? = null,
+        val quickPlay: QuickPlay? = null,
+        /** The last server joined from Cofre, kept across sessions. */
+        val lastServer: QuickPlay? = null,
+    ) {
+        val exit: ExitReason get() = ExitReason.entries.firstOrNull { it.name == reason } ?: ExitReason.Unknown
+        val crashed: Boolean get() = exit != ExitReason.Quit
+    }
+
+    @Serializable
+    private data class Pending(val instance: String, val spec: String, val quickPlay: QuickPlay? = null, val startedAt: Long = 0)
 
     var run by mutableStateOf<Run?>(null)
         private set
@@ -137,29 +208,65 @@ class Launcher(private val graph: AppGraph) {
     val gameRunning: Boolean get() = pendingFile.isFile && gameProcessAlive()
 
     /**
-     * Checks the instance's mods first: a missing requirement, or a mod that will or likely will crash on Vulkan, opens
-     * "Before you play". "May not work" doesn't. Jars the Installed tab hasn't graded yet are scanned here, which takes
-     * a while on a big new pack, so the launch screen shows this as its first stage.
+     * Updates the mod folder first when it's set to update on its own, then checks the mods: a missing requirement, or
+     * a mod that will or likely will crash on Vulkan, opens "Before you play" ("May not work" doesn't) unless
+     * [checked] is false ("Play anyway"). Jars the Installed tab hasn't graded yet are scanned here, which takes a while
+     * on a big new pack, so the launch screen shows these as its first stages.
      */
-    fun play(instance: Instance, quickPlay: QuickPlay? = null) {
+    fun play(instance: Instance, quickPlay: QuickPlay? = null, checked: Boolean = true) {
         if (job?.isActive == true || preflight != null || refusedWhileRunning(instance, quickPlay)) return
         graph.library.select(instance.id)
-        run = Run(instance, quickPlay, stage = Stage.Mods)
+        run = Run(instance, quickPlay, stage = Stage.Updates)
         job = graph.work({ start(instance, quickPlay) }) {
-            val dir = graph.instances.directory(instance)
-            val mods = File(dir, "mods")
-            val missing = graph.onIo { ModRequirements.missing(dir) }
-            val issues = graph.onIo { ContentCompatibility.playIssues(dir, graph.glScans) }.filter { it.severity == "broken" || it.severity == "likely" }
-            if (missing.isEmpty() && issues.isEmpty()) return@work start(instance, quickPlay)
-            val lines = graph.onIo {
-                missing.map { req ->
-                    val by = req.neededBy?.let { ModJarMetadata.read(File(mods, it))?.name ?: it } ?: return@map req.name
-                    graph.context.getString(R.string.mods_needs, by, req.name)
-                }
-            }
+            autoUpdate(instance)
+            stage(Stage.Mods)
+            if (!checked) return@work start(instance, quickPlay)
+            val ready = check(instance)
+            if (!ready.modProblems) return@work start(instance, quickPlay)
             run = null
-            preflight = Preflight(instance, quickPlay, missing, lines, issues)
+            preflight = Preflight(ready, quickPlay)
         }
+    }
+
+    /** The whole ready check for [instance], off the main thread. Jars not graded yet are scanned (cached per jar). */
+    suspend fun check(instance: Instance): ReadyCheck {
+        val current = graph.onIo { runCatching { graph.instances.get(instance.id) }.getOrDefault(instance) }
+        val folderProblem = graph.onIo { folderProblem(current) }
+        val dir = graph.instances.directory(current)
+        val content = if (folderProblem == null) graph.onIo { graph.contentDirectory(current) } else null
+        val missing = content?.let { graph.onIo { ModRequirements.missing(it) } }.orEmpty()
+        val issues = content?.let { graph.onIo { ContentCompatibility.playIssues(dir, graph.glScans, it) } }.orEmpty()
+            .filter { it.severity == "broken" || it.severity == "likely" }
+        val lines = graph.onIo {
+            missing.map { req ->
+                val by = req.neededBy?.let { ModJarMetadata.read(File(content, "mods/$it"))?.name ?: it } ?: return@map req.name
+                graph.context.getString(R.string.mods_needs, by, req.name)
+            }
+        }
+        val entry = graph.accounts.selected
+        val account = when {
+            entry == null -> AccountState.None
+            entry.signedOut -> AccountState.SignedOut
+            else -> AccountState.Ready
+        }
+        val loader = current.loaderVersion ?: NeoForgeInstaller.VERSION
+        return graph.onIo {
+            val files = GameLaunch(graph.context).files
+            ReadyCheck(
+                current, account, entry?.account?.name, graph.vulkan, vulkanSkipped = skipVulkanCheck,
+                loaderVersion = loader, loaderInstalled = files.versionJson("neoforge-$loader").isFile,
+                gameInstalled = files.versionJson(Target.GAME_VERSION).isFile && File(files.assets, "indexes").list().orEmpty().isNotEmpty(),
+                folderProblem = folderProblem, missing = missing, lines = lines, issues = issues,
+            )
+        }
+    }
+
+    /** Turns off [issues]' mods in [instance]'s folder (a ready-check fix). */
+    suspend fun turnOff(instance: Instance, issues: List<CompatibilityIssue>) {
+        val dir = graph.instances.directory(instance)
+        val content = graph.onIo { graph.contentDirectory(instance) }
+        InstanceStore.lock(content).withLock { graph.onIo { ContentCompatibility.turnOff(issues, dir, content) } }
+        graph.library.refresh()
     }
 
     private fun start(instance: Instance, quickPlay: QuickPlay?) {
@@ -198,8 +305,7 @@ class Launcher(private val graph: AppGraph) {
         val current = preflight?.takeIf { !it.busy && it.issues.isNotEmpty() } ?: return
         preflight = current.copy(turningOff = true, error = null)
         graph.work({ preflight = current.copy(error = it) }) {
-            val dir = graph.instances.directory(current.instance)
-            InstanceStore.lock(dir).withLock { graph.onIo { ContentCompatibility.turnOff(current.issues, dir) } }
+            turnOff(current.instance, current.issues)
             preflight = null
             play(current.instance, current.quickPlay)
         }
@@ -226,10 +332,12 @@ class Launcher(private val graph: AppGraph) {
         }
     }
 
-    private suspend fun getMissing(instance: Instance, missing: List<ModRequirement>) {
+    /** Installs [missing] requirements into [instance]'s folder through the mod installer, then checks they're there. */
+    suspend fun getMissing(instance: Instance, missing: List<ModRequirement>) {
         val dir = graph.instances.directory(instance)
-        ModInstaller(dir, modrinth = graph.modrinth).installMissing(missing)
-        val left = graph.onIo { ModRequirements.missing(dir) }.filter { req -> missing.any { it.modId == req.modId } }
+        val content = graph.onIo { graph.contentDirectory(instance) }
+        ModInstaller(content, dir, modrinth = graph.modrinth).installMissing(missing)
+        val left = graph.onIo { ModRequirements.missing(content) }.filter { req -> missing.any { it.modId == req.modId } }
         check(left.isEmpty()) { graph.context.getString(R.string.mods_still_missing, left.joinToString { it.name }) }
         graph.library.refresh()
     }
@@ -243,6 +351,7 @@ class Launcher(private val graph: AppGraph) {
 
     private suspend fun launch(instance: Instance, quickPlay: QuickPlay?) {
         log(graph.context.getString(R.string.log_launch_start, instance.name))
+        graph.onIo { folderProblem(graph.instances.get(instance.id)) }?.let { error(it) }
         stage(Stage.Device)
         val vulkan = graph.onIo { graph.vulkan }
         if (!vulkan.suitable && !skipVulkanCheck) error(graph.context.getString(R.string.launch_vulkan_unsuitable, vulkan.missing.joinToString { plainVulkan(graph.context.resources, it) }))
@@ -258,13 +367,49 @@ class Launcher(private val graph: AppGraph) {
         stage(Stage.Start)
         graph.onIo {
             pendingFile.parentFile?.mkdirs()
-            pendingFile.writeText(Kit.json.encodeToString(Pending(instance.id, spec.path, quickPlay)))
+            pendingFile.writeText(Kit.json.encodeToString(Pending(instance.id, spec.path, quickPlay, System.currentTimeMillis())))
             graph.instances.markPlayed(instance.id)
         }
         graph.context.startActivity(GameActivity.intent(graph.context, spec, session.accessToken).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         stage(Stage.InGame)
         run = run?.copy(done = true)
         graph.library.refresh()
+    }
+
+    /** Why [instance] can't play with its mod folder (gone, not for this instance, or can't play yet); null when it can. Blocking. */
+    private fun folderProblem(instance: Instance): String? {
+        if (instance.modFolder == null) return null
+        val folder = graph.folderOf(instance) ?: return graph.context.getString(R.string.folder_missing)
+        if (!folder.playable) return graph.context.getString(R.string.launch_folder_unplayable, folder.name, folder.loader.displayName, folder.gameVersion)
+        if (!folder.fits(instance)) {
+            return graph.context.getString(R.string.launch_folder_mismatch, folder.name, folder.loader.displayName, folder.gameVersion, instance.loader.displayName, instance.gameVersion)
+        }
+        return null
+    }
+
+    /**
+     * The Updates stage: a folder set to update on its own gets its updates (after a before-update snapshot) before the
+     * mods are checked. Never stops the launch: offline, on metered data or when an update fails, it plays as it is.
+     */
+    private suspend fun autoUpdate(instance: Instance) {
+        val current = graph.onIo { runCatching { graph.instances.get(instance.id) }.getOrNull() } ?: return
+        val folder = graph.onIo { graph.folderOf(current) }?.takeIf { it.autoUpdate == AutoUpdate.Auto && it.playable && it.fits(current) } ?: return
+        if (graph.downloadsModel.metered()) return log(graph.context.getString(R.string.log_updates_metered), LogLevel.Warning)
+        try {
+            val dir = graph.onIo { graph.modFolders.directory(folder) }
+            val updates = ModUpdates.check(dir, graph.modrinth, folder.gameVersion, folder.loader, folder.includeBeta)
+            if (updates.isEmpty()) return log(graph.context.getString(R.string.log_updates_none))
+            val result = ModUpdates.apply(dir, updates, ModInstaller(dir, modrinth = graph.modrinth)) { p ->
+                if (p.totalBytes > 0) run = run?.copy(fraction = (p.bytes.toFloat() / p.totalBytes).coerceIn(0f, 1f))
+            }
+            FolderUpdates.forget(graph, folder.id)
+            result.updated.forEach { log(graph.context.getString(R.string.log_updated, it.name, it.target.version), LogLevel.Success) }
+            result.failed.forEach { log(graph.context.getString(R.string.log_update_failed, it.update.name, it.reason), LogLevel.Warning) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log(graph.context.getString(R.string.log_updates_failed, e.message.orEmpty()), LogLevel.Warning)
+        }
     }
 
     /** NeoForge, then the runtime's launch spec (game files and Java installed on the way) with this instance's heap, JVM arguments and quick play. */
@@ -285,7 +430,14 @@ class Launcher(private val graph: AppGraph) {
             val account = GameAccount(session.name, session.uuid)
             val heap = heapMB(instance)
             val jvm = instance.jvmArguments.split(Regex("\\s+")).filter { it.isNotBlank() }
-            val file = InstanceStore.lock(dir).withLock { withContext(graph.io) { game.prepare(version, dir, account, heap, jvm, quickPlay?.args.orEmpty()) } }
+            val file = InstanceStore.lock(dir).withLock {
+                withContext(graph.io) {
+                    // Right before every launch: the game reads mods through these links.
+                    val current = graph.instances.get(instance.id)
+                    ModFolderLink.link(dir, current.modFolder?.let { graph.contentDirectory(current) })
+                    game.prepare(version, dir, account, heap, jvm, quickPlay?.args.orEmpty())
+                }
+            }
             log(graph.context.getString(R.string.log_files_ready), LogLevel.Success)
             log(graph.context.getString(R.string.log_heap, heap))
             file
@@ -312,27 +464,81 @@ class Launcher(private val graph: AppGraph) {
             val pending = graph.onIo { runCatching { Kit.json.decodeFromString<Pending>(pendingFile.readText()) }.getOrNull().also { pendingFile.delete() } }
                 ?: return@work
             run = null
-            stopped = graph.onIo { diagnose(pending) }
+            stopped = diagnose(pending)
             graph.library.refresh()
         }
     }
 
-    private fun diagnose(pending: Pending): Stopped? {
-        val instance = runCatching { graph.instances.get(pending.instance) }.getOrNull() ?: return null
-        val exit = GameLaunch(graph.context).exit(File(pending.spec))
-        val report = exit.report.copy(instance = instance.name)
+    /**
+     * Why the game stopped, recorded as the instance's last session. A clean quit marks the instance's settings and its
+     * folder's mods (a last-good snapshot) as working; a crash after an update offers to roll the mods back.
+     */
+    private suspend fun diagnose(pending: Pending): Stopped? {
+        val instance = graph.onIo { runCatching { graph.instances.get(pending.instance) }.getOrNull() } ?: return null
+        val dir = graph.instances.directory(instance)
+        val report = graph.onIo { GameLaunch(graph.context).exit(File(pending.spec)).report.copy(instance = instance.name) }
+        val content = graph.onIo { runCatching { graph.contentDirectory(instance) }.getOrNull() }
+        graph.onIo { runCatching { record(instance, pending, report) } }
         if (report.reason == ExitReason.Quit) {
             // A clean run: these memory and JVM settings become the ones "Restore last working" goes back to.
-            graph.instances.markLastGood(instance.id)
+            graph.onIo { graph.instances.markLastGood(instance.id) }
+            if (content != null) runCatching { Snapshots.take(content, Snapshots.Reason.LastGood) }
             return null
         }
         val missing = report.missingDependencies.map { ModRequirements.requirement(it.modId, "dependency:${it.modId}", it.requestedBy) }
-        return Stopped(report, instance, modFor(report, graph.instances.directory(instance)), quickPlay = pending.quickPlay, missing = missing)
+        val rollback = content?.let { runCatching { rollbackFor(it) }.getOrNull() }
+        return Stopped(
+            report, instance, content?.let { graph.onIo { modFor(report, dir, it) } }, quickPlay = pending.quickPlay, missing = missing,
+            rollback = rollback?.first, updatedMods = rollback?.second.orEmpty(),
+        )
     }
 
-    private fun modFor(report: GameExitReport, dir: File): ContentStore.Item? {
+    /** The newest before-update snapshot taken after the last clean run, with the mods changed since; null if there's none. */
+    private suspend fun rollbackFor(content: File): Pair<Snapshots.Snapshot, List<String>>? {
+        val snapshots = graph.onIo { Snapshots.list(content) }
+        val good = snapshots.firstOrNull { it.reason == Snapshots.Reason.LastGood }
+        val before = snapshots.firstOrNull { it.reason == Snapshots.Reason.BeforeUpdate }?.takeIf { good == null || it.createdAt > good.createdAt } ?: return null
+        val changes = Snapshots.changedSince(content, before)
+        if (changes.count == 0) return null
+        val names = graph.onIo {
+            (changes.changed + changes.added).map { jar ->
+                ModJarMetadata.read(File(content, "mods/$jar"))?.let { listOfNotNull(it.name, it.version).joinToString(" ") } ?: jar
+            }
+        }
+        return before to names
+    }
+
+    /** Game stopped → "Roll back to <date> snapshot": the mods as they were before the update, the rolled-back ones pinned. */
+    fun rollBack() {
+        val current = stopped?.takeIf { it.rollback != null && !it.rollingBack && !it.rolledBack } ?: return
+        val snapshot = current.rollback ?: return
+        stopped = current.copy(rollingBack = true, fixError = null)
+        graph.work({ stopped = current.copy(fixError = it) }) {
+            val content = graph.onIo { graph.contentDirectory(current.instance) }
+            Snapshots.restore(content, snapshot, pin = true)
+            current.instance.modFolder?.let { FolderUpdates.forget(graph, it) }
+            stopped = current.copy(rolledBack = true)
+            graph.library.refresh()
+        }
+    }
+
+    private fun sessionFile(instanceId: String): File = File(graph.home, "launch/sessions/$instanceId.json")
+
+    /** How [instance]'s last run went, or null before its first. Blocking. */
+    fun lastSession(instance: Instance): Session? =
+        runCatching { Kit.json.decodeFromString<Session>(sessionFile(instance.id).readText()) }.getOrNull()
+
+    private fun record(instance: Instance, pending: Pending, report: GameExitReport) {
+        val log = File(graph.instances.directory(instance), "logs/latest.log")
+        val ended = log.lastModified().takeIf { log.isFile && it > pending.startedAt } ?: System.currentTimeMillis()
+        val server = pending.quickPlay?.takeIf { it.args.firstOrNull() == "--quickPlayMultiplayer" } ?: lastSession(instance)?.lastServer
+        val session = Session(instance.id, pending.startedAt, ended, report.reason.name, report.clue, report.mod, pending.quickPlay, server)
+        FileOps.atomic(sessionFile(instance.id).apply { parentFile?.mkdirs() }, Kit.json.encodeToString(session).toByteArray())
+    }
+
+    private fun modFor(report: GameExitReport, dir: File, content: File): ContentStore.Item? {
         val name = report.mod ?: return null
-        return runCatching { ContentStore(dir).list(ContentKind.Mods) }.getOrDefault(emptyList())
+        return runCatching { ContentStore(dir, content).list(ContentKind.Mods) }.getOrDefault(emptyList())
             .firstOrNull { it.enabled && (it.name.equals(name, ignoreCase = true) || it.modID.equals(name, ignoreCase = true)) }
     }
 
@@ -342,7 +548,8 @@ class Launcher(private val graph: AppGraph) {
         val mod = current.mod ?: return
         graph.work({}) {
             val dir = graph.instances.directory(current.instance)
-            InstanceStore.lock(dir).withLock { graph.onIo { ContentStore(dir).setEnabled(false, mod) } }
+            val content = graph.onIo { graph.contentDirectory(current.instance) }
+            InstanceStore.lock(content).withLock { graph.onIo { ContentStore(dir, content).setEnabled(false, mod) } }
             stopped = current.copy(modOff = true)
         }
     }
@@ -408,5 +615,8 @@ class Launcher(private val graph: AppGraph) {
 
     private companion object {
         val TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
+        /** Rough first-install sizes for the ready check: Minecraft 26.2 with its assets, then NeoForge's libraries. */
+        const val GAME_MB = 560
+        const val LOADER_MB = 90
     }
 }

@@ -11,6 +11,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
 import java.io.FileNotFoundException
+import java.nio.file.Files
+import java.nio.file.Paths
+import android.provider.DocumentsContract.Document
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -35,5 +39,16 @@ class InstancesProviderTest {
         assertFailsWith<FileNotFoundException> { provider.queryDocument("root//b", null) }
         File(context.filesDir, "instances/a/mods").mkdirs()
         assertTrue(provider.isChildDocument("root/a", "root/a/mods"))
+
+        // An instance's link to its mod folder isn't listed or followed; the folder is reached through Mod folders.
+        val folder = File(context.filesDir, "mod-folders/f/resourcepacks").apply { mkdirs() }
+        File(folder, "pack.zip").writeText("x")
+        Files.createSymbolicLink(File(context.filesDir, "instances/a/resourcepacks").toPath(), Paths.get("../../mod-folders/f/resourcepacks"))
+        val names = provider.queryChildDocuments("root/a", arrayOf(Document.COLUMN_DOCUMENT_ID), null as String?).use { c -> List(c.count) { c.moveToPosition(it); c.getString(0) } }
+        assertEquals(listOf("root/a/mods"), names)
+        assertFailsWith<FileNotFoundException> { provider.queryDocument("root/a/resourcepacks/pack.zip", null) }
+        assertFalse(provider.isChildDocument("root/a", "root/a/resourcepacks"))
+        assertTrue(provider.isChildDocument("folders/f", "folders/f/resourcepacks/pack.zip"))
+        assertFailsWith<FileNotFoundException> { provider.queryDocument("folders/../instances", null) }
     }
 }

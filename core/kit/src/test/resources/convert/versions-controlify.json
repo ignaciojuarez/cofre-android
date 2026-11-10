@@ -1,0 +1,54 @@
+[
+ {
+  "id": "controlify-b",
+  "project_id": "controlify",
+  "name": "3.6.0-beta.2",
+  "version_number": "3.6.0-beta.2",
+  "game_versions": [
+   "26.2"
+  ],
+  "loaders": [
+   "fabric"
+  ],
+  "version_type": "beta",
+  "dependencies": [],
+  "files": [
+   {
+    "hashes": {
+     "sha1": "#controlify-beta",
+     "sha512": "&controlify-beta"
+    },
+    "url": "{{base}}/files/controlify-beta.jar",
+    "filename": "controlify-beta.jar",
+    "size": "%controlify-beta",
+    "primary": true
+   }
+  ]
+ },
+ {
+  "id": "controlify-f",
+  "project_id": "controlify",
+  "name": "3.5.3",
+  "version_number": "3.5.3",
+  "game_versions": [
+   "26.2"
+  ],
+  "loaders": [
+   "fabric"
+  ],
+  "version_type": "release",
+  "dependencies": [],
+  "files": [
+   {
+    "hashes": {
+     "sha1": "#controlify-fabric",
+     "sha512": "&controlify-fabric"
+    },
+    "url": "{{base}}/files/controlify-fabric.jar",
+    "filename": "controlify-fabric.jar",
+    "size": "%controlify-fabric",
+    "primary": true
+   }
+  ]
+ }
+]

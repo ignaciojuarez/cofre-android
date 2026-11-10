@@ -47,7 +47,7 @@ import com.ignacio.cofre.kit.instances.Instance
 import com.ignacio.cofre.ui.common.Fmt
 import com.ignacio.cofre.ui.common.loaderLabel
 
-/** Instances: the library beside the open instance (pushed on phones). */
+/** Instances: the library beside the open instance. */
 @Composable
 fun InstancesSection(
     graph: AppGraph,
@@ -58,7 +58,6 @@ fun InstancesSection(
     LaunchedEffect(Unit) { library.refresh() }
     AdaptiveListDetail(
         selection = nav.instance?.takeIf { id -> library.instances.any { it.id == id } },
-        onSelectionChange = { nav.instance = it },
         list = { InstanceList(graph) },
         detail = { id -> library.instances.firstOrNull { it.id == id }?.let { InstanceDetail(graph, it) } },
         modifier = modifier,

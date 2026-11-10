@@ -34,13 +34,13 @@ import com.ignacio.cofre.design.CofreTheme
 import com.ignacio.cofre.design.ControllerHost
 import com.ignacio.cofre.design.IconButton
 import com.ignacio.cofre.design.LocalRemoteImage
-import com.ignacio.cofre.design.NavStyle
 import com.ignacio.cofre.design.PixelGlyph
 import com.ignacio.cofre.design.RemoteImageLoader
 import com.ignacio.cofre.design.ShellSection
 import com.ignacio.cofre.kit.instances.Instance
 import com.ignacio.cofre.kit.logs.ExitReason
 import com.ignacio.cofre.kit.logs.GameExitReport
+import com.ignacio.cofre.ui.convert.ConvertScreen
 import com.ignacio.cofre.ui.downloads.DownloadsSheet
 import com.ignacio.cofre.ui.instances.InstancesSection
 import com.ignacio.cofre.ui.instances.NewInstanceSheet
@@ -150,6 +150,7 @@ fun CofreRoot(
                             onShare = launcher::shareReport,
                             onClose = launcher::dismissStopped,
                             onGetMods = launcher::getStoppedMods,
+                            onRollBack = launcher::rollBack,
                         )
                         run != null -> LaunchScreen(run, onCancel = launcher::cancel, onRetry = launcher::retry)
                         else -> Shell(graph)
@@ -183,8 +184,8 @@ private fun Shell(graph: AppGraph) {
     AdaptiveShell(
         nav.section,
         onSectionChange = { nav.section = it },
-        navFooter = { style ->
-            if (style != NavStyle.TabBar && graph.downloadsModel.summary.visible.isNotEmpty()) {
+        navFooter = {
+            if (graph.downloadsModel.summary.visible.isNotEmpty()) {
                 IconButton(PixelGlyph.Chest, stringResource(R.string.downloads_title), { nav.downloads = true })
             }
         },
@@ -192,7 +193,10 @@ private fun Shell(graph: AppGraph) {
         when (current) {
             ShellSection.Play -> PlaySection(graph)
             ShellSection.Instances -> InstancesSection(graph)
-            ShellSection.Mods -> ModsSection(graph)
+            ShellSection.Mods -> {
+                val converting = nav.convertFolder
+                if (converting != null) ConvertScreen(graph, converting) else ModsSection(graph)
+            }
             ShellSection.Settings -> SettingsSection(graph)
         }
     }

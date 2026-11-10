@@ -1,0 +1,19 @@
+{
+ "hits": [
+  {
+   "project_id": "create",
+   "slug": "create",
+   "title": "Create"
+  },
+  {
+   "project_id": "create-fabric",
+   "slug": "create-fabric",
+   "title": "Create Fabric"
+  },
+  {
+   "project_id": "apotheosis-additions",
+   "slug": "apotheosis-additions",
+   "title": "Apotheosis Additions"
+  }
+ ]
+}

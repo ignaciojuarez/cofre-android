@@ -5,6 +5,7 @@ import com.ignacio.cofre.kit.common.Loader
 import com.ignacio.cofre.kit.common.Target
 import com.ignacio.cofre.kit.common.FileOps
 import com.ignacio.cofre.kit.common.Zip
+import com.ignacio.cofre.kit.modfolders.ModFolderStore
 import kotlinx.serialization.Serializable
 import java.io.File
 import java.nio.file.Files
@@ -35,6 +36,8 @@ data class Instance(
     val icon: String? = null,
     /** Epoch milliseconds of the last launch, for "continue playing". */
     val lastPlayedAt: Long? = null,
+    /** The mod folder this instance links its mods, resource packs and shader packs to (`ModFolderStore`). */
+    val modFolder: String? = null,
 )
 
 class InstanceStore(val root: File) {
@@ -114,9 +117,14 @@ class InstanceStore(val root: File) {
         val next = old.copy(id = nextID, gameDirectory = nextID, name = name, favorite = false, lastPlayedAt = null)
         val dest = directory(next)
         try {
-            FileOps.copy(directory(old), dest)
-            // Undo history and Cofre's own files stay with the source.
-            dest.listFiles().orEmpty().filter { isPrivate(it.name) }.forEach(FileOps::delete)
+            // Undo history and Cofre's own files stay with the source. Mod folder links are made again, pointing at
+            // the same folder: never copied through.
+            Files.createDirectories(dest.toPath())
+            for (file in directory(old).listFiles().orEmpty().filter { !isPrivate(it.name) }) {
+                val path = file.toPath()
+                if (Files.isSymbolicLink(path) && file.name in ModFolderStore.CONTENT) Files.createSymbolicLink(dest.toPath().resolve(file.name), Files.readSymbolicLink(path))
+                else FileOps.copy(file, File(dest, file.name))
+            }
             if (!includeWorlds) FileOps.delete(File(dest, "saves"))
             if (!includeOptions) listOf("options.txt", "optionsof.txt").forEach { File(dest, it).delete() }
             // The copied metadata still names the source; replace only after validating the copy.
@@ -164,8 +172,19 @@ class InstanceStore(val root: File) {
     /** Permanently deletes an instance, skipping the trash. Used to roll back failed installs and imports. */
     fun remove(id: String) { FileOps.delete(directory(get(id))) }
 
-    fun export(id: String, destination: File, includeWorlds: Boolean = true): File {
-        Zip.write(directory(get(id)), destination) { p -> !isPrivate(p) && (includeWorlds || (p != "saves" && !p.startsWith("saves/"))) }
+    /**
+     * A self-contained zip of the instance. With its mod [folder], the folder's real content and mod index take the
+     * place of the instance's links, so importing it makes a new folder.
+     */
+    fun export(id: String, destination: File, includeWorlds: Boolean = true, folder: File? = null): File {
+        val dir = directory(get(id))
+        val content = ModFolderStore.CONTENT + ModFolderStore.INDEX
+        fun tree(root: File, names: List<String>): List<Pair<String, File>> = names.map { FileOps.child(root, it) }.filter { it.exists() }
+            .flatMap { listOf(it) + FileOps.tree(it) }.map { it.relativeTo(root).invariantSeparatorsPath to it }
+        val own = dir.listFiles().orEmpty().map { it.name }.filter { folder == null || it !in content }.sorted()
+        val files = (tree(dir, own) + if (folder != null) tree(folder, content) else emptyList())
+            .filter { (p, _) -> !isPrivate(p) && (includeWorlds || (p != "saves" && !p.startsWith("saves/"))) }
+        Zip.write(files, destination, listOfNotNull(dir, folder))
         return destination
     }
     fun import(archive: File, name: String? = null): Instance {
@@ -178,7 +197,8 @@ class InstanceStore(val root: File) {
             val newName = name ?: uniqueName(old.name)
             require(list().none { it.name == newName }) { "Duplicate name" }
             val id = newID(newName)
-            val next = old.copy(id = id, gameDirectory = id, name = newName, favorite = false, lastPlayedAt = null)
+            // Its mods came in the zip, real files: the caller gives it a new folder (ModFolderMigration.adopt).
+            val next = old.copy(id = id, gameDirectory = id, name = newName, favorite = false, lastPlayedAt = null, modFolder = null)
             FileOps.atomic(File(source, "cofre.json"), Kit.json.encodeToString(next).toByteArray())
             FileOps.move(source, directory(next))
             return next

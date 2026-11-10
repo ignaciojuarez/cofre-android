@@ -11,7 +11,11 @@ import java.nio.file.Files
 import java.util.Properties
 import java.util.UUID
 
-class ContentStore(val gameDirectory: File) {
+/**
+ * An instance's content. Mods, resource packs and shader packs live in [contentDirectory] (the instance's mod folder,
+ * acted on directly: never through the instance's links); data packs, options and `config/` stay in [gameDirectory].
+ */
+class ContentStore(val gameDirectory: File, val contentDirectory: File = gameDirectory) {
     data class Item(val id: String, val name: String, val version: String, val world: String?, val kind: ContentKind, val enabled: Boolean, val inUse: Boolean, val modID: String? = null) {
         val file: String get() = id.substringAfterLast('/')
         val urlName: String get() = file + if (enabled) "" else ".disabled"
@@ -22,7 +26,7 @@ class ContentStore(val gameDirectory: File) {
         return if (kind == ContentKind.DataPacks) {
             require(!world.isNullOrBlank() && '/' !in world)
             FileOps.child(gameDirectory, "saves/$world/$name")
-        } else FileOps.child(gameDirectory, name)
+        } else FileOps.child(contentDirectory, name)
     }
     fun list(kind: ContentKind): List<Item> {
         require(kind.folderName != null) { "Modpacks create instances" }
@@ -50,12 +54,15 @@ class ContentStore(val gameDirectory: File) {
     }
     fun trash(item: Item): TrashToken {
         val source = file(item)
-        val token = TrashToken(source.relativeTo(gameDirectory.absoluteFile).invariantSeparatorsPath, UUID.randomUUID().toString())
+        val token = TrashToken(source.relativeTo(base(item.kind == ContentKind.DataPacks).absoluteFile).invariantSeparatorsPath, UUID.randomUUID().toString())
         FileOps.move(source, trashFile(token)); trashFile(token).setLastModified(System.currentTimeMillis()) // the trash date, for purging
         return token
     }
-    fun restore(token: TrashToken) { FileOps.move(trashFile(token), FileOps.child(gameDirectory, token.path)) }
-    private fun trashFile(token: TrashToken): File { require(token.trashID.matches(Regex("[a-f0-9-]{36}"))); return FileOps.child(gameDirectory, ".cofre-trash/content/${token.trashID}") }
+    fun restore(token: TrashToken) { FileOps.move(trashFile(token), FileOps.child(base(token), token.path)) }
+    /** Removed content waits in the trash of the folder it came from: a mod folder's, or the instance's for data packs. */
+    private fun base(world: Boolean): File = if (world) gameDirectory else contentDirectory
+    private fun base(token: TrashToken): File = base(token.path.startsWith("saves/"))
+    private fun trashFile(token: TrashToken): File { require(token.trashID.matches(Regex("[a-f0-9-]{36}"))); return FileOps.child(base(token), ".cofre-trash/content/${token.trashID}") }
     fun activeShaderPack(): String? {
         for (name in listOf("iris.properties", "oculus.properties")) {
             val file = FileOps.child(gameDirectory, "config/$name"); if (!file.isFile) continue

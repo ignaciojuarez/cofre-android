@@ -25,9 +25,9 @@ object ModRequirements {
             }
         }.distinctBy { it.modId }
     }
-    /** Preflight: what the instance's enabled jars require that nothing installed provides. Jar metadata is cached per file. */
-    fun missing(instance: File): List<ModRequirement> {
-        val jars = File(instance, "mods").listFiles()?.filter { it.isFile && it.name.endsWith(".jar") }.orEmpty()
+    /** Preflight: what [folder]'s (a mod folder's) enabled jars require that nothing installed provides. Jar metadata is cached per file. */
+    fun missing(folder: File): List<ModRequirement> {
+        val jars = File(folder, "mods").listFiles()?.filter { it.isFile && it.name.endsWith(".jar") }.orEmpty()
         val metadata = jars.mapNotNull { jar -> ModJarMetadata.read(jar)?.let { jar.name to it } }.toMap()
         return missing(metadata, jars.filter { it.name !in metadata }.map { it.name })
     }

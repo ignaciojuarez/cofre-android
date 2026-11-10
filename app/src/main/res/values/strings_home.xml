@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Home (Play): the dashboard tiles, the ready check, auto-update at launch and the rollback offer. -->
+<resources>
+    <!-- Left column -->
+    <string name="home_running">Minecraft is running</string>
+    <string name="home_running_short">Running</string>
+    <string name="home_running_note">Go back to it from Recents. Its mod folder and options are read-only until it stops.</string>
+    <string name="home_resume">Resume %1$s</string>
+    <string name="home_join">Join %1$s</string>
+
+    <!-- Tiles -->
+    <string name="home_open">Open</string>
+    <string name="home_back">Back</string>
+    <string name="home_checking">Checking…</string>
+    <string name="home_never">never</string>
+
+    <!-- 1 · Ready check -->
+    <string name="home_ready">Ready check</string>
+    <string name="home_ready_value">Ready</string>
+    <string name="home_cant_launch">Won\'t launch</string>
+    <plurals name="home_to_fix">
+        <item quantity="one">%d to fix</item>
+        <item quantity="other">%d to fix</item>
+    </plurals>
+    <string name="home_ready_all">Account, Vulkan, Java and NeoForge are ready</string>
+    <string name="home_good_to_go">All good</string>
+    <string name="home_first_play">Downloads about %1$d MB on first play</string>
+    <string name="home_first_play_badge">First play</string>
+    <string name="home_fix_all">Fix all</string>
+    <string name="home_no_account">No account</string>
+    <string name="home_signed_out_short">Signed out</string>
+    <string name="home_vulkan_missing_short">Vulkan can\'t run 26.2</string>
+    <string name="home_may_crash">%1$s may crash</string>
+    <string name="home_signed_in">Signed in as %1$s</string>
+    <string name="home_account_ok">Ready to play Java Edition</string>
+    <string name="home_vulkan_ok">Vulkan ready</string>
+    <string name="home_java_loader">NeoForge %1$s and Java 25</string>
+    <string name="home_installed">Installed</string>
+    <string name="home_folder_cant_play">Its mod folder can\'t play</string>
+    <string name="home_open_instance">Open instance</string>
+    <string name="home_turn_off">Turn off</string>
+    <string name="home_get">Get %1$s</string>
+    <string name="home_from_modrinth">Required · from Modrinth</string>
+
+    <!-- 2 · Mod folder -->
+    <string name="home_folder">Mod folder</string>
+    <string name="home_no_folder">No mod folder</string>
+    <string name="home_on_off">%1$d on · %2$d off</string>
+    <string name="home_shared_with">shared with %1$s</string>
+    <string name="home_shared_count">Shared ×%1$d</string>
+    <plurals name="home_updates">
+        <item quantity="one">%d update</item>
+        <item quantity="other">%d updates</item>
+    </plurals>
+    <string name="home_up_to_date">Up to date</string>
+    <string name="home_offline">Offline</string>
+    <string name="home_offline_checked">Offline · last checked %1$s</string>
+    <string name="home_no_updates">Every mod is up to date.</string>
+    <string name="home_updates_off">Update checks are off for this folder.</string>
+    <string name="home_no_fitting_folder">No other folder fits this instance.</string>
+    <string name="home_open_in_mods">Open in Mods</string>
+    <string name="home_shared_banner">Shared with %1$s. Changes apply to both.</string>
+    <string name="home_copy_folder">Copy for this instance</string>
+    <string name="home_folder_read_only">Read-only while Minecraft runs</string>
+    <string name="home_update">Update</string>
+    <string name="home_update_all">Update all · %1$d</string>
+    <string name="home_update_failed">Couldn\'t update %1$s: %2$s</string>
+    <string name="home_quick_toggles">Quick toggles</string>
+
+    <!-- 3 · Performance -->
+    <string name="home_performance">Performance</string>
+    <string name="home_perf_value">%1$s · %2$d chunks</string>
+    <string name="home_perf_battery">Battery</string>
+    <string name="home_perf_balanced">Balanced</string>
+    <string name="home_perf_quality">Quality</string>
+    <string name="home_perf_custom">Custom</string>
+    <string name="home_fps">%1$d FPS</string>
+    <string name="home_fps_limit">FPS limit</string>
+    <string name="home_celsius">%1$d °C</string>
+    <string name="home_battery">%1$d%% battery</string>
+    <string name="home_battery_charging">%1$d%% charging</string>
+    <string name="home_memory_auto">Auto · %1$s</string>
+    <string name="home_render_distance">Render distance</string>
+    <string name="home_simulation_distance">Simulation distance</string>
+    <string name="home_chunks">%1$d chunks</string>
+    <string name="home_device_unknown">Device temperature unavailable</string>
+    <string name="home_thermal_good">Thermal headroom good</string>
+    <string name="home_thermal_warm">Warm: the system may slow it down</string>
+    <string name="home_thermal_hot">Hot: let it cool down before playing</string>
+    <string name="home_perf_note">Saved to %1$s\'s options.txt. Applies next launch.</string>
+    <string name="home_perf_running">Changes wait until Minecraft stops</string>
+
+    <!-- 4 · Server -->
+    <string name="home_no_servers">No servers</string>
+    <string name="home_online">Online</string>
+    <string name="home_online_of">%1$d / %2$d online</string>
+    <plurals name="home_servers">
+        <item quantity="one">%d server</item>
+        <item quantity="other">%d servers</item>
+    </plurals>
+
+    <!-- 5 · Last session -->
+    <string name="home_session">Last session</string>
+    <string name="home_never_played">Not played yet</string>
+    <string name="home_session_empty">Play once and how it went shows here.</string>
+    <string name="home_seconds">%1$d s</string>
+    <string name="home_minutes">%1$d min</string>
+    <string name="home_hours">%1$d h %2$d min</string>
+    <string name="home_ended_quit">quit normally</string>
+    <string name="home_ended_crash">%1$s</string>
+    <string name="home_crashed">Crashed</string>
+    <string name="home_quit">Quit</string>
+    <string name="home_no_errors">No errors</string>
+    <string name="home_played">Played</string>
+    <string name="home_ended">Ended</string>
+    <string name="home_played_in">Played in</string>
+    <string name="home_turn_off_and_play">Turn off %1$s and play</string>
+    <string name="home_log_clean">The game\'s log from the last session</string>
+    <string name="home_log_crash">The game\'s log: the crash is near the end</string>
+    <string name="home_log_empty">No log yet.</string>
+    <string name="home_view">View</string>
+    <string name="home_share">Share</string>
+
+    <!-- 6 · Screenshots -->
+    <string name="home_screenshots">Screenshots</string>
+    <string name="home_newest">Newest %1$s</string>
+    <string name="home_no_screenshots">No screenshots yet</string>
+    <string name="home_screenshots_empty">Press F2 in game. The newest becomes this instance\'s cover.</string>
+
+    <!-- Launch: the Updates stage -->
+    <string name="stage_updates">Update mods</string>
+    <string name="log_updates_none">Mods are up to date</string>
+    <string name="log_updates_metered">On metered data: mod updates wait for Wi-Fi</string>
+    <string name="log_updated">Updated %1$s to %2$s</string>
+    <string name="log_update_failed">Couldn\'t update %1$s: %2$s</string>
+    <string name="log_updates_failed">Couldn\'t check for mod updates: %1$s</string>
+
+    <!-- Game stopped: roll back an update -->
+    <plurals name="stopped_updated_before">
+        <item quantity="one">%1$d mod updated right before it: %2$s.</item>
+        <item quantity="other">%1$d mods updated right before it: %2$s.</item>
+    </plurals>
+    <string name="stopped_roll_back">Roll back to %1$s snapshot</string>
+    <string name="stopped_roll_back_note">Rolled-back mods get pinned until you update them yourself.</string>
+    <string name="stopped_rolled_back">Mods rolled back. Play again to try them as they were.</string>
+    <string name="stopped_open_log">Open log</string>
+</resources>

@@ -1,0 +1,28 @@
+[
+ {
+  "id": "cloth",
+  "project_id": "cloth-config",
+  "name": "21.2.0",
+  "version_number": "21.2.0",
+  "game_versions": [
+   "26.2"
+  ],
+  "loaders": [
+   "fabric"
+  ],
+  "version_type": "release",
+  "dependencies": [],
+  "files": [
+   {
+    "hashes": {
+     "sha1": "#cloth-config",
+     "sha512": "&cloth-config"
+    },
+    "url": "{{base}}/files/cloth-config.jar",
+    "filename": "cloth-config.jar",
+    "size": "%cloth-config",
+    "primary": true
+   }
+  ]
+ }
+]

@@ -22,6 +22,11 @@ import androidx.compose.ui.unit.dp
 import com.ignacio.cofre.AppGraph
 import com.ignacio.cofre.R
 import com.ignacio.cofre.design.Badge
+import com.ignacio.cofre.design.Banner
+import com.ignacio.cofre.design.ControllerAction
+import com.ignacio.cofre.design.Pad
+import com.ignacio.cofre.design.SectionLabel
+import com.ignacio.cofre.design.controllerActions
 import com.ignacio.cofre.design.BlockButton
 import com.ignacio.cofre.design.BlockSlider
 import com.ignacio.cofre.design.ButtonRole
@@ -39,7 +44,6 @@ import com.ignacio.cofre.design.SelectButton
 import com.ignacio.cofre.design.Stat
 import com.ignacio.cofre.design.ToggleRow
 import com.ignacio.cofre.design.Tone
-import com.ignacio.cofre.design.WidthClass
 import com.ignacio.cofre.kit.instances.Instance
 import com.ignacio.cofre.kit.options.JavaHeap
 import com.ignacio.cofre.ui.common.Fmt
@@ -64,7 +68,7 @@ fun InstanceDetail(
             BlockButton(stringResource(R.string.play), { graph.launcher.play(instance) }, Modifier.testTag("instance.play"), role = ButtonRole.Primary, size = ButtonSize.Small, icon = PixelGlyph.Play)
         }
         PaneScroll {
-            SceneHeader(instance.seed, if (CofreTheme.widthClass == WidthClass.Compact) 100.dp else 130.dp) {
+            SceneHeader(instance.seed, 130.dp) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Badge("NeoForge ${instance.loaderVersion ?: instance.gameVersion}", tone = Tone.NeoForge)
                     Badge("Vulkan", tone = Tone.Success)
@@ -86,22 +90,37 @@ private fun Overview(graph: AppGraph, instance: Instance) {
     val library = graph.library
     val context = LocalContext.current
     val stats by produceState<Library.Stats?>(null, instance) { value = library.stats(instance) }
+    val folders = rememberFolders(graph)
+    var picking by rememberSaveable(instance.id) { mutableStateOf(false) }
+    var deleting by rememberSaveable(instance.id) { mutableStateOf(false) }
     val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         uri?.let { library.export(instance.id, it) }
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Stat(stats?.mods?.toString() ?: "—", stringResource(R.string.instance_mods), Modifier.weight(1f))
-        Stat(stats?.bytes?.let { Fmt.bytes(context, it) } ?: "—", stringResource(R.string.instance_size), Modifier.weight(1f))
-        Stat(Fmt.ago(instance.lastPlayedAt) ?: stringResource(R.string.instance_never), stringResource(R.string.instance_played), Modifier.weight(1f))
+    val folderName = folders?.firstOrNull { it.folder.id == instance.modFolder }?.folder?.name
+    Column(
+        Modifier.controllerActions(ControllerAction(Pad.X, stringResource(R.string.link_section)) { picking = true }),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        SectionLabel(stringResource(R.string.link_section))
+        FolderBlock(graph, instance, folders, onChange = { picking = true })
+        library.error?.let { Banner(it, PixelGlyph.Cross, tone = Tone.Danger) { BlockButton(stringResource(R.string.dismiss), library::clearError, size = ButtonSize.Small) } }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Stat(stats?.mods?.toString() ?: "—", stringResource(R.string.instance_mods), Modifier.weight(1f))
+            Stat(stats?.bytes?.let { Fmt.bytes(context, it) } ?: "—", stringResource(R.string.instance_size), Modifier.weight(1f))
+            Stat(Fmt.ago(instance.lastPlayedAt) ?: stringResource(R.string.instance_never), stringResource(R.string.instance_played), Modifier.weight(1f))
+        }
+        if (instance.notes.isNotBlank()) CofreText(instance.notes, CofreTheme.type.body, color = CofreTheme.colors.inkSoft)
+        ListSection(label = stringResource(R.string.instance_section)) {
+            ToggleRow(stringResource(R.string.instance_favorite), instance.favorite, { library.favorite(instance.id, it) })
+        }
+        BlockButton(stringResource(R.string.instance_duplicate), { library.duplicate(instance.id) { graph.nav.instance = it.id } })
+        folderName?.let { Note(stringResource(R.string.duplicate_note, it)) }
+        BlockButton(stringResource(R.string.instance_export), { exporter.launch("${instance.name}.zip") }, icon = PixelGlyph.Chest)
+        BlockButton(stringResource(R.string.instance_delete), { deleting = true }, Modifier.testTag("instance.delete"), role = ButtonRole.GhostDanger)
+        Note(stringResource(R.string.instance_delete_note))
     }
-    if (instance.notes.isNotBlank()) CofreText(instance.notes, CofreTheme.type.body, color = CofreTheme.colors.inkSoft)
-    ListSection(label = stringResource(R.string.instance_section)) {
-        ToggleRow(stringResource(R.string.instance_favorite), instance.favorite, { library.favorite(instance.id, it) })
-    }
-    BlockButton(stringResource(R.string.instance_duplicate), { library.duplicate(instance.id) { graph.nav.instance = it.id } })
-    BlockButton(stringResource(R.string.instance_export), { exporter.launch("${instance.name}.zip") }, icon = PixelGlyph.Chest)
-    BlockButton(stringResource(R.string.instance_delete), { library.trash(instance.id) }, Modifier.testTag("instance.delete"), role = ButtonRole.GhostDanger)
-    Note(stringResource(R.string.instance_delete_note))
+    if (picking) FolderPickerSheet(graph, instance) { picking = false }
+    if (deleting) DeleteInstanceSheet(graph, instance) { deleting = false }
 }
 
 /** Name, group, notes, memory, JVM arguments (with a way back to the last set that worked) and NeoForge version. */

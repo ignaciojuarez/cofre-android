@@ -7,7 +7,7 @@ Cofre for Android is a native Kotlin + Jetpack Compose launcher for Minecraft: J
 - Launcher, kit, design system and runtime are built and emulator-tested. The game reaches Minecraft's Vulkan device check on the emulator; the first frame waits for the Odin 3 (`runtime/README.md` → "Needs the real device").
 
 ## Hard rules
-1. **Scope:** MC 26.2, NeoForge, Vulkan only. Never add GL translation layers (Zink, GL4ES, MobileGlues, ANGLE) or other game versions without asking.
+1. **Scope:** MC 26.2, NeoForge, Vulkan only. Never add GL translation layers (Zink, GL4ES, MobileGlues, ANGLE) or other game versions without asking. The app is **landscape only**: never add portrait or phone-width (compact) layouts.
 2. **Licenses:** this repo is GPL-3.0.
    - Never copy AGPL code (Terracotta, FlameLauncher, StikDebug).
    - Never copy code from Zalith Launcher 2 without asking first. Its GPL §7 terms would force an "Unofficial Modified Version" label.
@@ -28,7 +28,7 @@ Cofre for Android is a native Kotlin + Jetpack Compose launcher for Minecraft: J
 ## Where things live
 | Path | What |
 |---|---|
-| `core/kit/` | Pure Kotlin/JVM logic, one package per domain plus `common` (Kit's JSON/HTTP, `FileOps`/`Zip`, hashes, target constants) (`accounts`, `modrinth`, `curseforge`, `pages`, `versions`, `downloads`, `mods`, `instances`, `content`, `compat`, `modpacks`, `worlds`, `servers`, `logs`, `servercards`, `options`). Tests use JUnit 6 and run on the Mac |
+| `core/kit/` | Pure Kotlin/JVM logic, one package per domain plus `common` (Kit's JSON/HTTP, `FileOps`/`Zip`, hashes, target constants) (`accounts`, `modrinth`, `curseforge`, `pages`, `versions`, `downloads`, `mods`, `modfolders`, `instances`, `content`, `compat`, `modpacks`, `worlds`, `servers`, `logs`, `servercards`, `options`). Tests use JUnit 6 and run on the Mac |
 | `core/design/` | Compose design system ported from Cofre iOS (`app/UI/Sources/CofreUI/Tokens`, `Components`, `Layout`). Screenshot tests use Roborazzi |
 | `app/` | The app: screens in `com.ignacio.cofre.ui.<area>`, navigation, wiring |
 | `runtime/` | Java runtime, natives, GLFW shim, launch, NeoForge install, `:game` and `:installer` processes |

@@ -3,6 +3,7 @@ package com.ignacio.cofre.ui.mods
 import androidx.compose.runtime.Immutable
 import com.ignacio.cofre.design.Tone
 import com.ignacio.cofre.kit.common.ContentKind
+import com.ignacio.cofre.kit.common.Loader
 import com.ignacio.cofre.kit.common.Target
 import com.ignacio.cofre.kit.compat.CompatibilityIssue
 import com.ignacio.cofre.kit.compat.ContentCompatibility
@@ -34,13 +35,18 @@ data class ProjectSummary(
     val route: String get() = "project:${source.name}:$id"
 }
 
-/** What the browser searches: text, kind, source and filters. Equal queries never search twice. */
+/**
+ * What the browser searches: text, kind, source and filters, for the mod folder's [game] version and [loader]. Equal
+ * queries never search twice.
+ */
 @Immutable
 data class BrowseQuery(
     val text: String = "",
     val kind: ContentKind = ContentKind.Mods,
     val source: ProjectPage.Source = ProjectPage.Source.Modrinth,
     val filters: ProjectFilters = ProjectFilters(),
+    val game: String = Target.GAME_VERSION,
+    val loader: Loader = Target.LOADER,
 ) {
     /** The filters that differ from "fits this instance, by relevance". */
     val activeFilters: Int
@@ -73,7 +79,7 @@ class Catalog(private val modrinth: Modrinth, private val curseForge: CurseForge
 
     suspend fun search(query: BrowseQuery, offset: Int, limit: Int): List<ProjectSummary> = when (query.source) {
         ProjectPage.Source.Modrinth ->
-            modrinth.search(query.text, query.filters.facets(query.kind), query.filters.sort, offset, limit).map { hit ->
+            modrinth.search(query.text, query.filters.facets(query.kind, query.game, query.loader), query.filters.sort, offset, limit).map { hit ->
                 ProjectSummary(
                     hit.projectId, ProjectPage.Source.Modrinth, kindOf(hit.projectType, query.kind), hit.title, hit.description,
                     hit.iconUrl, hit.downloads, hit.slug, hit.pageUrl,
@@ -84,8 +90,8 @@ class Catalog(private val modrinth: Modrinth, private val curseForge: CurseForge
             // CurseForge's search has no class filter in kit yet, so the NeoForge loader filter is what keeps it to mods.
             client.search(
                 query.text,
-                gameVersion = if (query.filters.followGame) Target.GAME_VERSION else null,
-                neoForge = query.filters.followLoader,
+                gameVersion = if (query.filters.followGame) query.game else null,
+                neoForge = query.filters.followLoader && query.loader == Loader.NeoForge,
                 index = offset,
                 pageSize = limit.coerceAtMost(50),
             ).map { mod ->
@@ -120,8 +126,10 @@ class Catalog(private val modrinth: Modrinth, private val curseForge: CurseForge
         }
     }
 
-    fun resolver(project: ProjectSummary, installed: List<InstalledMod>): ModResolver = ModResolver(
+    fun resolver(project: ProjectSummary, installed: List<InstalledMod>, game: String = Target.GAME_VERSION, loader: Loader = Target.LOADER): ModResolver = ModResolver(
         installed,
+        game = game,
+        loader = loader,
         kind = project.kind,
         versionById = { id -> if (project.source == ProjectPage.Source.Modrinth) ModCandidate.from(modrinth.version(id)) else null },
         versions = { id -> candidates(project.source, id) },

@@ -71,7 +71,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
 
-/** Settings: a pane list beside the open pane (pushed on phones). */
+/** Settings: a pane list beside the open pane. */
 @Composable
 fun SettingsSection(
     graph: AppGraph,
@@ -80,7 +80,6 @@ fun SettingsSection(
     val nav = graph.nav
     AdaptiveListDetail(
         selection = nav.settingsPane,
-        onSelectionChange = { nav.settingsPane = it },
         list = { SettingsList(nav.settingsPane, onOpen = { nav.settingsPane = it }) },
         detail = { pane -> SettingsPaneContent(graph, pane) },
         modifier = modifier,

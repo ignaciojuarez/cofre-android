@@ -28,24 +28,27 @@ sealed class ModInstallFailure(message: String) : IOException(message) {
 }
 
 /**
- * Serializes installs per instance, stages every download, and reverses every move if commit fails. [onProgress]
- * gets the bytes and files of everything downloaded so far, including requirements found along the way.
+ * Serializes installs per mod folder, stages every download, and reverses every move if commit fails. [onProgress]
+ * gets the bytes and files of everything downloaded so far, including requirements found along the way. [instance] is
+ * the mod folder's directory (or a folder laid out like one); data packs go to [gameDirectory]'s worlds.
  */
 class ModInstaller(
     private val instance: File,
+    private val gameDirectory: File = instance,
     private val http: OkHttpClient = Kit.http,
     private val modrinth: Modrinth = Modrinth(http),
 ) {
     /** A resource, shader or data pack: one verified download moved into its folder. Data packs go to [world]. */
     suspend fun install(candidate: ModCandidate, kind: ContentKind, world: String? = null, metered: Boolean = false, allowMetered: Boolean = false, onProgress: (DownloadProgress) -> Unit = {}) = withContext(Dispatchers.IO) {
         val folder = when (kind) {
-            ContentKind.DataPacks -> { require(!world.isNullOrBlank() && !world.startsWith('.')) { "Pick a world" }; safeFilename(world); File(instance, "saves/$world/datapacks") }
+            ContentKind.DataPacks -> { require(!world.isNullOrBlank() && !world.startsWith('.')) { "Pick a world" }; safeFilename(world); File(gameDirectory, "saves/$world/datapacks") }
             ContentKind.Mods, ContentKind.Modpacks -> throw IllegalArgumentException("Not a single-file pack")
             else -> File(instance, requireNotNull(kind.folderName))
         }
         val name = requireNotNull(candidate.filename) { "No file to download" }; safeFilename(name)
-        InstanceStore.lock(instance).withLock {
-            val stage = File(instance, ".cofre-mods-staging/${UUID.randomUUID()}")
+        val owner = if (kind == ContentKind.DataPacks) gameDirectory else instance
+        InstanceStore.lock(owner).withLock {
+            val stage = File(owner, ".cofre-mods-staging/${UUID.randomUUID()}")
             try {
                 val download = File(stage, name)
                 val queue = DownloadQueue(File(stage, "queue.json"), http)
@@ -57,9 +60,12 @@ class ModInstaller(
         }
     }
 
-    suspend fun install(plan: ModInstallPlan, metered: Boolean = false, allowMetered: Boolean = false, onProgress: (DownloadProgress) -> Unit = {}): List<InstalledMod> = withContext(Dispatchers.IO) {
+    suspend fun install(plan: ModInstallPlan, metered: Boolean = false, allowMetered: Boolean = false, onProgress: (DownloadProgress) -> Unit = {}): List<InstalledMod> =
+        InstanceStore.lock(instance).withLock { installLocked(plan, metered, allowMetered, onProgress) }
+
+    /** [install] for a caller that already holds [InstanceStore.lock]. Anything but [ModInstallFailure.Rollback] leaves the mods as they were. */
+    internal suspend fun installLocked(plan: ModInstallPlan, metered: Boolean = false, allowMetered: Boolean = false, onProgress: (DownloadProgress) -> Unit = {}): List<InstalledMod> = withContext(Dispatchers.IO) {
         if (plan.blocked != null || plan.target == null) throw ModInstallFailure.Blocked(plan.blocked)
-        val mutex = InstanceStore.lock(instance); mutex.lock()
         val stage = File(instance, ".cofre-mods-staging/${UUID.randomUUID()}")
         var preserveBackup = false
         var ownsStage = false
@@ -120,7 +126,6 @@ class ModInstaller(
             index.installed()
         } finally {
             if (ownsStage && !preserveBackup) FileOps.delete(stage)
-            mutex.unlock()
         }
     }
     /**

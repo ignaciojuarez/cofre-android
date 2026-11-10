@@ -5,12 +5,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.ignacio.cofre.design.ShellSection
+import com.ignacio.cofre.kit.modfolders.ConvertTarget
 
 /** Where the user is: the shell section, each section's selection and the open sheets (SwiftUI's `NavModel`). */
 class AppNav {
     var section by mutableStateOf(ShellSection.Play)
-    /** The instance open in Instances (detail column / pushed detail). */
+    /** The instance open in Instances (the detail column). */
     var instance by mutableStateOf<String?>(null)
+    /** The mod folder open in Mods. */
+    var modFolder by mutableStateOf<String?>(null)
+    /** The mod folder being converted to another loader or game version. */
+    var convertFolder by mutableStateOf<String?>(null)
+    /** The target Convert opens with, when the caller already knows it (else Convert starts on the folder's own). */
+    var convertTarget by mutableStateOf<ConvertTarget?>(null)
     var settingsPane by mutableStateOf<SettingsPane?>(null)
     var newInstance by mutableStateOf(false)
     var downloads by mutableStateOf(false)
@@ -18,6 +25,18 @@ class AppNav {
     fun openInstance(id: String) {
         instance = id
         section = ShellSection.Instances
+    }
+
+    fun openFolder(id: String) {
+        modFolder = id
+        section = ShellSection.Mods
+    }
+
+    /** Opens Convert for [folderId], optionally preset to [target]. */
+    fun convert(folderId: String, target: ConvertTarget? = null) {
+        convertFolder = folderId
+        convertTarget = target
+        section = ShellSection.Mods
     }
 
     fun openSettings(pane: SettingsPane) {

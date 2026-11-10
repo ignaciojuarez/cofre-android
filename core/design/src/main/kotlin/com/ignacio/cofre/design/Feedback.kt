@@ -175,7 +175,7 @@ public fun Spinner(
     }
 }
 
-/** Setup steps: bars only on compact, bars and names elsewhere. [current] is 0-based. */
+/** Setup steps: a bar and a name each. [current] is 0-based. */
 @Composable
 public fun StepBar(
     steps: List<String>,
@@ -183,7 +183,6 @@ public fun StepBar(
     modifier: Modifier = Modifier,
 ) {
     val c = CofreTheme.colors
-    val names = CofreTheme.widthClass != WidthClass.Compact
     Row(
         modifier.semantics(mergeDescendants = true) {
             contentDescription = "Step ${current + 1} of ${steps.size}, ${steps.getOrElse(current) { "" }}"
@@ -205,9 +204,7 @@ public fun StepBar(
                         )
                         .outline(),
                 )
-                if (names) {
-                    CofreText(step, CofreTheme.type.label, color = if (i == current) c.ink else c.muted, maxLines = 1)
-                }
+                CofreText(step, CofreTheme.type.label, color = if (i == current) c.ink else c.muted, maxLines = 1)
             }
         }
     }

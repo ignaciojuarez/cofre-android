@@ -5,7 +5,10 @@ import android.content.Context
 import com.ignacio.cofre.accounts.Accounts
 import com.ignacio.cofre.kit.compat.GlScanCache
 import com.ignacio.cofre.kit.downloads.DownloadQueue
+import com.ignacio.cofre.kit.instances.Instance
 import com.ignacio.cofre.kit.instances.InstanceStore
+import com.ignacio.cofre.kit.modfolders.ModFolder
+import com.ignacio.cofre.kit.modfolders.ModFolderStore
 import com.ignacio.cofre.kit.modrinth.Modrinth
 import com.ignacio.cofre.kit.servers.MinecraftServerAddress
 import com.ignacio.cofre.kit.servers.MinecraftServerPing
@@ -48,6 +51,8 @@ class AppGraph(
     val settings = SettingsStore(File(home, "settings.json"))
     val vault = SecretVault(File(home, "secrets.bin"), secretKey)
     val instances = InstanceStore(File(home, "instances").apply { mkdirs() })
+    /** Mods live in folders next to the instances; each instance links to one. */
+    val modFolders = ModFolderStore(File(home, "mod-folders"))
     val modrinth = Modrinth()
     val downloads by lazy { DownloadQueue(File(home, "downloads/queue.json").apply { parentFile?.mkdirs() }) }
     val launcherLog = File(home, "logs/launcher.log")
@@ -75,6 +80,18 @@ class AppGraph(
         vault.set(CURSEFORGE_KEY, value)
         curseForge.value = value
     }
+
+    /** The mod folder [instance] links to; null before it's moved to one, or when the folder is gone. */
+    fun folderOf(instance: Instance): ModFolder? = instance.modFolder?.let { runCatching { modFolders.get(it) }.getOrNull() }
+
+    /**
+     * Where [instance]'s mods, resource packs, shader packs and mod index really are: its folder's directory (act on
+     * it directly, never through the instance's links), or the instance's own before migration. Throws when its
+     * folder is gone.
+     */
+    fun contentDirectory(instance: Instance): File =
+        instance.modFolder?.let { modFolders.directory(requireNotNull(folderOf(instance)) { context.getString(R.string.folder_missing) }) }
+            ?: instances.directory(instance)
 
     val library = Library(this)
     val accounts = Accounts(this)

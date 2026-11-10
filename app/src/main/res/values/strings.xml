@@ -99,11 +99,8 @@
     <string name="accounts_remove_body">Cofre forgets this account and its sign-in. Your instances and worlds stay.</string>
 
     <!-- Play -->
-    <string name="play_side_title">Worlds &amp; servers</string>
     <string name="play_instance">Instance</string>
     <string name="play_memory">Memory</string>
-    <string name="play_version">Minecraft</string>
-    <string name="play_manage">Manage instance</string>
     <string name="play_jump_back_in">Jump back in</string>
     <string name="play_sign_in">Sign in to play Java Edition</string>
     <string name="play_signed_out">Your account was signed out. Sign in again to play.</string>

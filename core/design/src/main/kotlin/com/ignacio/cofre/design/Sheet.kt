@@ -29,13 +29,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
-// §2 #22 Sheet: a bottom sheet on compact, a centered card elsewhere. Opaque panel, no glass.
+// §2 #22 Sheet: a centered card (Cofre is landscape only, so no bottom sheet). Opaque panel, no glass.
 
 /**
  * A modal sheet in its own window. It takes focus when it opens (in controller mode) and, when it closes, focus
  * is back on whatever opened it. B, system back and a tap outside call [onDismissRequest].
  *
- * [hugsContent]: as tall as its content on compact, and a 420 dp card elsewhere.
+ * [hugsContent]: a 420 dp card instead of the 560 dp one.
  */
 @Composable
 public fun BlockSheet(
@@ -52,59 +52,28 @@ public fun BlockSheet(
         CompositionLocalProvider(LocalController provides controller) {
             WindowInput(controller, onBack = onDismissRequest)
             BoxWithConstraints(Modifier.fillMaxSize().controllerInput(onBack = onDismissRequest)) {
-                val compact = WidthClass.of(maxWidth) == WidthClass.Compact
-                CompositionLocalProvider(LocalWidthClass provides if (compact) WidthClass.Compact else WidthClass.Medium) {
-                    SheetPanel(
-                        modifier.align(if (compact) Alignment.BottomCenter else Alignment.Center),
-                        compact = compact,
-                        hugsContent = hugsContent,
-                        maxHeight = maxHeight,
-                        content = content,
-                    )
+                CompositionLocalProvider(LocalWidthClass provides WidthClass.Medium) {
+                    SheetPanel(modifier.align(Alignment.Center), hugsContent = hugsContent, maxHeight = maxHeight, content = content)
                 }
             }
         }
     }
 }
 
-/**
- * The sheet's surface on its own, for layouts that draw it in place (the design gallery, previews).
- * [compact] draws the bottom-sheet form.
- */
+/** The sheet's surface on its own, for layouts that draw it in place (the design gallery, previews). */
 @Composable
 public fun SheetPanel(
     modifier: Modifier = Modifier,
-    compact: Boolean = CofreTheme.widthClass == WidthClass.Compact,
     hugsContent: Boolean = false,
     maxHeight: Dp = Dp.Unspecified,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val c = CofreTheme.colors
-    val shape = if (compact) {
-        modifier
-            .fillMaxWidth()
-            .then(if (hugsContent || maxHeight == Dp.Unspecified) Modifier else Modifier.fillMaxHeight(0.75f))
-            .background(c.panel)
-            .drawBehind { drawRect(c.outline, size = Size(size.width, CofreBlock.outline.toPx())) }
-    } else {
-        modifier
-            .width(if (hugsContent) 420.dp else CofreSpacing.card)
-            .heightIn(max = if (maxHeight == Dp.Unspecified) Dp.Unspecified else maxHeight - 48.dp)
-            .block(lip = CofreBlock.buttonLip)
-    }
+    val shape = modifier
+        .width(if (hugsContent) 420.dp else CofreSpacing.card)
+        .heightIn(max = if (maxHeight == Dp.Unspecified) Dp.Unspecified else maxHeight - 48.dp)
+        .block(lip = CofreBlock.buttonLip)
     ScreenFocus(claim = true, shape) {
-        Column(Modifier.padding(bottom = 16.dp)) {
-            if (compact) {
-                Box(
-                    Modifier
-                        .padding(top = 6.dp)
-                        .size(36.dp, 4.dp)
-                        .background(c.muted)
-                        .align(Alignment.CenterHorizontally),
-                )
-            }
-            content()
-        }
+        Column(Modifier.padding(bottom = 16.dp), content = content)
     }
 }
 

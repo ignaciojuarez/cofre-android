@@ -2,6 +2,7 @@ package com.ignacio.cofre.ui.mods
 
 import com.ignacio.cofre.kit.curseforge.CurseForge
 import com.ignacio.cofre.kit.instances.InstanceStore
+import com.ignacio.cofre.kit.modfolders.ModFolderStore
 import com.ignacio.cofre.kit.modpacks.PackFile
 import com.ignacio.cofre.kit.modrinth.Modrinth
 import kotlinx.coroutines.CoroutineScope
@@ -50,7 +51,7 @@ class ImportModelTest {
     }
 
     private fun model(store: InstanceStore) =
-        ImportModel(scope, store, Modrinth(), { null }, File(temp.root, "cache"), Dispatchers.IO)
+        ImportModel(scope, store, ModFolderStore(File(temp.root, "mod-folders")), Modrinth(), { null }, File(temp.root, "cache"), Dispatchers.IO)
 
     private suspend fun ImportModel.settle(check: (ImportPhase) -> Boolean) = withTimeout(5_000) { phase.first(check) }
 
@@ -77,6 +78,8 @@ class ImportModelTest {
         assertEquals("26.2.0.93", done.instance.loaderVersion)
         val dir = store.directory(done.instance)
         assertTrue(File(dir, "config/sodium-options.json").isFile)
+        assertEquals("Handheld mods", ModFolderStore(File(temp.root, "mod-folders")).get(assertNotNull(done.instance.modFolder)).name, "the pack gets its own mod folder")
+        assertTrue(java.nio.file.Files.isSymbolicLink(File(dir, "mods").toPath()))
         assertEquals(listOf(done.instance.id), store.list().map { it.id }, "no stage left behind")
         assertFalse(archive.exists(), "the picked copy is deleted once installed")
     }
@@ -87,7 +90,7 @@ class ImportModelTest {
             fun file(name: String) = """{"data":{"id":34,"modId":12,"fileName":"$name","fileLength":3,"downloadUrl":"https://edge.forgecdn.net/x.jar","hashes":[{"value":"${"a".repeat(32)}","algo":2},{"value":"${"b".repeat(40)}","algo":1}]}}"""
             server.enqueue(MockResponse(body = file("../evil.jar")))
             server.enqueue(MockResponse(body = file("sodium.jar")))
-            val import = ImportModel(scope, InstanceStore(temp.newFolder("instances")), Modrinth(), { CurseForge("key", baseUrl = server.url("/")) }, File(temp.root, "cache"), Dispatchers.IO)
+            val import = ImportModel(scope, InstanceStore(temp.newFolder("instances")), ModFolderStore(File(temp.root, "mod-folders")), Modrinth(), { CurseForge("key", baseUrl = server.url("/")) }, File(temp.root, "cache"), Dispatchers.IO)
             val stage = temp.newFolder("stage")
             val pack = PackFile("mods/curseforge-12-34.jar", projectID = 12, fileID = 34)
             assertFailsWith<IllegalArgumentException> { import.download(pack, stage) }

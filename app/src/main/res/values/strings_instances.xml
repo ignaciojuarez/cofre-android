@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Instances: linking an instance to a mod folder, new instance, delete and duplicate. -->
+    <string name="link_section">Mod folder</string>
+    <string name="link_change">Change</string>
+    <string name="link_open">Open</string>
+    <string name="link_copy_for">Make a copy just for %1$s</string>
+    <string name="link_no_mods">No mods</string>
+    <string name="link_no_mods_note">Plays plain %1$s</string>
+    <string name="link_folder_gone">Its mod folder is gone</string>
+    <string name="link_folder_gone_note">Restore it in Mod folders, or pick another</string>
+    <string name="link_also_used_by">also used by %1$s</string>
+    <string name="link_used_by">used by %1$s</string>
+    <string name="link_not_used">not used</string>
+    <string name="link_current">current</string>
+    <string name="link_shared_with">shared with %1$s</string>
+    <string name="link_sheet_title">Mod folder for %1$s</string>
+    <string name="link_fits">Fits %1$s %2$s</string>
+    <string name="link_doesnt_fit">Doesn’t fit</string>
+    <string name="link_other_loader">%1$s %2$s · this instance runs %3$s</string>
+    <string name="link_other_version">Needs Minecraft %1$s</string>
+    <string name="link_cant_play">%1$s %2$s · Cofre can’t play this yet</string>
+    <string name="link_convert">Convert a copy</string>
+    <string name="link_new_folder">New empty folder</string>
+    <string name="link_note">Worlds, settings and configs stay with %1$s. Only mods and packs change.</string>
+    <string name="link_use">Use %1$s</string>
+    <string name="link_running">The game is running. Change folders after it stops.</string>
+    <string name="link_loading">Loading mod folders…</string>
+    <string name="new_folder">Mod folder</string>
+    <string name="new_folder_empty">New empty folder</string>
+    <string name="new_folder_empty_note">“%1$s mods”</string>
+    <string name="duplicate_note">The copy shares %1$s.</string>
+    <string name="delete_title">Delete %1$s?</string>
+    <string name="delete_body">Worlds, settings and screenshots go to Recently deleted for 30 days.</string>
+    <string name="delete_folder_stays">%1$s stays. %2$s still uses it.</string>
+    <string name="delete_folder_stays_alone">%1$s stays. Nothing else uses it.</string>
+    <string name="delete_also_folder">Also delete %1$s</string>
+    <string name="delete_also_folder_note">It goes to Recently deleted in Mod folders for 30 days.</string>
+    <string name="delete_confirm">Delete</string>
+</resources>

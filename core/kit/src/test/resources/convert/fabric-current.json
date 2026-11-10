@@ -1,0 +1,132 @@
+{
+ "@sodium": {
+  "id": "sodium-now",
+  "project_id": "sodium",
+  "name": "0.9.2-neoforge",
+  "version_number": "0.9.2-neoforge",
+  "game_versions": [
+   "26.2"
+  ],
+  "loaders": [
+   "neoforge"
+  ],
+  "version_type": "release"
+ },
+ "@waystones": {
+  "id": "waystones-now",
+  "project_id": "waystones",
+  "name": "21.2.4",
+  "version_number": "21.2.4",
+  "game_versions": [
+   "26.2"
+  ],
+  "loaders": [
+   "neoforge"
+  ],
+  "version_type": "release"
+ },
+ "@jade": {
+  "id": "jade-now",
+  "project_id": "jade",
+  "name": "19.3.1",
+  "version_number": "19.3.1",
+  "game_versions": [
+   "26.2"
+  ],
+  "loaders": [
+   "neoforge"
+  ],
+  "version_type": "release"
+ },
+ "@create": {
+  "id": "create-now",
+  "project_id": "create",
+  "name": "6.0.6",
+  "version_number": "6.0.6",
+  "game_versions": [
+   "26.2"
+  ],
+  "loaders": [
+   "neoforge"
+  ],
+  "version_type": "release"
+ },
+ "@apotheosis": {
+  "id": "apotheosis-now",
+  "project_id": "apotheosis",
+  "name": "9.1.2",
+  "version_number": "9.1.2",
+  "game_versions": [
+   "26.2"
+  ],
+  "loaders": [
+   "neoforge"
+  ],
+  "version_type": "release"
+ },
+ "@dh": {
+  "id": "distanthorizons-now",
+  "project_id": "distanthorizons",
+  "name": "3.3.3",
+  "version_number": "3.3.3",
+  "game_versions": [
+   "26.2"
+  ],
+  "loaders": [
+   "neoforge"
+  ],
+  "version_type": "release"
+ },
+ "@neoloading": {
+  "id": "neoload-now",
+  "project_id": "neoload",
+  "name": "1.0.0",
+  "version_number": "1.0.0",
+  "game_versions": [
+   "26.2"
+  ],
+  "loaders": [
+   "neoforge"
+  ],
+  "version_type": "release"
+ },
+ "@ferrite": {
+  "id": "ferritecore-now",
+  "project_id": "ferritecore",
+  "name": "9.0.0-neoforge",
+  "version_number": "9.0.0-neoforge",
+  "game_versions": [
+   "26.2"
+  ],
+  "loaders": [
+   "neoforge"
+  ],
+  "version_type": "release"
+ },
+ "@controlify": {
+  "id": "controlify-now",
+  "project_id": "controlify",
+  "name": "3.5.3",
+  "version_number": "3.5.3",
+  "game_versions": [
+   "26.2"
+  ],
+  "loaders": [
+   "neoforge"
+  ],
+  "version_type": "release"
+ },
+ "@jei": {
+  "id": "jei-now",
+  "project_id": "jei",
+  "name": "26.2.0.12",
+  "version_number": "26.2.0.12",
+  "game_versions": [
+   "26.2"
+  ],
+  "loaders": [
+   "neoforge"
+  ],
+  "version_type": "release"
+ }
+}

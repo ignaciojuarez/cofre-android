@@ -1,5 +1,6 @@
 package com.ignacio.cofre.ui.play
 
+import android.text.format.DateFormat
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -27,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.ignacio.cofre.R
@@ -56,6 +59,9 @@ import com.ignacio.cofre.design.pageScroll
 import com.ignacio.cofre.kit.logs.ExitReason
 import com.ignacio.cofre.kit.logs.GameExitReport
 import com.ignacio.cofre.launch.Launcher
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * G01 Game stopped: what happened, one next step, then the actions. On Android the launcher survives the game, so
@@ -70,6 +76,7 @@ fun GameStoppedScreen(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
     onGetMods: () -> Unit = {},
+    onRollBack: () -> Unit = {},
 ) {
     var details by rememberSaveable { mutableStateOf(false) }
     BackHandler(onBack = onClose)
@@ -93,13 +100,13 @@ fun GameStoppedScreen(
                                 Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) { Message(stopped) }
                                     Column(Modifier.width(340.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Actions(stopped, onPlayAgain, onTurnOffMod, onGetMods, onShare, onClose, onDetails = { details = true })
+                                        Actions(stopped, onPlayAgain, onTurnOffMod, onGetMods, onRollBack, onShare, onClose, onDetails = { details = true })
                                     }
                                 }
                             } else {
                                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                                     Message(stopped)
-                                    Actions(stopped, onPlayAgain, onTurnOffMod, onGetMods, onShare, onClose, onDetails = { details = true })
+                                    Actions(stopped, onPlayAgain, onTurnOffMod, onGetMods, onRollBack, onShare, onClose, onDetails = { details = true })
                                 }
                             }
                         }
@@ -125,6 +132,13 @@ private fun ColumnScope.Message(stopped: Launcher.Stopped) {
         }
     }
     CofreText(report.explanation, CofreTheme.type.body)
+    if (stopped.rollback != null && stopped.updatedMods.isNotEmpty()) {
+        CofreText(
+            pluralStringResource(R.plurals.stopped_updated_before, stopped.updatedMods.size, stopped.updatedMods.size, stopped.updatedMods.joinToString()),
+            CofreTheme.type.body,
+            color = CofreTheme.colors.inkSoft,
+        )
+    }
     report.clue?.let { CofreText(it, CofreTheme.type.code, color = CofreTheme.colors.inkSoft, maxLines = 3) }
     Column(Modifier.fillMaxWidth().block(BlockKind.Well).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         SectionLabel(stringResource(R.string.stopped_next_step))
@@ -139,12 +153,28 @@ private fun Actions(
     onPlayAgain: () -> Unit,
     onTurnOffMod: () -> Unit,
     onGetMods: () -> Unit,
+    onRollBack: () -> Unit,
     onShare: () -> Unit,
     onClose: () -> Unit,
     onDetails: () -> Unit,
 ) {
     val mod = stopped.mod
-    val fixPending = mod != null && !stopped.modOff || stopped.missing.isNotEmpty() && !stopped.modsGot
+    val rollback = stopped.rollback
+    val fixPending = mod != null && !stopped.modOff || stopped.missing.isNotEmpty() && !stopped.modsGot || rollback != null && !stopped.rolledBack
+    if (rollback != null) {
+        if (stopped.rolledBack) {
+            Banner(stringResource(R.string.stopped_rolled_back), PixelGlyph.Check, tone = Tone.Success)
+        } else {
+            stopped.fixError?.takeIf { stopped.missing.isEmpty() }?.let { Banner(it, PixelGlyph.Cross, tone = Tone.Danger) }
+            val date = remember(rollback.createdAt) { snapshotDate(rollback.createdAt) }
+            BlockButton(
+                stringResource(R.string.stopped_roll_back, date), onRollBack, Modifier.testTag("stopped.rollBack"),
+                role = ButtonRole.Primary, size = ButtonSize.Large, loading = stopped.rollingBack, enabled = !stopped.rollingBack,
+            )
+            CofreText(stringResource(R.string.stopped_roll_back_note), CofreTheme.type.caption, color = CofreTheme.colors.muted)
+            BlockButton(stringResource(R.string.stopped_open_log), onDetails, Modifier.testTag("stopped.openLog"), icon = PixelGlyph.Paper)
+        }
+    }
     if (stopped.missing.isNotEmpty()) {
         when {
             stopped.modsGot -> Banner(stringResource(R.string.stopped_mods_got), PixelGlyph.Check, tone = Tone.Success)
@@ -167,6 +197,10 @@ private fun Actions(
     BlockButton(stringResource(R.string.stopped_share), onShare, icon = PixelGlyph.Paper)
     BlockButton(stringResource(R.string.stopped_details), onDetails)
 }
+
+/** "Nov 8" in the device's locale. */
+private fun snapshotDate(epochMillis: Long): String =
+    SimpleDateFormat(DateFormat.getBestDateTimePattern(Locale.getDefault(), "MMMd"), Locale.getDefault()).format(Date(epochMillis))
 
 @Composable
 private fun DetailsSheet(report: GameExitReport, onDismiss: () -> Unit) {
