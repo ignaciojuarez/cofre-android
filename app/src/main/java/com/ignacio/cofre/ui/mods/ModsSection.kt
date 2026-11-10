@@ -12,6 +12,8 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -91,6 +93,7 @@ fun ModsSection(
     val focus = LocalFocusManager.current
     val uri = LocalUriHandler.current
     val searchFocus = remember { FocusRequester() }
+    val browseList = rememberLazyListState()
     var searchRequests by remember { mutableIntStateOf(0) }
     var filters by rememberSaveable { mutableStateOf(false) }
     var picker by rememberSaveable { mutableStateOf(false) }
@@ -109,6 +112,9 @@ fun ModsSection(
     // Y: focus the field and bring up the keyboard.
     LaunchedEffect(searchRequests) {
         if (searchRequests == 0) return@LaunchedEffect
+        // The field scrolls with the results; bring it back before focusing it.
+        browseList.scrollToItem(0)
+        withFrameNanos {}
         runCatching { searchFocus.requestFocus() }
         keyboard?.show()
     }
@@ -197,6 +203,7 @@ fun ModsSection(
                         onImport = { model.select(ModsRoutes.IMPORT) },
                         onAddKey = { graph.nav.openSettings(SettingsPane.CurseForge) },
                         searchFocus = searchFocus,
+                        list = browseList,
                         folder = folder,
                         onFolder = { picker = true },
                         inFolder = inFolder,
