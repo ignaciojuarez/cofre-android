@@ -40,6 +40,7 @@ import com.ignacio.cofre.design.ShellSection
 import com.ignacio.cofre.kit.instances.Instance
 import com.ignacio.cofre.kit.logs.ExitReason
 import com.ignacio.cofre.kit.logs.GameExitReport
+import com.ignacio.cofre.ui.convert.ConvertScreen
 import com.ignacio.cofre.ui.downloads.DownloadsSheet
 import com.ignacio.cofre.ui.instances.InstancesSection
 import com.ignacio.cofre.ui.instances.NewInstanceSheet
@@ -191,7 +192,10 @@ private fun Shell(graph: AppGraph) {
         when (current) {
             ShellSection.Play -> PlaySection(graph)
             ShellSection.Instances -> InstancesSection(graph)
-            ShellSection.Mods -> ModsSection(graph)
+            ShellSection.Mods -> {
+                val converting = nav.convertFolder
+                if (converting != null) ConvertScreen(graph, converting) else ModsSection(graph)
+            }
             ShellSection.Settings -> SettingsSection(graph)
         }
     }
