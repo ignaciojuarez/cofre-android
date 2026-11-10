@@ -42,6 +42,7 @@ class Modrinth(
         @SerialName("wiki_url") val wikiUrl: String? = null,
         @SerialName("discord_url") val discordUrl: String? = null,
         @SerialName("donation_urls") val donations: List<Donation> = emptyList(),
+        val loaders: List<String> = emptyList(), @SerialName("game_versions") val gameVersions: List<String> = emptyList(),
     )
     @Serializable data class License(val id: String, val name: String? = null)
     @Serializable data class Donation(val url: String, val platform: String? = null)
@@ -90,6 +91,12 @@ class Modrinth(
         return Kit.json.decodeFromString<SearchResponse>(request(url.build())).hits
     }
     suspend fun project(id: String): Project = Kit.json.decodeFromString(request(endpoint("project", id)))
+    /** Many projects in one request (`GET /projects?ids=[…]`); unknown ids are missing from the result. */
+    suspend fun projects(ids: List<String>): List<Project> {
+        if (ids.isEmpty()) return emptyList()
+        val url = endpoint("projects").newBuilder().addQueryParameter("ids", Kit.json.encodeToString(ids.distinct())).build()
+        return Kit.json.decodeFromString(request(url))
+    }
     suspend fun version(id: String): Version = Kit.json.decodeFromString(request(endpoint("version", id)))
     suspend fun versions(projectId: String, loaders: List<String> = emptyList(), gameVersions: List<String> = emptyList(), includeChangelog: Boolean = true): List<Version> =
         Kit.json.decodeFromString(request(versionsUrl(projectId, loaders, gameVersions, includeChangelog)))

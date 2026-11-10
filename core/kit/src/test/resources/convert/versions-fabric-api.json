@@ -1,0 +1,28 @@
+[
+ {
+  "id": "fapi",
+  "project_id": "fabric-api",
+  "name": "0.131.2",
+  "version_number": "0.131.2",
+  "game_versions": [
+   "26.2"
+  ],
+  "loaders": [
+   "fabric"
+  ],
+  "version_type": "release",
+  "dependencies": [],
+  "files": [
+   {
+    "hashes": {
+     "sha1": "#fabric-api",
+     "sha512": "&fabric-api"
+    },
+    "url": "{{base}}/files/fabric-api.jar",
+    "filename": "fabric-api.jar",
+    "size": "%fabric-api",
+    "primary": true
+   }
+  ]
+ }
+]
