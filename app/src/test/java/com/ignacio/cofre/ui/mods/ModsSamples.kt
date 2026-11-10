@@ -2,6 +2,8 @@ package com.ignacio.cofre.ui.mods
 
 import com.ignacio.cofre.kit.common.ContentKind
 import com.ignacio.cofre.kit.common.Loader
+import com.ignacio.cofre.kit.instances.Instance
+import com.ignacio.cofre.kit.modfolders.ModFolder
 import com.ignacio.cofre.kit.compat.ContentCompatibility
 import com.ignacio.cofre.kit.compat.GlRisk
 import com.ignacio.cofre.kit.content.ContentStore
@@ -96,10 +98,27 @@ internal object ModsSamples {
                 item("glwidgets-1.2.jar", "GL Widgets", "1.2"), null,
                 issue = ContentCompatibility.glIssue("glwidgets", "GL Widgets", GlRisk.Likely),
             ),
+            InstalledRow(
+                item("distanthorizons-3.3.3-26.2.jar", "Distant Horizons", "3.3.3"),
+                InstalledMod("distanthorizons-3.3.3-26.2.jar", "Distant Horizons", "uCdwusMi", "dh3"),
+                pinned = true,
+            ),
             InstalledRow(item("controlify-3.5.3.jar", "Controlify", "3.5.3+mc26.2", enabled = false)),
         ),
         loading = false,
     )
+
+    private val now = 1_762_700_000_000L
+    val survival = Instance("survival", "Survival+", loaderVersion = "26.2.0.93", modFolder = "survival-mods", lastPlayedAt = now - 3_600_000)
+    val creative = Instance("creative", "Creative test", loaderVersion = "26.2.0.93", modFolder = "survival-mods", lastPlayedAt = now - 86_400_000 * 3)
+    val handheld = Instance("handheld", "Handheld", loaderVersion = "26.2.0.93", modFolder = "handheld-lite")
+    val folder = ModFolder("survival-mods", "Survival mods", loaderVersion = "26.2.0.93", createdFrom = "survival", createdAt = now - 86_400_000 * 7)
+    val folderInfo = FolderInfo(folder, listOf(survival, creative), mods = 42)
+
+    /** Browse badges: Sodium is in the folder, FerriteCore has an update. */
+    val inFolder: Map<String, String?> = mapOf(sodium.id to null, "uXXizFIs" to "9.0.1")
+
+    val shared = SharedPrompt(SharedChange.Update, "FerriteCore", "Survival mods", survival, listOf("Creative test")) {}
 
     val ready: ImportPhase.Ready = run {
         val pack = Modpack(

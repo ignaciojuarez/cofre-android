@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onRoot
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.ignacio.cofre.kit.common.Loader
 import com.ignacio.cofre.design.AdaptiveListDetail
 import com.ignacio.cofre.design.AdaptiveShell
 import com.ignacio.cofre.design.CofreTheme
@@ -58,13 +59,11 @@ abstract class ModsScreenshots(private val device: String) {
     private fun Browse() = BrowsePane(
         ModsSamples.browse, selected = ModsSamples.sodium.route, updates = 1, hasCurseForge = true,
         onQueryChange = {}, onOpen = {}, onLoadMore = {}, onRetry = {}, onFilters = {}, onInstalled = {}, onImport = {}, onAddKey = {},
+        folder = ModsSamples.folderInfo, inFolder = ModsSamples.inFolder,
     )
 
     @Composable
-    private fun Installed() = InstalledPane(
-        ModsSamples.installed, "Handheld",
-        onTab = {}, onToggle = {}, onRemove = {}, onUpdate = {}, onUpdateAll = {}, onUndo = {}, onDismiss = {},
-    )
+    private fun Installed() = FolderPane(ModsSamples.installed, ModsSamples.folderInfo, FolderActions())
 
     @Test fun browse() = shoot("browse") {
         AdaptiveListDetail<String>(null, list = { Browse() }, detail = {}, placeholder = { Installed() })
@@ -98,6 +97,25 @@ abstract class ModsScreenshots(private val device: String) {
         AdaptiveListDetail(ModsRoutes.IMPORT, list = { Browse() }, detail = {
             ImportPane(ModsSamples.ready, {}, {}, {}, {}, {})
         })
+    }
+
+    @Test fun shared() = shoot("shared") {
+        Box(Modifier.fillMaxSize().pageBackground()) {
+            SheetPanel(Modifier.align(Alignment.Center), hugsContent = true) {
+                SharedContent(ModsSamples.shared, {}, {}, {})
+            }
+        }
+    }
+
+    @Test fun folderPicker() = shoot("folder_picker") {
+        Box(Modifier.fillMaxSize().pageBackground()) {
+            SheetPanel(Modifier.align(Alignment.Center), hugsContent = true) {
+                FolderPickerContent(
+                    listOf(ModsSamples.folder, ModsSamples.folder.copy(id = "fabric", name = "Survival mods · Fabric", loader = Loader.Fabric)),
+                    ModsSamples.folder.id, {}, {},
+                )
+            }
+        }
     }
 
     @Test fun filters() = shoot("filters") {
