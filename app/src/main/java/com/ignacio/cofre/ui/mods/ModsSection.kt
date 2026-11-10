@@ -3,6 +3,7 @@ package com.ignacio.cofre.ui.mods
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -23,6 +24,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -49,10 +53,13 @@ import com.ignacio.cofre.design.PixelGlyph
 import com.ignacio.cofre.design.CofreTheme
 import com.ignacio.cofre.design.controllerActions
 import com.ignacio.cofre.ui.common.displayName
+import com.ignacio.cofre.ui.folders.FoldersScreen
+import com.ignacio.cofre.ui.folders.SnapshotsSheet
 
 /**
- * The Mods section: browse on the left, a mod page, Installed or Import on the right. Y searches
- * and X opens filters from anywhere in it; Get, removal and filters open as sheets over it.
+ * The Mods section works on one mod folder: browse on the left ("Adding to" picks the folder; LT anywhere), and the
+ * folder, a mod page or Import on the right. Y searches and X opens filters; "Manage folders" swaps in the Mod folders
+ * overview (B comes back). Get, removal, shared-folder questions and snapshots open as sheets over it.
  */
 @Composable
 fun ModsSection(
@@ -62,11 +69,16 @@ fun ModsSection(
 ) {
     val browse by model.browse.state.collectAsStateWithLifecycle()
     val route by model.route.collectAsStateWithLifecycle()
+    val page by model.page.collectAsStateWithLifecycle()
     val instance by model.instance.collectAsStateWithLifecycle()
+    val folder by model.folder.collectAsStateWithLifecycle()
+    val folders by model.folders.collectAsStateWithLifecycle()
+    val inFolder by model.inFolder.collectAsStateWithLifecycle()
     val installedModel by model.installed.collectAsStateWithLifecycle()
     val install by model.install.collectAsStateWithLifecycle()
+    val shared by model.shared.collectAsStateWithLifecycle()
+    val snapshots by model.snapshots.collectAsStateWithLifecycle()
     val hasCurseForge by model.hasCurseForge.collectAsStateWithLifecycle()
-    val instances by model.instances.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
     val focus = LocalFocusManager.current
@@ -74,14 +86,17 @@ fun ModsSection(
     val searchFocus = remember { FocusRequester() }
     var searchRequests by remember { mutableIntStateOf(0) }
     var filters by rememberSaveable { mutableStateOf(false) }
+    var picker by rememberSaveable { mutableStateOf(false) }
     var viewer by remember { mutableStateOf<Pair<List<GalleryItem>, Int>?>(null) }
 
     fun importUri(uri: Uri) {
+        model.show(ModsPage.Browse)
         model.select(ModsRoutes.IMPORT)
         val name = context.displayName(uri) ?: uri.lastPathSegment ?: "pack.mrpack"
         model.import.open(name) { graph.copyToCache(uri, if (name.endsWith(".mrpack", true)) "mrpack" else "zip") }
     }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { picked -> picked?.let(::importUri) }
+    val packPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { picked -> picked?.let(::importUri) }
+    fun pickPack() = packPicker.launch(arrayOf("application/zip", "application/x-modrinth-modpack+zip", "application/octet-stream"))
     IncomingPacks(onPack = ::importUri)
 
     // Y: focus the field and bring up the keyboard.
@@ -94,13 +109,59 @@ fun ModsSection(
         searchRequests++
     }
 
+    if (page == ModsPage.Folders) {
+        BackHandler { model.show(ModsPage.Browse) }
+        FoldersScreen(
+            model.manage,
+            onOpen = { id -> model.selectFolder(id); model.select(null); model.show(ModsPage.Browse) },
+            onConvert = { id, target -> graph.nav.convert(id, target) },
+            onOpenInstance = graph.nav::openInstance,
+            onPickPack = ::pickPack,
+            instances = graph.library.instances,
+            builds = graph.library.neoForgeVersions,
+            modifier = modifier,
+        )
+        return
+    }
+
+    val installedState = installedModel?.state?.collectAsStateWithLifecycle()?.value
+    val actions = FolderActions(
+        onTab = { installedModel?.select(it) },
+        onFilter = { installedModel?.filter(it) },
+        onToggle = model::toggle,
+        onRemove = model::remove,
+        onUpdate = model::update,
+        onPin = model::pin,
+        onUpdateAll = model::updateAll,
+        onConvert = { folder?.let { graph.nav.convert(it.folder.id) } },
+        onSnapshots = model::openSnapshots,
+        onAutoUpdate = model::autoUpdate,
+        onOpenInstance = graph.nav::openInstance,
+        onUndo = { installedModel?.undo() },
+        onDismiss = { installedModel?.dismissMessage() },
+    )
+
+    @Composable
+    fun FolderSide() {
+        val info = folder
+        val installed = installedModel
+        if (info != null && installed != null) FolderRoute(installed, info, actions)
+        else NoFolderPane(onManage = { model.show(ModsPage.Folders) })
+    }
+
     Box(
         modifier
             .fillMaxSize()
-            .modsActions(stringResource(R.string.mods_search), stringResource(R.string.mods_filters), ::search) { filters = true },
+            // LT picks the folder from anywhere in Mods, even inside a list (where it would page up).
+            .onPreviewKeyEvent { event ->
+                if (event.nativeKeyEvent.keyCode != android.view.KeyEvent.KEYCODE_BUTTON_L2 || folders.isEmpty()) return@onPreviewKeyEvent false
+                if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) picker = true
+                true
+            }
+            .modsActions(stringResource(R.string.mods_search), stringResource(R.string.mods_filters), ::search) { filters = true }
+            .controllerActions(ControllerAction(Pad.L2, stringResource(R.string.mods_folder_hint)) { picker = true }),
     ) {
-        val installedState = installedModel?.state?.collectAsStateWithLifecycle()?.value
-        if (instance == null) {
+        if (instance == null && folder == null) {
             EmptyState(
                 title = stringResource(R.string.mods_no_instance),
                 message = stringResource(R.string.mods_no_instance_message),
@@ -115,7 +176,7 @@ fun ModsSection(
                     BrowsePane(
                         state = browse,
                         selected = route,
-                        updates = installedState?.updates ?: 0,
+                        updates = installedState?.takeIf { it.tab == InstalledTab.Mods }?.updates ?: 0,
                         hasCurseForge = hasCurseForge,
                         onQueryChange = model.browse::setQuery,
                         onOpen = model::open,
@@ -126,17 +187,17 @@ fun ModsSection(
                         onImport = { model.select(ModsRoutes.IMPORT) },
                         onAddKey = { graph.nav.openSettings(SettingsPane.CurseForge) },
                         searchFocus = searchFocus,
-                        instance = instance,
-                        instances = instances,
-                        onInstance = model::selectInstance,
+                        folder = folder,
+                        onFolder = { picker = true },
+                        inFolder = inFolder,
                     )
                 },
                 detail = { current ->
                     when (current) {
-                        ModsRoutes.INSTALLED -> installedModel?.let { InstalledRoute(it, instance?.name.orEmpty()) }
+                        ModsRoutes.INSTALLED -> FolderSide()
                         ModsRoutes.IMPORT -> ImportRoute(
                             model.import,
-                            onPickFile = { picker.launch(arrayOf("application/zip", "application/x-modrinth-modpack+zip", "application/octet-stream")) },
+                            onPickFile = ::pickPack,
                             onOpenInstance = { id -> graph.nav.openInstance(id) },
                         )
                         else -> {
@@ -155,16 +216,14 @@ fun ModsSection(
                         }
                     }
                 },
-                placeholder = {
-                    installedModel?.let { InstalledRoute(it, instance?.name.orEmpty()) }
-                },
+                placeholder = { FolderSide() },
             )
         }
 
         install?.let { get ->
             InstallRoute(
                 get,
-                instanceName = instance?.name.orEmpty(),
+                instanceName = folder?.folder?.name.orEmpty(),
                 onOpenUrl = { runCatching { uri.openUri(it) } },
                 onClose = model::closeInstall,
             )
@@ -172,8 +231,22 @@ fun ModsSection(
         if (filters) {
             FiltersSheet(browse.query, onQueryChange = { next -> model.browse.setQuery { next } }, onDismiss = { filters = false })
         }
+        if (picker) {
+            FolderPickerSheet(
+                folders, folder?.folder?.id,
+                onPick = { id -> picker = false; model.selectFolder(id) },
+                onManage = { picker = false; model.show(ModsPage.Folders) },
+                onDismiss = { picker = false },
+            )
+        }
         installedState?.removal?.let { prompt ->
             RemovalSheet(prompt, onConfirm = { installedModel?.confirmRemoval(it) }, onDismiss = { installedModel?.cancelRemoval() })
+        }
+        shared?.let { prompt ->
+            SharedSheet(prompt, onBoth = model::sharedBoth, onCopy = model::sharedCopy, onDismiss = model::dismissShared)
+        }
+        snapshots?.let { sheet ->
+            SnapshotsSheet(sheet.rows, onRestore = model::restore, onDismiss = model::closeSnapshots)
         }
         viewer?.let { (items, start) ->
             // Over the whole section; focus can't leave it, and touches don't reach the page under it.

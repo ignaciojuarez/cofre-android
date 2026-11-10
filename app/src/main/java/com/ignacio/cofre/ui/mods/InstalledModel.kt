@@ -8,11 +8,14 @@ import com.ignacio.cofre.kit.compat.ContentCompatibility
 import com.ignacio.cofre.kit.compat.GlScanCache
 import com.ignacio.cofre.kit.content.ContentStore
 import com.ignacio.cofre.kit.mods.InstalledMod
+import com.ignacio.cofre.kit.common.Loader
 import com.ignacio.cofre.kit.mods.ModCandidate
+import com.ignacio.cofre.kit.mods.ModUpdate
+import com.ignacio.cofre.kit.mods.apply
+import com.ignacio.cofre.kit.mods.check
 import com.ignacio.cofre.kit.mods.ModIndex
 import com.ignacio.cofre.kit.mods.ModInstaller
 import com.ignacio.cofre.kit.mods.ModRemoval
-import com.ignacio.cofre.kit.mods.ModResolver
 import com.ignacio.cofre.kit.mods.ModUpdates
 import com.ignacio.cofre.kit.modrinth.Modrinth
 import kotlinx.coroutines.CancellationException
@@ -30,7 +33,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 
-/** The Installed tabs: mods, resource and shader packs, and data packs grouped by world. */
+/** The folder's tabs: mods, resource and shader packs, and the instance's data packs grouped by world (they live in worlds). */
 enum class InstalledTab(val kinds: List<ContentKind>) {
     Mods(listOf(ContentKind.Mods)),
     Packs(listOf(ContentKind.ResourcePacks, ContentKind.Shaders)),
@@ -46,9 +49,25 @@ data class InstalledRow(
     val update: ModCandidate? = null,
     /** A known-mods rule, or the graded OpenGL scan of a jar no rule vouches for. */
     val issue: CompatibilityIssue? = null,
+    /** Pinned in the mod index: updates leave it alone. */
+    val pinned: Boolean = false,
 ) {
     val key: String get() = "${item.kind}:${item.id}"
+
+    /** Only jars the mod index knows (by Modrinth identity) can be pinned. */
+    val pinnable: Boolean get() = mod?.projectId != null
+
+    fun matches(filter: InstalledFilter): Boolean = when (filter) {
+        InstalledFilter.All -> true
+        InstalledFilter.Updates -> update != null
+        InstalledFilter.Off -> !item.enabled
+        InstalledFilter.Issues -> issue != null
+        InstalledFilter.Pinned -> pinned
+    }
 }
+
+/** The chips over the list. */
+enum class InstalledFilter { All, Updates, Off, Issues, Pinned }
 
 /** Removing something others need: who breaks, and which now-unneeded dependencies could go too. */
 @Immutable
@@ -61,6 +80,7 @@ data class UndoNote(val text: String, val tokens: List<ContentStore.TrashToken>)
 data class InstalledState(
     val tab: InstalledTab = InstalledTab.Mods,
     val rows: List<InstalledRow> = emptyList(),
+    val filter: InstalledFilter = InstalledFilter.All,
     val loading: Boolean = true,
     val busy: Set<String> = emptySet(),
     val removal: RemovalPrompt? = null,
@@ -69,12 +89,15 @@ data class InstalledState(
 ) {
     val updates: Int get() = rows.count { it.update != null }
     val on: Int get() = rows.count { it.item.enabled }
+    val shown: List<InstalledRow> get() = rows.filter { it.matches(filter) }
+    fun count(filter: InstalledFilter): Int = rows.count { it.matches(filter) }
 }
 
 /**
- * The Installed pane for one instance: its mods, resource and shader packs live in [folder] (its mod folder); data
- * packs and which packs are active, in [directory]. The files are the truth: every action re-reads them. Network work (update
- * checks, identifying unknown jars) and the OpenGL scan run in the background and fill rows in as they finish.
+ * One mod folder's content: mods, resource and shader packs live in [folder]; data packs and which packs are active,
+ * in [directory] (an instance that uses the folder). The files are the truth: every action re-reads them. Network work
+ * (update checks, identifying unknown jars) and the OpenGL scan run in the background and fill rows in as they finish.
+ * Updates follow the folder's [gameVersion], [loader] and [includeBeta].
  */
 class InstalledModel(
     private val scope: CoroutineScope,
@@ -83,6 +106,9 @@ class InstalledModel(
     private val glScans: GlScanCache,
     private val io: CoroutineDispatcher = Dispatchers.IO,
     val folder: File = directory,
+    private val gameVersion: String = Target.GAME_VERSION,
+    private val loader: Loader = Target.LOADER,
+    private val includeBeta: Boolean = false,
 ) {
     private val mutable = MutableStateFlow(InstalledState())
     val state: StateFlow<InstalledState> = mutable.asStateFlow()
@@ -90,8 +116,8 @@ class InstalledModel(
     private val index = ModIndex(folder)
     private var loading: Job? = null
     private var identified = false
-    /** Latest update candidate per project, from the last check. */
-    private val updates = mutableMapOf<String, ModCandidate>()
+    /** The last check's updates, by index key (jar name without `.disabled`). */
+    private val updates = mutableMapOf<String, ModUpdate>()
 
     init {
         reload()
@@ -99,8 +125,21 @@ class InstalledModel(
 
     fun select(tab: InstalledTab) {
         if (tab == mutable.value.tab) return
-        mutable.update { it.copy(tab = tab, rows = emptyList(), loading = true) }
+        mutable.update { it.copy(tab = tab, rows = emptyList(), loading = true, filter = InstalledFilter.All) }
         reload()
+    }
+
+    fun filter(filter: InstalledFilter) = mutable.update { it.copy(filter = filter) }
+
+    /** Pins or unpins a jar the index knows; a pinned jar shows no update. */
+    fun pin(row: InstalledRow) {
+        if (!row.pinnable) return
+        val key = ModIndex.key(row.item.urlName)
+        scope.launch {
+            quietly { index.pin(key, !row.pinned) }
+            if (!row.pinned) updates.remove(key)
+            refresh()
+        }
     }
 
     /** Re-reads the files, then fills in Vulkan findings and updates in the background. */
@@ -156,39 +195,49 @@ class InstalledModel(
         }
     }
 
+    fun show(message: String) = mutable.update { it.copy(message = message) }
+
     fun dismissMessage() = mutable.update { it.copy(message = null, undo = null) }
 
     fun update(row: InstalledRow) {
-        val candidate = row.update ?: return
-        busy(row.key) {
-            val plan = ModResolver.modrinth(modrinth, mods()).plan(candidate.projectId, candidate.versionId)
-            ModInstaller(folder, directory, modrinth = modrinth).install(plan)
-            updates.remove(candidate.projectId)
-        }
+        val update = updateFor(row) ?: return
+        busy(row.key) { apply(listOf(update)) }
     }
 
     fun updateAll() {
         val rows = mutable.value.rows.filter { it.update != null }
-        busy(*rows.map { it.key }.toTypedArray()) {
-            for (row in rows) {
-                val candidate = row.update ?: continue
-                val plan = ModResolver.modrinth(modrinth, mods()).plan(candidate.projectId, candidate.versionId)
-                ModInstaller(folder, directory, modrinth = modrinth).install(plan)
-                updates.remove(candidate.projectId)
-            }
-        }
+        val list = rows.mapNotNull(::updateFor)
+        if (list.isEmpty()) return
+        busy(*rows.map { it.key }.toTypedArray()) { apply(list) }
+    }
+
+    /** The checked update for [row], or one built from the row (a copied folder before its first check). */
+    private fun updateFor(row: InstalledRow): ModUpdate? {
+        val target = row.update ?: return null
+        val key = ModIndex.key(row.item.urlName)
+        return updates[key] ?: ModUpdate(row.item.urlName, row.item.name, target.projectId, row.mod?.versionId, row.mod?.version, target)
+    }
+
+    /** Through [ModUpdates.apply]: a snapshot first, rolled back if the folder could be left half-changed. */
+    private suspend fun apply(list: List<ModUpdate>) {
+        val result = ModUpdates.apply(folder, list, ModInstaller(folder, directory, modrinth = modrinth))
+        result.updated.forEach { updates.remove(ModIndex.key(it.file)) }
+        result.failed.firstOrNull()?.let { failed -> mutable.update { it.copy(message = "${failed.update.name}: ${failed.reason}") } }
     }
 
     // Reading
 
     private suspend fun read(tab: InstalledTab): List<InstalledRow> = withContext(io) {
         val mods = if (tab == InstalledTab.Mods) index.installed().associateBy { it.file } else emptyMap()
+        val entries = if (tab == InstalledTab.Mods) runCatching { index.read() }.getOrDefault(emptyMap()) else emptyMap()
         tab.kinds.flatMap { kind -> runCatching { store.list(kind) }.getOrDefault(emptyList()) }.map { item ->
             val mod = mods[item.urlName]
             val id = item.modID ?: item.id
             val issue = ContentCompatibility.issue(id, item.name, item.kind, item.version)
                 ?: item.takeIf(::scannable)?.let { glScans.cached(store.file(it)) }?.let { ContentCompatibility.glIssue(id, item.name, it) }
-            InstalledRow(item, mod, update = mod?.projectId?.let(updates::get)?.takeIf { it.versionId != mod.versionId }, issue = issue)
+            val key = ModIndex.key(item.urlName)
+            val pinned = entries[key]?.pinned == true
+            InstalledRow(item, mod, update = updates[key]?.target?.takeIf { !pinned }, issue = issue, pinned = pinned)
         }
     }
 
@@ -216,26 +265,12 @@ class InstalledModel(
         }
     }
 
-    /** Same-or-more-stable channel only (ModUpdates); a project that fails to load is skipped. */
+    /** One Modrinth request for the whole folder ([ModUpdates.check]); offline means no updates shown. */
     private suspend fun checkUpdates() {
-        val entries = withContext(io) { index.read() }
-        val tracked = mutable.value.rows.mapNotNull { row ->
-            val mod = row.mod ?: return@mapNotNull null
-            val entry = entries[ModIndex.key(row.item.urlName)]?.takeIf { it.source == "modrinth" } ?: return@mapNotNull null
-            mod to entry
-        }
-        for ((mod, entry) in tracked) {
-            val catalog = silently {
-                modrinth.versions(entry.projectId, listOf(Target.LOADER.modrinthId), listOf(Target.GAME_VERSION), includeChangelog = false)
-                    .map { ModCandidate.from(it, mod.name) }
-            } ?: continue
-            val current = catalog.firstOrNull { it.versionId == entry.versionId }
-                ?: silently { ModCandidate.from(modrinth.version(entry.versionId), mod.name) }
-                ?: continue
-            val next = ModUpdates.candidate(current.copy(channel = entry.channel), catalog) ?: continue
-            updates[entry.projectId] = next
-            mutable.update { s -> s.copy(rows = s.rows.map { if (it.mod?.projectId == entry.projectId) it.copy(update = next) else it }) }
-        }
+        val found = silently { ModUpdates.check(folder, modrinth, gameVersion, loader, includeBeta) } ?: return
+        updates.clear()
+        found.forEach { updates[ModIndex.key(it.file)] = it }
+        refresh()
     }
 
     // Acting

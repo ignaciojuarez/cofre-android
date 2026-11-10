@@ -4,15 +4,11 @@
     <!-- Browse -->
     <string name="mods_get_mods">Get mods</string>
     <string name="mods_search">Search</string>
-    <string name="mods_for_instance">Instance</string>
-    <string name="mods_for_instance_named">For %1$s</string>
     <string name="mods_search_label">Search %1$s</string>
     <string name="mods_filters">Filters</string>
     <string name="mods_filters_count">Filters · %1$d</string>
     <string name="mods_filters_title">Filters · %1$s</string>
     <string name="mods_import">Import</string>
-    <string name="mods_installed">Installed</string>
-    <string name="mods_installed_updates">Installed · %1$d</string>
     <string name="mods_kind_mods">Mods</string>
     <string name="mods_kind_resource">Resource</string>
     <string name="mods_kind_data">Data</string>
@@ -34,8 +30,8 @@
     <string name="mods_make_instance">Make an instance</string>
 
     <!-- Filters -->
-    <string name="mods_fits_instance">Fits this instance</string>
-    <string name="mods_fits_instance_detail">Minecraft %1$s · NeoForge</string>
+    <string name="mods_fits_instance">Fits this folder</string>
+    <string name="mods_fits_instance_detail">Minecraft %1$s · %2$s, from the folder</string>
     <string name="mods_sort">Sort</string>
     <string name="mods_sort_relevance">Relevance</string>
     <string name="mods_sort_downloads">Downloads</string>
@@ -134,4 +130,42 @@
         <item quantity="one">%1$d more file</item>
         <item quantity="other">%1$d more files</item>
     </plurals>
+    <!-- The mod folder Mods works on. -->
+    <string name="mods_adding_to">Adding to</string>
+    <string name="mods_adding_to_title">Adding to</string>
+    <string name="mods_folder_line">%1$s · %2$d mods · used by %3$d</string>
+    <string name="mods_folder_hint">Folder</string>
+    <string name="mods_folder">Folder</string>
+    <string name="mods_folder_updates">Folder · %1$d</string>
+    <string name="mods_from_folder">%1$s · %2$s · from the folder</string>
+    <string name="mods_in_folder">In folder</string>
+    <string name="mods_manage_folders">Manage folders</string>
+    <string name="mods_no_folder">No mod folder</string>
+    <string name="mods_no_folder_message">This instance\'s mod folder is gone. Pick another in Manage folders, or restore it from Recently deleted.</string>
+    <string name="mods_folder_unplayable">Cofre can\'t play %1$s yet. You can still fill this folder and convert it later.</string>
+    <string name="mods_convert">Convert / upgrade</string>
+    <string name="mods_snapshots">Snapshots</string>
+    <string name="mods_used_by">Used by</string>
+    <string name="mods_used_by_none">No instance yet</string>
+    <string name="mods_auto_update">Auto-update</string>
+    <string name="mods_tab_mods_count">Mods · %1$d</string>
+    <string name="mods_data_scope">Data packs in %1$s\'s worlds</string>
+    <string name="mods_filter_all">All</string>
+    <string name="mods_filter_updates">Updates %1$d</string>
+    <string name="mods_filter_off">Off %1$d</string>
+    <string name="mods_filter_issues">Issues %1$d</string>
+    <string name="mods_filter_pinned">Pinned %1$d</string>
+    <string name="mods_pinned">Pinned</string>
+    <string name="mods_pin_named">Pin %1$s</string>
+    <string name="mods_unpin_named">Unpin %1$s</string>
+    <string name="mods_shared_title">%1$s %2$s?</string>
+    <string name="mods_shared_update_all_title">Update %1$s mods?</string>
+    <string name="mods_shared_update">Update</string>
+    <string name="mods_shared_remove">Remove</string>
+    <string name="mods_shared_turn_off">Turn off</string>
+    <string name="mods_shared_turn_on">Turn on</string>
+    <string name="mods_shared_body">%1$s is shared. This also changes %2$s.</string>
+    <string name="mods_shared_both">%1$s both</string>
+    <string name="mods_shared_all">%1$s all %2$d</string>
+    <string name="mods_shared_copy">Copy folder for %1$s only</string>
 </resources>

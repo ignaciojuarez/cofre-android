@@ -48,15 +48,18 @@ import com.ignacio.cofre.design.PixelGlyph
 import com.ignacio.cofre.design.PixelIcon
 import com.ignacio.cofre.design.RemoteImage
 import com.ignacio.cofre.design.SectionLabel
-import com.ignacio.cofre.design.SelectButton
 import com.ignacio.cofre.design.SheetHeader
 import com.ignacio.cofre.design.Spinner
 import com.ignacio.cofre.design.ToggleRow
 import com.ignacio.cofre.design.outline
 import com.ignacio.cofre.design.pageScroll
 import com.ignacio.cofre.kit.common.ContentKind
-import com.ignacio.cofre.kit.common.Target
-import com.ignacio.cofre.kit.instances.Instance
+import com.ignacio.cofre.design.ControllerGlyph
+import com.ignacio.cofre.design.Pad
+import com.ignacio.cofre.design.Tone
+import com.ignacio.cofre.kit.mods.VersionLabel
+import com.ignacio.cofre.ui.folders.FolderIcon
+import com.ignacio.cofre.ui.folders.label
 import com.ignacio.cofre.kit.modrinth.ProjectFilters
 import com.ignacio.cofre.kit.pages.ProjectPage
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -96,9 +99,10 @@ internal fun BrowsePane(
     onAddKey: () -> Unit,
     modifier: Modifier = Modifier,
     searchFocus: FocusRequester = remember { FocusRequester() },
-    instance: Instance? = null,
-    instances: List<Instance> = emptyList(),
-    onInstance: (String) -> Unit = {},
+    folder: FolderInfo? = null,
+    onFolder: () -> Unit = {},
+    /** Modrinth project id → its update's version (null when up to date), for what's already in the folder. */
+    inFolder: Map<String, String?> = emptyMap(),
 ) {
     val query = state.query
     val field = rememberTextFieldState(query.text)
@@ -110,22 +114,16 @@ internal fun BrowsePane(
     Column(modifier.fillMaxSize()) {
         ColumnHeader(stringResource(R.string.mods_get_mods)) {
             BlockButton(stringResource(R.string.mods_import), onImport, size = ButtonSize.Small)
-            BlockButton(
-                if (updates > 0) stringResource(R.string.mods_installed_updates, updates) else stringResource(R.string.mods_installed),
-                onInstalled,
-                size = ButtonSize.Small,
-            )
-        }
-        Column(Modifier.padding(horizontal = margin).padding(bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (instance != null && instances.size > 1) {
-                SelectButton(
-                    stringResource(R.string.mods_for_instance),
-                    selection = instance.id,
-                    onSelect = onInstance,
-                    options = instances.map { it.id to stringResource(R.string.mods_for_instance_named, it.name) },
-                    compact = true,
+            if (folder != null) {
+                BlockButton(
+                    if (updates > 0) stringResource(R.string.mods_folder_updates, updates) else stringResource(R.string.mods_folder),
+                    onInstalled,
+                    size = ButtonSize.Small,
                 )
             }
+        }
+        Column(Modifier.padding(horizontal = margin).padding(bottom = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (folder != null) AddingTo(folder, onFolder)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Field(
                     field,
@@ -172,7 +170,7 @@ internal fun BrowsePane(
                         BlockButton(stringResource(R.string.mods_clear_filters), { onQueryChange { it.copy(filters = ProjectFilters()) } }, role = ButtonRole.Primary)
                     }
                 }
-                else -> ResultList(state, selected, margin, onOpen, onLoadMore)
+                else -> ResultList(state, selected, margin, onOpen, onLoadMore, inFolder)
             }
         }
     }
@@ -185,6 +183,7 @@ private fun ResultList(
     margin: Dp,
     onOpen: (ProjectSummary) -> Unit,
     onLoadMore: () -> Unit,
+    inFolder: Map<String, String?>,
     modifier: Modifier = Modifier,
 ) {
     val list = rememberLazyListState()
@@ -203,7 +202,8 @@ private fun ResultList(
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         items(state.results, key = { it.source.name + it.id }) { project ->
-            ProjectRow(project, selected = project.route == selected, onClick = { onOpen(project) })
+            val here = project.source == ProjectPage.Source.Modrinth && project.id in inFolder
+            ProjectRow(project, selected = project.route == selected, onClick = { onOpen(project) }, inFolder = here, update = if (here) inFolder[project.id] else null)
         }
         if (state.loadingMore) {
             item(key = "more") {
@@ -220,6 +220,8 @@ internal fun ProjectRow(
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    inFolder: Boolean = false,
+    update: String? = null,
 ) {
     val issue = remember(project) { project.issue }
     BlockRow(
@@ -233,8 +235,38 @@ internal fun ProjectRow(
                 CofreText(project.summary, CofreTheme.type.caption, color = CofreTheme.colors.muted, maxLines = 1)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     project.downloads?.let { Meta("↓ " + count(it)) }
+                    when {
+                        update != null -> Badge(stringResource(R.string.mods_update_badge, VersionLabel.clean(update)), tone = Tone.Accent)
+                        inFolder -> Badge(stringResource(R.string.mods_in_folder), tone = Tone.Success)
+                    }
                     issue?.let { Badge(it.badge, tone = it.tone) }
                 }
+            }
+        },
+    )
+}
+
+/** "Adding to" the folder Get installs into; A (or LT anywhere in Mods) opens the folder picker. */
+@Composable
+private fun AddingTo(folder: FolderInfo, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    BlockRow(
+        folder.folder.name,
+        modifier,
+        onClick = onClick,
+        leading = { FolderIcon(folder.folder, 36.dp) },
+        subtitleContent = {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                CofreText(stringResource(R.string.mods_adding_to), CofreTheme.type.label, color = CofreTheme.colors.muted, maxLines = 1)
+                CofreText(
+                    stringResource(R.string.mods_folder_line, folder.folder.label, folder.mods, folder.usedBy.size),
+                    CofreTheme.type.caption, color = CofreTheme.colors.muted, maxLines = 1,
+                )
+            }
+        },
+        trailing = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                ControllerGlyph(Pad.L2)
+                CofreText("▾", CofreTheme.type.label, color = CofreTheme.colors.muted)
             }
         },
     )
@@ -285,7 +317,7 @@ internal fun FiltersContent(
             stringResource(R.string.mods_fits_instance),
             checked = query.fitsInstance,
             onCheckedChange = { on -> onQueryChange(query.copy(filters = filters.copy(followGame = on, followLoader = on))) },
-            subtitle = stringResource(R.string.mods_fits_instance_detail, Target.GAME_VERSION),
+            subtitle = stringResource(R.string.mods_fits_instance_detail, query.game, query.loader.displayName),
         )
         if (query.source == ProjectPage.Source.Modrinth) {
             SectionLabel(stringResource(R.string.mods_sort))
@@ -323,7 +355,7 @@ internal fun FiltersContent(
 @Composable
 private fun filterSummary(query: BrowseQuery): String {
     val parts = buildList {
-        add(if (query.fitsInstance) "${Target.GAME_VERSION} · NeoForge" else stringResource(R.string.mods_any_version))
+        add(if (query.fitsInstance) stringResource(R.string.mods_from_folder, query.game, query.loader.displayName) else stringResource(R.string.mods_any_version))
         Sorts.firstOrNull { it.first == query.filters.sort }?.let { add(stringResource(it.second)) }
         query.filters.categories.sorted().forEach { add(ProjectFilters.categoryLabel(it)) }
     }
