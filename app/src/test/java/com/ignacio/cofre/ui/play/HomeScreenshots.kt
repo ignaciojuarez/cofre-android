@@ -145,7 +145,7 @@ class OdinHome : HomeScreenshots("odin")
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [36], qualifiers = PHONE)
-class PhoneHome : HomeScreenshots("phone")
+class PhoneHome : HomeScreenshots("landscape-phone")
 
 /** Home's sample data on top of [Samples]: a shared mod folder with updates, options, a session and screenshots. */
 object HomeSamples {

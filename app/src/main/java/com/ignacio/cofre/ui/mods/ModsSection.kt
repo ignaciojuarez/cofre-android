@@ -38,6 +38,12 @@ import androidx.core.util.Consumer
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.ignacio.cofre.AppGraph
+import com.ignacio.cofre.design.ButtonSize
+import com.ignacio.cofre.design.Tone
+import com.ignacio.cofre.design.Banner
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
 import com.ignacio.cofre.R
 import com.ignacio.cofre.SettingsPane
 import com.ignacio.cofre.copyToCache
@@ -111,6 +117,7 @@ fun ModsSection(
 
     if (page == ModsPage.Folders) {
         BackHandler { model.show(ModsPage.Browse) }
+        Box(modifier.fillMaxSize()) {
         FoldersScreen(
             model.manage,
             onOpen = { id -> model.selectFolder(id); model.select(null); model.show(ModsPage.Browse) },
@@ -119,8 +126,9 @@ fun ModsSection(
             onPickPack = ::pickPack,
             instances = graph.library.instances,
             builds = graph.library.neoForgeVersions,
-            modifier = modifier,
         )
+        LibraryError(graph, Modifier.align(Alignment.BottomCenter))
+        }
         return
     }
 
@@ -261,6 +269,16 @@ fun ModsSection(
                 GalleryViewer(items, start, onClose = { viewer = null })
             }
         }
+        LibraryError(graph, Modifier.align(Alignment.BottomCenter))
+    }
+}
+
+/** Library refusals from actions started here (linking or copying a folder while the game runs, say). */
+@Composable
+private fun LibraryError(graph: AppGraph, modifier: Modifier = Modifier) {
+    val error = graph.library.error ?: return
+    Banner(error, PixelGlyph.Cross, modifier.padding(horizontal = 20.dp, vertical = 12.dp), tone = Tone.Danger) {
+        BlockButton(stringResource(R.string.dismiss), graph.library::clearError, size = ButtonSize.Small)
     }
 }
 
