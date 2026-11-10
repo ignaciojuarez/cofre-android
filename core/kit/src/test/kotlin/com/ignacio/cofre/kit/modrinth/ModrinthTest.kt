@@ -53,6 +53,19 @@ class ModrinthTest {
             assertEquals(emptyList(), client.versions("a")); assertEquals(299, client.rateLimit?.remaining)
         }
     }
+    @Test fun latestVersionsAskForTheTargetInOneRequest() = runBlocking {
+        MockWebServer().use { server ->
+            server.start(); server.enqueue(MockResponse(body = "{}"))
+            val client = Modrinth(baseUrl = server.url("/v2/"))
+            assertEquals(emptyMap(), client.latestVersions(listOf("abc", "def"), listOf("fabric"), listOf("26.3")))
+            val request = server.takeRequest()
+            assertEquals("/v2/version_files/update", request.url.encodedPath)
+            val body = Kit.json.parseToJsonElement(request.body!!.utf8()).toString()
+            assertEquals("""{"hashes":["abc","def"],"algorithm":"sha1","loaders":["fabric"],"game_versions":["26.3"]}""", body)
+            assertEquals(emptyMap(), client.latestVersions(emptyList(), listOf("fabric"), listOf("26.3")))
+            assertEquals(1, server.requestCount)
+        }
+    }
     @Test fun bulkHashesUseV2Contract() = runBlocking {
         MockWebServer().use { server ->
             server.start(); server.enqueue(MockResponse(body = "{}"))

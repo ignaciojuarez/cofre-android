@@ -73,6 +73,7 @@ class Modrinth(
     )
     @Serializable private data class SearchResponse(val hits: List<SearchHit>)
     @Serializable private data class HashRequest(val hashes: List<String>, val algorithm: String)
+    @Serializable private data class UpdateRequest(val hashes: List<String>, val algorithm: String, val loaders: List<String>, @SerialName("game_versions") val gameVersions: List<String>)
     data class RateLimit(val limit: Int?, val remaining: Int?, val resetAtMillis: Long)
 
     private val lock = Any()
@@ -107,6 +108,17 @@ class Modrinth(
         require(algorithm == "sha1" || algorithm == "sha512")
         if (hashes.isEmpty()) return emptyMap()
         return Kit.json.decodeFromString(request(endpoint("version_files"), Kit.json.encodeToString(HashRequest(hashes, algorithm))))
+    }
+    /**
+     * For each file hash, the newest version of that file's project that fits [loaders] and [gameVersions]: one request
+     * for a whole folder (Modrinth's `version_files/update`). Hashes Modrinth doesn't know, or whose project has no
+     * fitting version, are missing from the result. Updates and conversions both start here.
+     */
+    suspend fun latestVersions(hashes: List<String>, loaders: List<String>, gameVersions: List<String>, algorithm: String = "sha1"): Map<String, Version> {
+        require(algorithm == "sha1" || algorithm == "sha512")
+        if (hashes.isEmpty()) return emptyMap()
+        val body = Kit.json.encodeToString(UpdateRequest(hashes, algorithm, loaders, gameVersions))
+        return Kit.json.decodeFromString(request(endpoint("version_files", "update"), body))
     }
     private fun endpoint(vararg segments: String): HttpUrl = baseUrl.newBuilder().apply { segments.forEach { addPathSegment(it) } }.build()
 
