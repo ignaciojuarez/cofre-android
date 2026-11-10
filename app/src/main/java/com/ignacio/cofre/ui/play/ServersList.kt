@@ -49,8 +49,8 @@ fun ServersList(
     graph: AppGraph,
     instance: Instance,
     modifier: Modifier = Modifier,
+    model: ServersModel = remember(instance.id) { ServersModel(graph, instance) },
 ) {
-    val model = remember(instance.id) { ServersModel(graph, instance) }
     var adding by rememberSaveable { mutableStateOf(false) }
     var removing by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(model) { model.refresh() }
@@ -63,7 +63,7 @@ fun ServersList(
                 BlockRow(
                     server.record.name,
                     Modifier.controllerActions(ControllerAction(Pad.X, remove) { removing = server.id }),
-                    subtitle = status(model.pings[server.id]) ?: server.record.ip,
+                    subtitle = pingText(model.pings[server.id]) ?: server.record.ip,
                     leading = { WorldIcon((model.pings[server.id] as? ServersModel.Ping.Online)?.status?.faviconPNG ?: server.record.iconPNG) },
                     trailing = {
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -97,16 +97,6 @@ fun ServersList(
             onDismiss = { removing = null },
         )
     }
-}
-
-@Composable
-private fun status(ping: ServersModel.Ping?): String? = when (ping) {
-    is ServersModel.Ping.Online -> {
-        val players = ping.status.online?.let { online -> ping.status.max?.let { "$online/$it" } ?: "$online" }
-        listOfNotNull(players?.let { stringResource(R.string.servers_players, it) }, "${ping.status.latencyMillis} ms").joinToString(" · ")
-    }
-    ServersModel.Ping.Offline -> stringResource(R.string.servers_offline)
-    else -> null
 }
 
 @Composable
