@@ -108,6 +108,45 @@ class Library(private val graph: AppGraph) {
         store.duplicate(id, store.uniqueName(graph.context.getString(R.string.instance_copy_name, store.get(id).name))).also(::relink)
     }
 
+    /**
+     * Links instance [id] to mod folder [folderId], or to no mods when null. The folder must fit the instance and be
+     * playable. Refused while the game runs; the old folder is kept.
+     */
+    fun linkFolder(id: String, folderId: String?, done: (Instance) -> Unit = {}) {
+        if (graph.launcher.gameRunning) {
+            error = graph.context.getString(R.string.error_game_running)
+            return
+        }
+        edit(done, owner = id) {
+            val instance = store.get(id)
+            val folder = folderId?.let { graph.modFolders.get(it) }
+            require(folder == null || (folder.fits(instance) && folder.playable)) { graph.context.getString(R.string.folder_doesnt_fit) }
+            ModFolderLink.link(store.directory(instance), folder?.let { graph.modFolders.directory(it) })
+            store.save(instance.copy(modFolder = folder?.id))
+        }
+    }
+
+    /** Gives instance [id] its own copy of its shared mod folder ("<instance> mods") and links it to the copy. */
+    fun copyFolderFor(id: String, done: (Instance) -> Unit = {}) {
+        if (graph.launcher.gameRunning) {
+            error = graph.context.getString(R.string.error_game_running)
+            return
+        }
+        edit(done, owner = id) {
+            val instance = store.get(id)
+            val source = requireNotNull(graph.folderOf(instance)) { graph.context.getString(R.string.folder_missing) }
+            val folders = graph.modFolders
+            val sourceDir = folders.directory(source)
+            val copy = runBlocking {
+                InstanceStore.lock(sourceDir).withLock {
+                    folders.copy(sourceDir, folders.uniqueName(graph.context.getString(R.string.folder_default_name, instance.name)), source.gameVersion, source.loader, source.loaderVersion, source.id)
+                }
+            }
+            ModFolderLink.link(store.directory(instance), folders.directory(copy))
+            store.save(instance.copy(modFolder = copy.id))
+        }
+    }
+
     fun trash(id: String) {
         val name = instances.firstOrNull { it.id == id }?.name ?: return
         edit({ token -> undo = Undo(name, token) }, owner = id) {

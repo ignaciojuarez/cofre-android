@@ -2,6 +2,7 @@
 <resources>
     <!-- Mod folders: mods, resource packs and shader packs kept outside instances. -->
     <string name="folder_default_name">%1$s mods</string>
+    <string name="folder_doesnt_fit">That mod folder is for another game version or loader.</string>
     <string name="folder_missing">This instance\'s mod folder is gone. Restore it from Recently deleted.</string>
     <string name="launch_folder_mismatch">The mod folder “%1$s” is for %2$s %3$s, but this instance runs %4$s %5$s.</string>
     <string name="launch_folder_unplayable">The mod folder “%1$s” is for %2$s %3$s. Cofre can\'t play that yet.</string>
