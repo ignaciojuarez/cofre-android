@@ -212,6 +212,14 @@ private fun FoldersList(
 ) {
     val context = LocalContext.current
     val list = rememberLazyListState()
+    // A new or newly opened folder sorts anywhere: bring the selected card into view.
+    LaunchedEffect(state.selected, state.cards) {
+        val index = state.cards.indexOfFirst { it.id == state.selected }.takeIf { it >= 0 } ?: return@LaunchedEffect
+        val row = index + 1 + listOfNotNull(state.undo, state.message).size
+        val info = list.layoutInfo
+        val whole = info.visibleItemsInfo.any { it.index == row && it.offset >= info.viewportStartOffset && it.offset + it.size <= info.viewportEndOffset }
+        if (!whole) list.animateScrollToItem(row)
+    }
     Column(Modifier.fillMaxSize()) {
         ColumnHeader(stringResource(R.string.folders_root_title)) {
             BlockButton(stringResource(R.string.folders_new), onNew, size = ButtonSize.Small, role = ButtonRole.Primary)

@@ -9,6 +9,7 @@ import android.view.View
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performSemanticsAction
@@ -50,6 +51,9 @@ private const val ODIN = "w1138dp-h640dp-land-270dpi"
 
 /** A short landscape phone (rail navigation). */
 private const val PHONE = "w731dp-h411dp-land-280dpi"
+
+/** The shortest landscape phone Home supports: Play must stay above the fold. */
+private const val SHORT_PHONE = "w731dp-h360dp-land-420dpi"
 
 /** Home (Play) as a controller user sees it: the dashboard, its tiles opened, and its edge states. */
 @OptIn(ExperimentalRoborazziApi::class)
@@ -146,6 +150,21 @@ class OdinHome : HomeScreenshots("odin")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [36], qualifiers = PHONE)
 class PhoneHome : HomeScreenshots("landscape-phone")
+
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [36], qualifiers = SHORT_PHONE)
+@OptIn(ExperimentalRoborazziApi::class)
+class ShortPhoneHome {
+    @get:Rule val rule = createComposeRule()
+
+    @Test fun homeShort() {
+        rule.setContent { CofreRoot(HomeSamples.graph()) }
+        rule.waitForIdle()
+        rule.onNodeWithTag("play.play").assertIsDisplayed()
+        captureScreenRoboImage("src/test/screenshots/landscape-phone/home_short.png")
+    }
+}
 
 /** Home's sample data on top of [Samples]: a shared mod folder with updates, options, a session and screenshots. */
 object HomeSamples {

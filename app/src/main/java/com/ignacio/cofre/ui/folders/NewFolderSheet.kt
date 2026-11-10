@@ -92,7 +92,8 @@ fun NewFolderContent(
     var build by rememberSaveable { mutableStateOf<String?>(if (start == FolderStart.Instance) first?.loaderVersion else null) }
     var autoUpdate by rememberSaveable { mutableStateOf(AutoUpdate.Notify) }
     var essentials by rememberSaveable { mutableStateOf(false) }
-    var link by rememberSaveable { mutableStateOf(true) }
+    // Off by default: making a folder never silently switches an instance.
+    var link by rememberSaveable { mutableStateOf(false) }
     /** The instance "Match an instance" last picked, which "Link to … now" offers too. */
     var matched by rememberSaveable { mutableStateOf<String?>(null) }
     val name = rememberTextFieldState(suggestName(first?.takeIf { start == FolderStart.Instance }?.let { "${it.name} mods" } ?: "Mods"))

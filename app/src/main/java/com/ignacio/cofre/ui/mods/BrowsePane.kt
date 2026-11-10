@@ -115,7 +115,8 @@ internal fun BrowsePane(
     Column(modifier.fillMaxSize()) {
         ColumnHeader(stringResource(R.string.mods_get_mods)) {
             BlockButton(stringResource(R.string.mods_import), onImport, size = ButtonSize.Small)
-            if (folder != null) {
+            // The folder pane is beside the list unless a project or Import replaced it; only then bring it back.
+            if (folder != null && selected != null && selected != ModsRoutes.INSTALLED) {
                 BlockButton(
                     if (updates > 0) stringResource(R.string.mods_folder_updates, updates) else stringResource(R.string.mods_folder),
                     onInstalled,

@@ -138,7 +138,8 @@ private fun Home(graph: AppGraph, active: Instance) {
     val close = { open?.let { returnTo = it }; open = null }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val height = maxHeight
-        val hero = (height * 0.36f).coerceIn(120.dp, 230.dp)
+        // Shrinks on short screens so Play stays visible without scrolling.
+        val hero = (height * 0.36f).coerceIn(64.dp, 230.dp)
         val tiles: @Composable (Dp) -> Unit = { height ->
             val tile = open
             if (tile == null) {
@@ -147,23 +148,17 @@ private fun Home(graph: AppGraph, active: Instance) {
                 TilePanelFor(tile, graph, model, onClose = close, onView = { viewing = it }, modifier = Modifier.fillMaxWidth().height(height))
             }
         }
-        if (maxWidth >= 640.dp) {
-            Row(Modifier.fillMaxSize()) {
-                Box(Modifier.weight(0.44f).fillMaxHeight()) { PaneScroll { Left(graph, model, hero) } }
-                Box(Modifier.weight(0.56f).fillMaxHeight().padding(start = 4.dp, end = 20.dp, top = 6.dp, bottom = 12.dp)) {
-                    // Three rows that fill the column, or scroll when that would make tiles too short.
-                    val rows = ((height - 36.dp) / 3).coerceAtLeast(TILE_MIN)
-                    if (open == null) {
-                        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) { tiles(rows) }
-                    } else {
-                        tiles(height - 18.dp)
-                    }
+        // Always two columns (landscape only): Play stays above the fold down to about 360 dp tall, the tiles scroll.
+        Row(Modifier.fillMaxSize()) {
+            Box(Modifier.weight(0.44f).fillMaxHeight()) { PaneScroll { Left(graph, model, hero) } }
+            Box(Modifier.weight(0.56f).fillMaxHeight().padding(start = 4.dp, end = 20.dp, top = 6.dp, bottom = 12.dp)) {
+                // Three rows that fill the column, or scroll when that would make tiles too short.
+                val rows = ((height - 36.dp) / 3).coerceAtLeast(TILE_MIN)
+                if (open == null) {
+                    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) { tiles(rows) }
+                } else {
+                    tiles(height - 18.dp)
                 }
-            }
-        } else {
-            PaneScroll {
-                Left(graph, model, hero)
-                if (open == null) tiles(TILE_MIN) else tiles(height - 24.dp)
             }
         }
     }

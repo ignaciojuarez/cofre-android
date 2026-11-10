@@ -98,6 +98,9 @@ class FoldersModel(private val graph: AppGraph, private val scope: CoroutineScop
     private val mutableVersions = MutableStateFlow(listOf(Target.GAME_VERSION))
     val versions: StateFlow<List<String>> = mutableVersions.asStateFlow()
 
+    /** The `nav.modFolder` the last load saw, so a change to it selects that folder once. */
+    private var seenOpened: String? = null
+
     fun reload() {
         scope.launch { load() }
     }
@@ -297,8 +300,11 @@ class FoldersModel(private val graph: AppGraph, private val scope: CoroutineScop
         }
         // Folders in use first, then by name; the selection falls back to the first.
         val sorted = cards.sortedWith(compareBy<FolderCard>({ it.usedBy.isEmpty() }, { !it.folder.playable }, { it.folder.name.lowercase() }))
+        // A folder Mods newly opened (Convert's result, the picker) wins over the old selection, once.
+        val opened = graph.nav.modFolder?.takeIf { it != seenOpened }
+        seenOpened = graph.nav.modFolder
         mutable.update { s ->
-            val selected = s.selected?.takeIf { id -> sorted.any { it.id == id } } ?: graph.nav.modFolder?.takeIf { id -> sorted.any { it.id == id } } ?: sorted.firstOrNull()?.id
+            val selected = listOf(opened, s.selected, graph.nav.modFolder).firstOrNull { id -> sorted.any { it.id == id } } ?: sorted.firstOrNull()?.id
             s.copy(cards = sorted, deleted = deleted, loading = false, selected = selected)
         }
         mutable.value.selected?.let { loadSnapshots(it) }

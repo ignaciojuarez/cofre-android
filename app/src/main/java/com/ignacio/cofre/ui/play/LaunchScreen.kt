@@ -57,16 +57,11 @@ fun LaunchScreen(
     Column(modifier.fillMaxSize().background(CofreTheme.colors.page).testTag("launch")) {
         ScreenFocus(Modifier.weight(1f)) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
-                if (maxWidth >= 760.dp) {
-                    Row(Modifier.fillMaxSize()) {
-                        Hero(run, Modifier.weight(1f).fillMaxHeight())
-                        Stages(run, onCancel, onRetry, Modifier.width(440.dp).fillMaxHeight())
-                    }
-                } else {
-                    Column(Modifier.fillMaxSize()) {
-                        Hero(run, Modifier.fillMaxWidth().height(240.dp))
-                        Stages(run, onCancel, onRetry, Modifier.weight(1f))
-                    }
+                val side = minOf(440.dp, maxWidth * 0.5f)
+                // Side by side on every landscape screen, so the error and its actions are never below the fold.
+                Row(Modifier.fillMaxSize()) {
+                    Hero(run, Modifier.weight(1f).fillMaxHeight())
+                    Stages(run, onCancel, onRetry, Modifier.width(side).fillMaxHeight())
                 }
             }
         }
@@ -111,7 +106,8 @@ private fun Stages(
 ) {
     val scroll = rememberScrollState()
     Column(modifier.padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // Actions first: Cancel is where focus starts, above the log.
+        // A failure first, where it's seen, then the actions: Cancel (or Try again) is where focus starts.
+        run.error?.let { Banner(it, PixelGlyph.Cross, Modifier.testTag("launch.error"), tone = Tone.Danger) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             when {
                 run.error != null -> {
@@ -146,7 +142,6 @@ private fun Stages(
                     )
                 }
             }
-            run.error?.let { Banner(it, PixelGlyph.Cross, Modifier.testTag("launch.error"), tone = Tone.Danger) }
             ListSection(label = stringResource(R.string.launch_log)) {
                 LogView(run.log, Modifier.fillMaxWidth().height(180.dp))
             }

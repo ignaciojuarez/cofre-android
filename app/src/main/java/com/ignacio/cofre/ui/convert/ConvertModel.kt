@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import com.ignacio.cofre.AppGraph
 import com.ignacio.cofre.R
 import com.ignacio.cofre.kit.common.FileOps
+import com.ignacio.cofre.kit.common.Loader
 import com.ignacio.cofre.kit.common.Target
 import com.ignacio.cofre.kit.instances.InstanceStore
 import com.ignacio.cofre.kit.modfolders.Convert
@@ -87,7 +88,7 @@ class ConvertModel(
     private var named: Pair<ConvertTarget, String>? = null
     /** "<name> · <Loader> <version>", unique among folders; read from disk once per target. */
     val newName: String get() = named?.takeIf { it.first == target }?.second
-        ?: graph.modFolders.uniqueName("${folder.name} · ${target.loader.displayName} ${target.gameVersion}").also { named = target to it }
+        ?: graph.modFolders.uniqueName(convertedName(folder.name, target)).also { named = target to it }
 
     init {
         replan()
@@ -222,6 +223,13 @@ class ConvertModel(
     fun close() = scope.cancel()
 
     private companion object { const val RECENT = 16 }
+}
+
+/** "<name> · <Loader> <version>", replacing the suffix an earlier convert added (and its " 2" de-dup number). */
+internal fun convertedName(name: String, target: ConvertTarget): String {
+    val loaders = Loader.entries.joinToString("|") { Regex.escape(it.displayName) }
+    val base = name.replace(Regex(" · (?:$loaders) \\S+(?: \\d+)?$"), "")
+    return "$base · ${target.loader.displayName} ${target.gameVersion}"
 }
 
 /** "26.2" < "26.2.1" < "26.10": numeric parts compared in order. */
