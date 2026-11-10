@@ -108,9 +108,8 @@ class FlowTest {
         press(KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_BUTTON_L1)
         assertEquals(ShellSection.Instances, graph.nav.section)
 
-        // L1/R1 leave focus on the sidebar (core/design's ScreenFocus); Right steps into the list, onto the first
-        // instance rather than the search field. A opens it, B goes back, B again to Play.
-        press(KeyEvent.KEYCODE_DPAD_RIGHT)
+        // L1/R1 move focus into the section's content: the first instance rather than the search field. A opens it,
+        // B goes back, B again to Play.
         rule.onNodeWithTag("instance.Survival+").assert(SemanticsMatcher.expectValue(SemanticsProperties.Focused, true))
         press(KeyEvent.KEYCODE_BUTTON_A)
         assertEquals("survival", graph.nav.instance)

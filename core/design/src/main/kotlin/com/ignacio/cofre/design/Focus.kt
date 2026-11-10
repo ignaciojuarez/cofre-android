@@ -41,6 +41,7 @@ import androidx.compose.ui.node.currentValueOf
 import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.node.traverseAncestors
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.toSize
@@ -117,6 +118,29 @@ internal class FocusRingNode :
     fun centerIn(screen: LayoutCoordinates): Offset? {
         val c = coordinates?.takeIf { it.isAttached && screen.isAttached } ?: return null
         return screen.localPositionOf(c, Offset.Zero) + Offset(c.size.width / 2f, c.size.height / 2f)
+    }
+
+    /** True when this ring draws in [view]'s window. */
+    fun inWindowOf(view: android.view.View): Boolean = isAttached && currentValueOf(LocalView) === view
+
+    /**
+     * Takes focus back after a sheet or menu it opened closes. Window focus comes back a moment after the other
+     * window goes, and Compose then focuses the window's first item (often a pane's top button); this runs after.
+     */
+    fun takeBackFocus() {
+        if (!isAttached) return
+        val view = currentValueOf(LocalView)
+        val controller = currentValueOf(LocalController)
+        coroutineScope.launch {
+            for (i in 0 until 60) {
+                withFrameNanos {}
+                if (view.hasWindowFocus()) {
+                    withFrameNanos {}
+                    break
+                }
+            }
+            if (controller.lastInput == InputKind.Controller && controller.focusedRing !== this@FocusRingNode) requestFocus()
+        }
     }
 
     fun boundsInRoot(): Rect? = coordinates?.takeIf { it.isAttached }?.let {
@@ -302,8 +326,11 @@ internal class ScreenFocusNode(var saved: MutableState<Offset?>, var claim: Bool
     private var coordinates: LayoutCoordinates? = null
     private var parent: ScreenFocusNode? = null
     private var childScreens = 0
-    private var settled = false
+    var settled = false
+        private set
     private var appearing: Job? = null
+    /** The item in another window that had focus when this sheet or menu claimed it. */
+    private var opener: FocusRingNode? = null
 
     override fun onPlaced(coordinates: LayoutCoordinates) {
         this.coordinates = coordinates
@@ -325,12 +352,19 @@ internal class ScreenFocusNode(var saved: MutableState<Offset?>, var claim: Bool
         appearing?.cancel()
         val controller = currentValueOf(LocalController)
         wasTouch = controller.lastInput == InputKind.Touch
+        // A screen that appears with a claiming parent (a section opened by L1/R1 whose content is a nested screen)
+        // claims too: the parent has no items of its own and leaves the choice to it.
+        // A reused node gets its new [claim] after this, so read that after the frame.
+        val appearingParent = parent?.takeIf { !it.settled }
+        val before = controller.focusedRing
         appearing = coroutineScope.launch {
             withFrameNanos {} // let the screen lay out first
+            val claims = claim || appearingParent?.claim == true
             // Compose may already have put focus on one of our items; move it to the saved one. Leave it alone
             // when it sits outside this screen (the rail button that switched to it).
             val focused = controller.focusedRing
-            if (controller.lastInput == InputKind.Controller && (claim || focused == null || focused in rings)) {
+            if (claim) opener = before?.takeIf { it !in rings && !it.inWindowOf(currentValueOf(LocalView)) }
+            if (controller.lastInput == InputKind.Controller && (claims || focused == null || focused in rings)) {
                 restore(saved.value)
             }
             settled = true
@@ -353,6 +387,9 @@ internal class ScreenFocusNode(var saved: MutableState<Offset?>, var claim: Bool
     override fun onDetach() {
         parent?.let { it.childScreens-- }
         parent = null
+        // A closing sheet or menu gives focus back to what opened it.
+        opener?.takeBackFocus()
+        opener = null
     }
 
     /** Records the focused item, except Compose's own pick while the screen appears. */

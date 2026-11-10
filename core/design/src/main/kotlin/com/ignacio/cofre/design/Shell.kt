@@ -19,10 +19,16 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -79,6 +85,7 @@ public fun AdaptiveShell(
 ) {
     val sections = ShellSection.entries
     val holder = rememberSaveableStateHolder()
+    val sectionActions = remember { mutableStateListOf<ControllerAction>() }
     // How the section last changed: by shoulder button (focus goes into the content) or from the nav chrome.
     var byShoulder by remember { mutableStateOf(false) }
     fun shoulder(step: Int) {
@@ -96,11 +103,12 @@ public fun AdaptiveShell(
             .controllerActions(
                 ControllerAction(Pad.L1, "Sections") { shoulder(-1) },
                 ControllerAction(Pad.R1, "Sections") { shoulder(1) },
+                *sectionActions.toTypedArray(),
             ),
     ) {
         val widthClass = WidthClass.of(maxWidth)
         val style = if (widthClass == WidthClass.Expanded && !preferRail) NavStyle.Sidebar else NavStyle.Rail
-        CompositionLocalProvider(LocalWidthClass provides widthClass) {
+        CompositionLocalProvider(LocalWidthClass provides widthClass, LocalSectionActions provides sectionActions) {
             // One layout for every width, so resizing moves the chrome without rebuilding the content.
             ShellLayout {
                 Column(Modifier.fillMaxSize()) {
@@ -114,6 +122,26 @@ public fun AdaptiveShell(
                 NavChrome(style, section, pick, modsBadge, navFooter)
             }
         }
+    }
+}
+
+private val LocalSectionActions = staticCompositionLocalOf<MutableList<ControllerAction>?> { null }
+
+/**
+ * Gamepad actions for the whole shell, nav chrome included, while the calling section is on screen (Mods' LT folder
+ * picker works from the rail too). Regions inside the content still win.
+ */
+@Composable
+public fun SectionActions(vararg actions: ControllerAction) {
+    val registry = LocalSectionActions.current ?: return
+    val latest by rememberUpdatedState(actions)
+    val keys = actions.map { it.pad to it.label }
+    DisposableEffect(registry, keys) {
+        val stable = keys.map { (pad, label) ->
+            ControllerAction(pad, label) { latest.firstOrNull { it.pad == pad }?.onPress?.invoke() }
+        }
+        registry += stable
+        onDispose { registry -= stable.toSet() }
     }
 }
 
@@ -144,7 +172,8 @@ private fun NavChrome(
     val c = CofreTheme.colors
     fun badge(s: ShellSection) = if (s == ShellSection.Mods) modsBadge else 0
     val rail = style == NavStyle.Rail
-    Column(
+    // Scrolls when the window is too short for every section and the footer (the footer stays at the bottom otherwise).
+    BoxWithConstraints(
         Modifier
             .width(if (rail) CofreSpacing.rail else CofreSpacing.sidebar)
             .fillMaxHeight()
@@ -153,27 +182,34 @@ private fun NavChrome(
                 val o = CofreBlock.outline.toPx()
                 val x = if (layoutDirection == LayoutDirection.Ltr) size.width - o else 0f
                 drawRect(c.outline, Offset(x, 0f), Size(o, size.height))
-            }
-            .padding(horizontal = if (rail) 6.dp else 12.dp)
-            .padding(top = 10.dp, bottom = if (rail) 12.dp else 16.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
-        horizontalAlignment = if (rail) Alignment.CenterHorizontally else Alignment.Start,
+            },
     ) {
-        if (rail) {
-            AppIcon(Modifier.padding(top = 6.dp, bottom = 12.dp), size = 34.dp)
-        } else {
-            Row(
-                Modifier.padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 14.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                AppIcon(size = 30.dp)
-                CofreText("Cofre", CofreTheme.type.title2)
+        Column(
+            Modifier
+                .verticalScroll(rememberScrollState())
+                .heightIn(min = maxHeight)
+                .fillMaxWidth()
+                .padding(horizontal = if (rail) 6.dp else 12.dp)
+                .padding(top = 10.dp, bottom = if (rail) 12.dp else 16.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+            horizontalAlignment = if (rail) Alignment.CenterHorizontally else Alignment.Start,
+        ) {
+            if (rail) {
+                AppIcon(Modifier.padding(top = 6.dp, bottom = 12.dp), size = 34.dp)
+            } else {
+                Row(
+                    Modifier.padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    AppIcon(size = 30.dp)
+                    CofreText("Cofre", CofreTheme.type.title2)
+                }
             }
+            ShellSection.entries.forEach { s -> NavItem(s, s == section, onSelect, style, badge(s)) }
+            Spacer(Modifier.weight(1f))
+            footer(style)
         }
-        ShellSection.entries.forEach { s -> NavItem(s, s == section, onSelect, style, badge(s)) }
-        Spacer(Modifier.weight(1f))
-        footer(style)
     }
 }
 

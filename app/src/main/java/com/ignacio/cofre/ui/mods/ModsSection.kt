@@ -55,6 +55,7 @@ import com.ignacio.cofre.design.EmptyState
 import com.ignacio.cofre.design.GalleryItem
 import com.ignacio.cofre.design.GalleryViewer
 import com.ignacio.cofre.design.Pad
+import com.ignacio.cofre.design.SectionActions
 import com.ignacio.cofre.design.PixelGlyph
 import com.ignacio.cofre.design.CofreTheme
 import com.ignacio.cofre.design.controllerActions
@@ -157,6 +158,8 @@ fun ModsSection(
         else NoFolderPane(onManage = { model.show(ModsPage.Folders) })
     }
 
+    // LT picks the folder from the rail too, while Mods is on screen.
+    SectionActions(ControllerAction(Pad.L2, stringResource(R.string.mods_folder_hint)) { picker = true })
     Box(
         modifier
             .fillMaxSize()
@@ -166,8 +169,7 @@ fun ModsSection(
                 if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) picker = true
                 true
             }
-            .modsActions(stringResource(R.string.mods_search), stringResource(R.string.mods_filters), ::search) { filters = true }
-            .controllerActions(ControllerAction(Pad.L2, stringResource(R.string.mods_folder_hint)) { picker = true }),
+            .modsActions(stringResource(R.string.mods_search), stringResource(R.string.mods_filters), ::search) { filters = true },
     ) {
         if (instance == null && folder == null) {
             EmptyState(

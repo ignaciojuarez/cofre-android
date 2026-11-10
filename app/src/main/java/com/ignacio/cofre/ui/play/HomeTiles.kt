@@ -298,7 +298,9 @@ private fun FolderPanel(graph: AppGraph, model: HomeModel) {
                 stringResource(R.string.home_folder),
                 folder?.id ?: "",
                 { if (it.isNotEmpty() && it != folder?.id) model.link(it) },
-                (if (folder == null) listOf("" to stringResource(R.string.home_no_folder)) else emptyList()) + info.choices.map { it.id to it.name },
+                // The current folder leads even when it no longer fits, so the menu opens on it.
+                (if (folder == null) listOf("" to stringResource(R.string.home_no_folder)) else emptyList()) +
+                    (listOfNotNull(folder).filter { f -> info.choices.none { it.id == f.id } } + info.choices).map { it.id to it.name },
                 Modifier.weight(1f).testTag("home.folder.switch"),
             )
         } else {

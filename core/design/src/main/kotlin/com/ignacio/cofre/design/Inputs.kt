@@ -30,7 +30,11 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -347,6 +351,13 @@ private fun <T> BlockMenu(
         onDismissRequest = onDismiss,
         properties = PopupProperties(focusable = true),
     ) {
+        // The menu claims focus for its top item as it opens; then it moves to the current choice.
+        val current = remember { FocusRequester() }
+        LaunchedEffect(Unit) {
+            withFrameNanos {}
+            withFrameNanos {}
+            runCatching { current.requestFocus() }
+        }
         ScreenFocus(claim = true, Modifier.controllerInput(onBack = onDismiss)) {
             Column(
                 Modifier
@@ -359,6 +370,7 @@ private fun <T> BlockMenu(
                     val on = value == selection
                     Row(
                         Modifier
+                            .then(if (on) Modifier.focusRequester(current) else Modifier)
                             .fillMaxWidth()
                             .heightIn(min = 40.dp)
                             .blockClickable(role = Role.RadioButton) { onPick(value) }
