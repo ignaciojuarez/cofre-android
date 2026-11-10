@@ -57,9 +57,12 @@ class ModInstaller(
         }
     }
 
-    suspend fun install(plan: ModInstallPlan, metered: Boolean = false, allowMetered: Boolean = false, onProgress: (DownloadProgress) -> Unit = {}): List<InstalledMod> = withContext(Dispatchers.IO) {
+    suspend fun install(plan: ModInstallPlan, metered: Boolean = false, allowMetered: Boolean = false, onProgress: (DownloadProgress) -> Unit = {}): List<InstalledMod> =
+        InstanceStore.lock(instance).withLock { installLocked(plan, metered, allowMetered, onProgress) }
+
+    /** [install] for a caller that already holds [InstanceStore.lock]. Anything but [ModInstallFailure.Rollback] leaves the mods as they were. */
+    internal suspend fun installLocked(plan: ModInstallPlan, metered: Boolean = false, allowMetered: Boolean = false, onProgress: (DownloadProgress) -> Unit = {}): List<InstalledMod> = withContext(Dispatchers.IO) {
         if (plan.blocked != null || plan.target == null) throw ModInstallFailure.Blocked(plan.blocked)
-        val mutex = InstanceStore.lock(instance); mutex.lock()
         val stage = File(instance, ".cofre-mods-staging/${UUID.randomUUID()}")
         var preserveBackup = false
         var ownsStage = false
@@ -120,7 +123,6 @@ class ModInstaller(
             index.installed()
         } finally {
             if (ownsStage && !preserveBackup) FileOps.delete(stage)
-            mutex.unlock()
         }
     }
     /**
