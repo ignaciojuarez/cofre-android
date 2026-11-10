@@ -28,7 +28,7 @@ Cofre for Android is a native Kotlin + Jetpack Compose launcher for Minecraft: J
 ## Where things live
 | Path | What |
 |---|---|
-| `core/kit/` | Pure Kotlin/JVM logic, one package per domain plus `common` (Kit's JSON/HTTP, `FileOps`/`Zip`, hashes, target constants) (`accounts`, `modrinth`, `curseforge`, `pages`, `versions`, `downloads`, `mods`, `instances`, `content`, `compat`, `modpacks`, `worlds`, `servers`, `logs`, `servercards`, `options`). Tests use JUnit 6 and run on the Mac |
+| `core/kit/` | Pure Kotlin/JVM logic, one package per domain plus `common` (Kit's JSON/HTTP, `FileOps`/`Zip`, hashes, target constants) (`accounts`, `modrinth`, `curseforge`, `pages`, `versions`, `downloads`, `mods`, `modfolders`, `instances`, `content`, `compat`, `modpacks`, `worlds`, `servers`, `logs`, `servercards`, `options`). Tests use JUnit 6 and run on the Mac |
 | `core/design/` | Compose design system ported from Cofre iOS (`app/UI/Sources/CofreUI/Tokens`, `Components`, `Layout`). Screenshot tests use Roborazzi |
 | `app/` | The app: screens in `com.ignacio.cofre.ui.<area>`, navigation, wiring |
 | `runtime/` | Java runtime, natives, GLFW shim, launch, NeoForge install, `:game` and `:installer` processes |

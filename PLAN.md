@@ -148,6 +148,12 @@ New on Android:
   - Fallback: our own stick → mouse, button → key mapper inside the GLFW shim, for when Controlify is missing or broken.
 - **Typing:** SDL/GLFW text input brings up the Android IME. Search fields open a dedicated text sheet.
 
+## 📦 Mod folders
+- A folder (`filesDir/mod-folders/<id>/`) holds `mods/`, `resourcepacks/`, `shaderpacks/` and `cofre-mods.json`, with a game version and loader. Instances link to one; several can share it; deleting an instance keeps it.
+- An instance's content dirs are relative symlinks into its folder; the launcher relinks before every launch. FML follows them ✔︎ (emulator, 2026-11-09).
+- Folders for another loader or game version can be made (Convert) and kept, but only folders that fit the instance and `Target` can be linked or played.
+- Snapshots (before each update, last good launch, manual) store each jar once per folder; Android blocks hard links in app data ✔︎, so the first snapshot is one full copy.
+
 ## ⚠️ Edge cases
 - 🖼️ **Graphics**
   - NeoForge's early window is GL: write `earlyWindowControl = false` to `config/fml.toml`, or ship NeoLoading-Vulkan-Fix.
@@ -187,6 +193,7 @@ New on Android:
 | 3 | Runtime: JRE, natives, GLFW shim, `:game` | Vanilla 26.2 shows a first frame on Vulkan on the Odin 3 | 🟡 Our JRE 25 + LWJGL 3.4.1 natives (`natives-20261109-7`, all 16 KB-aligned) boot the game; it reaches Minecraft's Vulkan device check on the emulator |
 | 4 | NeoForge install + launch, Sodium, Controlify | Modded 26.2 is playable with the built-in controller | 🟡 NeoForge 26.2.0.93 installs in `:installer` and launches to the Vulkan check; the handheld preset installs; controller play needs the Odin 3 |
 | 5 | Accounts, mod browse/install/update, modpacks, worlds, servers, logs, crash screen | Same features as iOS | ✅ built; Microsoft sign-in needs an approved client ID |
+| 5b | Mod folders (shared by instances, convert to another loader/version, auto-update, snapshots) and the Home dashboard | FML loads a folder's mods through the instance's links | ✅ built; launch through links checked on the emulator (2026-11-09) |
 | 6 | Handheld polish, release pipeline | A signed GitHub release that self-updates | ⏳ |
 
 What to run first on the Odin 3: `runtime/README.md` → "Needs the real device".
