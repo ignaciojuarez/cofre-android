@@ -2,13 +2,16 @@ package com.ignacio.cofre.kit.compat
 
 import com.ignacio.cofre.kit.common.Hashes
 import com.ignacio.cofre.kit.common.Kit
+import kotlinx.serialization.Serializable
 import java.io.File
 
 /**
  * The OpenGL risk per jar, cached on disk by SHA-1 so a jar is scanned once, whether the Installed tab or Play asks
- * first. The scan reads every class and is slow on big jars: call [scan] off the main thread.
+ * first. Findings of another [GlUsageScanner.VERSION] are dropped. The scan reads every class and is slow on big jars:
+ * call [scan] off the main thread.
  */
 class GlScanCache(private val file: File) {
+    @Serializable private data class Saved(val scanner: Int, val risks: Map<String, GlRisk>)
     private val scanning = Any()
     private var entries: MutableMap<String, GlRisk>? = null
 
@@ -30,14 +33,13 @@ class GlScanCache(private val file: File) {
         synchronized(this) {
             load()[hash] = found
             file.parentFile?.mkdirs()
-            file.writeText(Kit.json.encodeToString(load().toMap()))
+            file.writeText(Kit.json.encodeToString(Saved(GlUsageScanner.VERSION, load().toMap())))
         }
         found
     }
 
-    private fun load(): MutableMap<String, GlRisk> = entries ?: runCatching {
-        Kit.json.decodeFromString<Map<String, GlRisk>>(file.readText()).toMutableMap()
-    }.getOrDefault(mutableMapOf()).also { entries = it }
+    private fun load(): MutableMap<String, GlRisk> = entries ?: runCatching { Kit.json.decodeFromString<Saved>(file.readText()) }.getOrNull()
+        ?.takeIf { it.scanner == GlUsageScanner.VERSION }?.risks.orEmpty().toMutableMap().also { entries = it }
 
     private fun hashOf(jar: File): String {
         val key = "${jar.path}|${jar.length()}|${jar.lastModified()}"

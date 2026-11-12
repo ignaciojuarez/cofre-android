@@ -21,6 +21,8 @@ data class GlScan(val usages: List<GlUsage>, val backendAware: Boolean = false) 
  * Known Vulkan-ready mods are vouched for by id and version in known-mods.json, not here.
  */
 object GlUsageScanner {
+    /** Bump when what a scan finds changes: [GlScanCache] then scans every jar again. */
+    const val VERSION = 1
     /** 26.2's backend-neutral GPU API (`RenderSystem.getDevice()` returns a GpuDevice) and the Vulkan backend itself. */
     private val neutral = listOf("com/mojang/blaze3d/systems/GpuDevice", "com/mojang/blaze3d/systems/GpuBackend", "com/mojang/blaze3d/systems/CommandEncoder", "com/mojang/blaze3d/systems/RenderPass", "com/mojang/blaze3d/vulkan/", "org/lwjgl/vulkan/")
     /** Also scans jars nested in `META-INF/jarjar/` (NeoForge) and `META-INF/jars/`; their classes read `inner.jar!/pkg/Cls`. */

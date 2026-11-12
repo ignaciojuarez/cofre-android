@@ -4,6 +4,8 @@ import android.view.Choreographer
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.View
+import android.view.inputmethod.BaseInputConnection
 import kotlin.math.abs
 
 /** GLFW key codes (LWJGL 3.4.1 GLFW_KEY_*) for the Android keys a keyboard sends. */
@@ -11,6 +13,7 @@ internal object GlfwKeys {
     const val SPACE = 32
     const val ESCAPE = 256
     const val TAB = 258
+    const val BACKSPACE = 259
     const val F = 70
     const val E = 69
     const val Q = 81
@@ -70,9 +73,12 @@ internal object GlfwKeys {
  *   A → jump (Space)           B / Start → Escape           X → drop (Q)               Y → inventory (E)
  *   L1 / R1 → hotbar left/right (scroll)                    L3 → sprint (Ctrl)         R3 → sneak (Shift)
  *   D-pad up → perspective (F5), down → swap hands (F), left/right → hotbar            Select → player list (Tab)
+ *   In menus ([inMenu]): D-pad → arrow keys, which move between buttons (A presses the focused one)
  */
-internal class GamepadMapper {
+internal class GamepadMapper(private val inMenu: () -> Boolean) {
     private val held = HashSet<Int>() // GLFW keys / mouse buttons (as -1 - button) we've pressed
+    private var hatX = 0 // the hat's last direction per axis: -1, 0, 1
+    private var hatY = 0
     private var lookX = 0f
     private var lookY = 0f
     private var lastFrameNanos = 0L
@@ -108,15 +114,14 @@ internal class GamepadMapper {
             KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BUTTON_START -> key(GlfwKeys.ESCAPE, down)
             KeyEvent.KEYCODE_BUTTON_X -> key(GlfwKeys.Q, down)
             KeyEvent.KEYCODE_BUTTON_Y -> key(GlfwKeys.E, down)
-            KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_DPAD_LEFT -> if (down) GameBridge.scroll(0.0, 1.0)
-            KeyEvent.KEYCODE_BUTTON_R1, KeyEvent.KEYCODE_DPAD_RIGHT -> if (down) GameBridge.scroll(0.0, -1.0)
+            KeyEvent.KEYCODE_BUTTON_L1 -> if (down) GameBridge.scroll(0.0, 1.0)
+            KeyEvent.KEYCODE_BUTTON_R1 -> if (down) GameBridge.scroll(0.0, -1.0)
             KeyEvent.KEYCODE_BUTTON_L2 -> button(RIGHT_BUTTON, down)
             KeyEvent.KEYCODE_BUTTON_R2 -> button(LEFT_BUTTON, down)
             KeyEvent.KEYCODE_BUTTON_THUMBL -> key(GlfwKeys.LEFT_CONTROL, down)
             KeyEvent.KEYCODE_BUTTON_THUMBR -> key(GlfwKeys.LEFT_SHIFT, down)
             KeyEvent.KEYCODE_BUTTON_SELECT -> key(GlfwKeys.TAB, down)
-            KeyEvent.KEYCODE_DPAD_UP -> key(GlfwKeys.F5, down)
-            KeyEvent.KEYCODE_DPAD_DOWN -> key(GlfwKeys.F, down)
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT -> dpad(event.keyCode, down)
             else -> return false
         }
         return true
@@ -143,7 +148,8 @@ internal class GamepadMapper {
         trigger(RIGHT_BUTTON, left)
 
         // Some pads report the d-pad as a hat instead of key codes.
-        hat(event.getAxisValue(MotionEvent.AXIS_HAT_Y), GlfwKeys.F5, GlfwKeys.F)
+        hatX = hat(event.getAxisValue(MotionEvent.AXIS_HAT_X), hatX, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT)
+        hatY = hat(event.getAxisValue(MotionEvent.AXIS_HAT_Y), hatY, KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN)
     }
 
     /** Releases everything held (focus lost): no stuck keys when the game comes back. */
@@ -151,6 +157,8 @@ internal class GamepadMapper {
         for (code in held.toList()) if (code >= 0) key(code, false) else button(-1 - code, false)
         lookX = 0f
         lookY = 0f
+        hatX = 0
+        hatY = 0
     }
 
     private fun key(glfwKey: Int, down: Boolean) {
@@ -176,9 +184,33 @@ internal class GamepadMapper {
         if (value > PRESS_AT) button(button, true) else if (value < RELEASE_AT) button(button, false)
     }
 
-    private fun hat(value: Float, negativeKey: Int, positiveKey: Int) {
-        key(negativeKey, value < -0.5f)
-        key(positiveKey, value > 0.5f)
+    // A release lets go of both meanings: a menu may have opened or closed while it was held.
+    private fun dpad(keyCode: Int, down: Boolean) {
+        val arrow = GlfwKeys.fromAndroid(keyCode) ?: return
+        val inGame = when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_UP -> GlfwKeys.F5
+            KeyEvent.KEYCODE_DPAD_DOWN -> GlfwKeys.F
+            else -> null // left/right: the hotbar
+        }
+        when {
+            !down -> {
+                key(arrow, false)
+                inGame?.let { key(it, false) }
+            }
+            inMenu() -> key(arrow, true)
+            inGame != null -> key(inGame, true)
+            else -> GameBridge.scroll(0.0, if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) 1.0 else -1.0)
+        }
+    }
+
+    /** A hat axis as d-pad presses: one press and one release per direction it moves to. Returns the new direction. */
+    private fun hat(value: Float, was: Int, negativeKey: Int, positiveKey: Int): Int {
+        val now = if (value < -0.5f) -1 else if (value > 0.5f) 1 else 0
+        if (now != was) {
+            if (was != 0) dpad(if (was < 0) negativeKey else positiveKey, false)
+            if (now != 0) dpad(if (now < 0) negativeKey else positiveKey, true)
+        }
+        return now
     }
 
     private fun deadzone(v: Float) = if (abs(v) < DEADZONE) 0f else v
@@ -192,5 +224,29 @@ internal class GamepadMapper {
         const val PRESS_AT = 0.5f
         const val RELEASE_AT = 0.35f
         const val LOOK_SPEED = 1400f // pixels per second at full tilt
+    }
+}
+
+/**
+ * Android's soft keyboard typing into the game (shown when the game turns GLFW_IME on): committed text becomes
+ * characters, deletes become Backspace. Enter and other keys come as key events through dispatchKeyEvent, like a
+ * hardware keyboard's, so nothing arrives twice.
+ */
+internal class SoftKeyboard(view: View) : BaseInputConnection(view, false) {
+    override fun commitText(text: CharSequence, newCursorPosition: Int): Boolean {
+        editable?.clear() // any composing text this replaces
+        text.toString().codePoints().forEach { GameBridge.char(it) }
+        return true
+    }
+
+    // A keyboard that composes anyway: what it composed counts as typed.
+    override fun finishComposingText(): Boolean = commitText(editable?.toString().orEmpty(), 1)
+
+    override fun deleteSurroundingText(beforeLength: Int, afterLength: Int): Boolean {
+        repeat(beforeLength) {
+            GameBridge.key(GlfwKeys.BACKSPACE, GameBridge.PRESS)
+            GameBridge.key(GlfwKeys.BACKSPACE, GameBridge.RELEASE)
+        }
+        return true
     }
 }

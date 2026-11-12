@@ -366,8 +366,8 @@ public class GLFW {
 
     // ---- Cofre state ------------------------------------------------------------------------
 
-    /** The only window and monitor. Handles just need to be non-NULL. */
-    static final long WINDOW = 1L, MONITOR = 2L;
+    /** The only monitor. Handles just need to be non-NULL. */
+    static final long MONITOR = 2L;
 
     // Event records written by libcofre (keep in sync with cofre.c and GameActivity.kt).
     static final int EV_KEY = 1, EV_CHAR = 2, EV_MOUSE_BUTTON = 3, EV_CURSOR_POS = 4, EV_CURSOR_MOVE = 5,
@@ -381,9 +381,19 @@ public class GLFW {
     private static final Map<Integer, Integer> INPUT_MODES = new HashMap<>();
 
     private static boolean nativeLoaded, pumping, shouldClose, focused = true, iconified;
+    // Soft keyboard. Minecraft's TextInputManager never tells GLFW a text field has focus, but once the IME status
+    // callback fires it reads GLFW_IME on its next tick, and outside text fields it then turns it off. With the
+    // callback fired on every poll and GLFW_IME always reported on, a tick that only reads it means a field has
+    // focus, and one that turns it off means none has. ponytail: a mod reading GLFW_IME itself could flash the keyboard.
+    private static boolean imeRead, imeTurnedOff, keyboardShown;
     private static int width = 1280, height = 720;
     private static double cursorX, cursorY;
-    private static long startNanos = System.nanoTime(), windowMonitor, userPointer, currentContext;
+    private static long startNanos = System.nanoTime(), windowMonitor, userPointer, currentContext, lastWindow = 0x100;
+    /**
+     * The newest window: the activity's surface, its callbacks and its events belong to it. Each glfwCreateWindow gets
+     * its own handle, so another window (an early loading screen's) going away leaves the game's alone.
+     */
+    static long currentWindow;
     private static String clipboard = "";
     private static SharedLibrary library;
     private static GLFWVidMode videoMode;
@@ -432,6 +442,8 @@ public class GLFW {
     private static native int nPollEvents(ByteBuffer out, int capacity);
     private static native long nWindowSize();
     private static native void nSetCursorCaptured(boolean captured);
+    private static native void nSetIme(boolean on);
+    private static native void nDropInput();
     static native long nAcquireWindow();
     static native void nReleaseWindow(long window);
 
@@ -448,6 +460,7 @@ public class GLFW {
 
     public static boolean glfwInit() {
         loadNative();
+        nDropInput(); // taps and presses from while the JVM booted
         long size = nWindowSize();
         if (size != 0) {
             width = (int) (size >>> 32);
@@ -599,13 +612,16 @@ public class GLFW {
         if (!nativeLoaded) glfwInit();
         windowMonitor = monitor;
         shouldClose = false;
-        return WINDOW;
+        currentWindow = ++lastWindow;
+        return currentWindow;
     }
     public static long glfwCreateWindow(int w, int h, ByteBuffer title, long monitor, long share) {
         return glfwCreateWindow(w, h, (CharSequence) null, monitor, share);
     }
     public static void glfwDestroyWindow(long window) {
-        if (window != 0) Callbacks.glfwFreeCallbacks(window);
+        if (window == 0 || window != currentWindow) return;
+        Callbacks.glfwFreeCallbacks(window);
+        currentWindow = 0;
     }
 
     public static boolean glfwWindowShouldClose(long window) {
@@ -709,7 +725,7 @@ public class GLFW {
         currentContext = window;
     }
     public static long glfwGetCurrentContext() {
-        return currentContext != 0 ? currentContext : WINDOW;
+        return currentContext;
     }
     public static void glfwSwapBuffers(long window) {}
     public static void glfwSwapInterval(int interval) {}
@@ -780,11 +796,17 @@ public class GLFW {
         if (!nativeLoaded || pumping) return; // a callback may poll again (Minecraft redraws during input)
         pumping = true;
         try {
+            if (imeRead || imeTurnedOff) {
+                boolean field = !imeTurnedOff; // shown on entering a field, so a keyboard the player closes stays closed
+                if (field != keyboardShown) nSetIme(keyboardShown = field);
+                imeRead = imeTurnedOff = false;
+            }
             int n;
             do {
                 n = nPollEvents(EVENTS, EVENT_CAPACITY);
                 for (int i = 0; i < n; i++) dispatch(i * EVENT_SIZE);
             } while (n == EVENT_CAPACITY);
+            if (imeStatusCb != null) imeStatusCb.invoke(currentWindow);
         } finally {
             pumping = false;
         }
@@ -806,18 +828,19 @@ public class GLFW {
         int type = EVENTS.getInt(at), i0 = EVENTS.getInt(at + 4), i1 = EVENTS.getInt(at + 8),
             i2 = EVENTS.getInt(at + 12), i3 = EVENTS.getInt(at + 16);
         double d0 = EVENTS.getDouble(at + 24), d1 = EVENTS.getDouble(at + 32);
+        long window = currentWindow;
         switch (type) {
             case EV_KEY:
                 if (i0 >= 0 && i0 <= GLFW_KEY_LAST) KEYS[i0] = (byte) (i2 == GLFW_RELEASE ? GLFW_RELEASE : GLFW_PRESS);
-                if (keyCb != null) keyCb.invoke(WINDOW, i0, i1, i2, i3);
+                if (keyCb != null) keyCb.invoke(window, i0, i1, i2, i3);
                 break;
             case EV_CHAR:
-                if (charCb != null) charCb.invoke(WINDOW, i0);
-                if (charModsCb != null) charModsCb.invoke(WINDOW, i0, i1);
+                if (charCb != null) charCb.invoke(window, i0);
+                if (charModsCb != null) charModsCb.invoke(window, i0, i1);
                 break;
             case EV_MOUSE_BUTTON:
                 if (i0 >= 0 && i0 <= GLFW_MOUSE_BUTTON_LAST) BUTTONS[i0] = (byte) i1;
-                if (mouseButtonCb != null) mouseButtonCb.invoke(WINDOW, i0, i1, i2);
+                if (mouseButtonCb != null) mouseButtonCb.invoke(window, i0, i1, i2);
                 break;
             case EV_CURSOR_POS:
                 moveCursor(d0, d1);
@@ -828,26 +851,28 @@ public class GLFW {
                 else moveCursor(clamp(cursorX + d0, width - 1), clamp(cursorY + d1, height - 1));
                 break;
             case EV_SCROLL:
-                if (scrollCb != null) scrollCb.invoke(WINDOW, d0, d1);
+                if (scrollCb != null) scrollCb.invoke(window, d0, d1);
                 break;
             case EV_WINDOW_SIZE:
-                if (i0 <= 0 || i1 <= 0 || (i0 == width && i1 == height)) break;
+                // 0×0 while the activity is stopped: Minecraft treats the window as minimized and stops acquiring images.
+                if (i0 < 0 || i1 < 0 || (i0 == width && i1 == height)) break;
                 width = i0;
                 height = i1;
-                if (windowSizeCb != null) windowSizeCb.invoke(WINDOW, width, height);
-                if (framebufferSizeCb != null) framebufferSizeCb.invoke(WINDOW, width, height);
+                if (windowSizeCb != null) windowSizeCb.invoke(window, width, height);
+                if (framebufferSizeCb != null) framebufferSizeCb.invoke(window, width, height);
                 break;
             case EV_FOCUS:
                 focused = i0 != 0;
-                if (windowFocusCb != null) windowFocusCb.invoke(WINDOW, focused);
+                if (!focused) keyboardShown = false; // Android hides it with the window; show it again for a focused field
+                if (windowFocusCb != null) windowFocusCb.invoke(window, focused);
                 break;
             case EV_ICONIFY:
                 iconified = i0 != 0;
-                if (windowIconifyCb != null) windowIconifyCb.invoke(WINDOW, iconified);
+                if (windowIconifyCb != null) windowIconifyCb.invoke(window, iconified);
                 break;
             case EV_CLOSE:
                 shouldClose = true;
-                if (windowCloseCb != null) windowCloseCb.invoke(WINDOW);
+                if (windowCloseCb != null) windowCloseCb.invoke(window);
                 break;
             default:
                 break;
@@ -861,7 +886,7 @@ public class GLFW {
     private static void moveCursor(double x, double y) {
         cursorX = x;
         cursorY = y;
-        if (cursorPosCb != null) cursorPosCb.invoke(WINDOW, x, y);
+        if (cursorPosCb != null) cursorPosCb.invoke(currentWindow, x, y);
     }
 
     private static boolean cursorCaptured() {
@@ -874,13 +899,19 @@ public class GLFW {
     public static int glfwGetInputMode(long window, int mode) {
         switch (mode) {
             case GLFW_CURSOR: return INPUT_MODES.getOrDefault(mode, GLFW_CURSOR_NORMAL);
+            case GLFW_IME: imeRead = true; return GLFW_TRUE; // see keyboardShown
             default: return INPUT_MODES.getOrDefault(mode, GLFW_FALSE);
         }
     }
     public static void glfwSetInputMode(long window, int mode, int value) {
+        if (mode == GLFW_IME) {
+            if (value == GLFW_FALSE) imeTurnedOff = true; // see keyboardShown
+            return;
+        }
         boolean wasCaptured = cursorCaptured();
         INPUT_MODES.put(mode, value);
-        if (mode == GLFW_CURSOR && nativeLoaded && wasCaptured != cursorCaptured()) nSetCursorCaptured(cursorCaptured());
+        if (!nativeLoaded) return;
+        if (mode == GLFW_CURSOR && wasCaptured != cursorCaptured()) nSetCursorCaptured(cursorCaptured());
     }
     public static boolean glfwRawMouseMotionSupported() {
         return true;
@@ -975,7 +1006,7 @@ public class GLFW {
         return previous(prev, GLFWDropCallback.class);
     }
 
-    // ---- Text input (IME): no preedit on Android yet ----------------------------------------
+    // ---- Text input (IME): GLFW_IME is the soft keyboard (glfwSetInputMode); no preedit ------
 
     public static GLFWIMEStatusCallback glfwSetIMEStatusCallback(long window, GLFWIMEStatusCallbackI cb) {
         Object prev = imeStatusCb;

@@ -89,6 +89,30 @@ class MetadataTest {
         val metadata = assertNotNull(ModJarMetadata.read(jar(mapOf("META-INF/neoforge.mods.toml" to bountiful().toByteArray(), "META-INF/jarjar/arch.jar" to inner, "META-INF/jarjar/metadata.json" to """{"jars":[{"identifier":{"artifact":"kotlinforforge"}}]}""".toByteArray()))))
         assertTrue("architectury" in metadata.modIds); assertTrue(ModRequirements.missing(mapOf("b.jar" to metadata)).isEmpty())
     }
+    @Test fun aBundledLibrarysMetadataAfterManyOrLargeClassesStillCounts() {
+        // Gradle writes classes before resources: a real library's toml sits past its classes, some over 1 MB.
+        val classes = (1..200).associate { "lib/C$it.class" to byteArrayOf(1) } + ("lib/Big.class" to ByteArray(2_000_000))
+        val inner = jarBytes(classes + ("META-INF/neoforge.mods.toml" to "[[mods]]\nmodId='flywheel'".toByteArray()))
+        val metadata = assertNotNull(ModJarMetadata.read(jar(mapOf("META-INF/neoforge.mods.toml" to "[[mods]]\nmodId='create'".toByteArray(), "META-INF/jarjar/flywheel.jar" to inner, "META-INF/jarjar/broken.jar" to byteArrayOf(1, 2, 3)))))
+        assertEquals(listOf("create", "flywheel"), metadata.modIds)
+    }
+    @Test fun recordsWhichLoadersMetadataAJarCarries() {
+        fun read(vararg files: Pair<String, String>) = assertNotNull(ModJarMetadata.read(jar(files.associate { it.first to it.second.toByteArray() })))
+        val fabric = read("fabric.mod.json" to """{"id":"f","depends":{"fabric-api":"*","cloth-config":"*"}}""")
+        assertEquals(setOf(Loader.Fabric), fabric.loaders); assertFalse(fabric.neoForge)
+        assertEquals(setOf(Loader.Quilt), read("quilt.mod.json" to """{"quilt_loader":{"id":"q"}}""").loaders)
+        val forge = read("META-INF/mods.toml" to "[[mods]]\nmodId='old'\n[[dependencies.old]]\nmodId='lib'\nmandatory=true")
+        assertEquals(setOf(Loader.Forge), forge.loaders); assertFalse(forge.neoForge)
+        assertTrue(read("fabric.mod.json" to """{"id":"u"}""", "META-INF/neoforge.mods.toml" to "[[mods]]\nmodId='u'").neoForge, "a universal jar is a NeoForge mod")
+        // Neither a Fabric jar's nor an old Forge jar's needs are missing on NeoForge: FML never loads them.
+        assertTrue(ModRequirements.missing(mapOf("f.jar" to fabric, "old.jar" to forge)).isEmpty())
+    }
+    @Test fun aBundledLibrarysOldTomlStillProvidesItsIdButIsntTheJarsOwn() {
+        val inner = jarBytes(mapOf("META-INF/mods.toml" to "[[mods]]\nmodId='lib'".toByteArray()))
+        val metadata = assertNotNull(ModJarMetadata.read(jar(mapOf("META-INF/neoforge.mods.toml" to "[[mods]]\nmodId='main'".toByteArray(), "META-INF/jarjar/lib.jar" to inner))))
+        assertTrue(metadata.neoForge); assertEquals(listOf("main", "lib"), metadata.modIds); assertEquals(listOf("main"), metadata.own); assertEquals(listOf("lib"), metadata.nested)
+        assertTrue(ModRequirements.missing(mapOf("main.jar" to metadata, "user.jar" to ModJarMetadata(listOf("user"), dependencies = listOf(JarDependency("lib"))))).isEmpty())
+    }
     @Test fun plainInvalidOrOversizedMetadataIsIgnored() {
         assertNull(ModJarMetadata.read(jar(mapOf("other.txt" to byteArrayOf(1)))))
         assertNull(ModJarMetadata.read(File(root, "bad.jar").also { it.writeText("not a zip") }))

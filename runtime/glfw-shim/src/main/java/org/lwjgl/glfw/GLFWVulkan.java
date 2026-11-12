@@ -64,8 +64,9 @@ public class GLFWVulkan {
     }
 
     /**
-     * Creates the VkSurfaceKHR on the activity's SurfaceView. While the activity has no surface
-     * (the device is asleep), this blocks until a new one exists; the game then rebuilds its swapchain.
+     * Creates the VkSurfaceKHR on the activity's SurfaceView, waiting for its first surface if the
+     * JVM got here first. Minecraft calls this once, so the activity keeps that surface through
+     * Home and sleep (SurfaceView's FOLLOWS_ATTACHMENT lifecycle).
      */
     public static int glfwCreateWindowSurface(VkInstance instance, long window, VkAllocationCallbacks allocator, LongBuffer surface) {
         GLFW.loadNative();

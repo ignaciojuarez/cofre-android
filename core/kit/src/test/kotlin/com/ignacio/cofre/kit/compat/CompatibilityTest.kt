@@ -120,13 +120,83 @@ class CompatibilityTest {
     }
     @Test fun playIssuesUseTheSharedScanCacheAndSkipFolders() {
         val clean = jar("mods/clean.jar", mapOf("META-INF/neoforge.mods.toml" to toml("clean", "1.0"), "a/A.class" to clazz("java/lang/Object")))
-        File(root, "gl-risk.json").writeText("""{"${Hashes.sha1(clean)}":"Likely"}""")
+        File(root, "gl-risk.json").writeText("""{"scanner":${GlUsageScanner.VERSION},"risks":{"${Hashes.sha1(clean)}":"Likely"}}""")
         assertEquals("likely", ContentCompatibility.playIssues(root, scans).single().severity, "the cached finding, not a rescan")
         val glOnly = jar("mods/glonly.jar", mapOf("META-INF/neoforge.mods.toml" to toml("glonly", "1.0"), "a/Draw.class" to clazz(gl)))
         File(root, "mods/folder-mod").mkdirs()
         assertEquals(2, ContentCompatibility.playIssues(root, scans).size)
         assertEquals(GlRisk.Likely, GlScanCache(File(root, "gl-risk.json")).cached(glOnly), "saved for the Installed tab and the next start")
         assertNull(scans.cached(File(root, "mods/folder-mod")))
+    }
+    @Test fun findingsFromAnotherScannerVersionAreScannedAgain() {
+        val clean = jar("mods/clean.jar", mapOf("META-INF/neoforge.mods.toml" to toml("clean", "1.0"), "a/A.class" to clazz("java/lang/Object")))
+        val sha = Hashes.sha1(clean); val cache = File(root, "gl-risk.json")
+        for (old in listOf("""{"$sha":"Likely"}""", """{"scanner":${GlUsageScanner.VERSION - 1},"risks":{"$sha":"Likely"}}""")) {
+            cache.writeText(old); assertNull(GlScanCache(cache).cached(clean)); assertEquals(GlRisk.None, GlScanCache(cache).scan(clean))
+        }
+        assertEquals(GlRisk.None, GlScanCache(cache).cached(clean), "saved under the current version")
+    }
+    private fun mod(file: String, toml: String, vararg more: Pair<String, ByteArray>) = jar("mods/$file", mapOf("META-INF/neoforge.mods.toml" to toml.toByteArray()) + more)
+    private fun issues() = ContentCompatibility.playIssues(root, scans).associateBy { it.file }
+    @Test fun distantHorizonsAndControlifyAreFlaggedOnAndroid() {
+        mod("DistantHorizons-3.3.3-26.2-neoforge.jar", "[[mods]]\nmodId='distanthorizons'\nversion='3.3.3'\ndisplayName='Distant Horizons'")
+        mod("controlify-3.5.3+mc26.2-universal.jar", "mods = [{modId = 'controlify', version = '3.5.3+mc26.2', displayName = 'Controlify'}]")
+        val found = issues()
+        val dh = found.getValue("DistantHorizons-3.3.3-26.2-neoforge.jar"); assertEquals("broken", dh.severity); assertTrue("database library has no Android build" in dh.reason)
+        val controlify = found.getValue("controlify-3.5.3+mc26.2-universal.jar"); assertEquals("broken", controlify.severity); assertTrue("can't see controllers on Android" in controlify.reason)
+        for ((slug, title) in listOf("distanthorizons" to "Distant Horizons", "controlify" to "Controlify")) assertEquals("broken", ContentCompatibility.issue(slug, title, ContentKind.Mods)?.severity, "Browse warns before install")
+        assertFalse(ContentCompatibility.vouched("distanthorizons", "Distant Horizons", "3.3.3"))
+    }
+    @Test fun jarsNeoForgeWontLoadAreBrokenButAUniversalJarIsFine() {
+        jar("mods/fabric-only.jar", mapOf("fabric.mod.json" to """{"id":"fabriconly","depends":{"fabric-api":"*"}}""".toByteArray()))
+        jar("mods/old-forge.jar", mapOf("META-INF/mods.toml" to "[[mods]]\nmodId='oldforge'".toByteArray()))
+        jar("mods/universal.jar", mapOf("fabric.mod.json" to """{"id":"universal"}""".toByteArray(), "META-INF/neoforge.mods.toml" to toml("universal", "1")))
+        val found = issues()
+        assertEquals(setOf("fabric-only.jar", "old-forge.jar"), found.keys)
+        assertEquals("Not a NeoForge mod: it's made for Fabric.", found.getValue("fabric-only.jar").reason); assertEquals("broken", found.getValue("old-forge.jar").severity)
+        // With Sinytra Connector on, Fabric mods load.
+        mod("connector.jar", "[[mods]]\nmodId='connector'")
+        assertEquals(setOf("old-forge.jar"), issues().keys)
+    }
+    @Test fun aSecondCopyOfAModIsBrokenAndTurningItOffKeepsItsUsers() {
+        mod("a-1.jar", "[[mods]]\nmodId='a'\nversion='1.0'"); mod("a-2.jar", "[[mods]]\nmodId='a'\nversion='2.0'")
+        mod("user.jar", "[[mods]]\nmodId='user'\n[[dependencies.user]]\nmodId='a'\ntype='required'")
+        // A library bundled in another mod isn't a second copy.
+        mod("bundler.jar", "[[mods]]\nmodId='bundler'", "META-INF/jarjar/a.jar" to jar("bundled-a.jar", mapOf("META-INF/neoforge.mods.toml" to toml("a", "0.5"))).readBytes())
+        val issue = issues().values.single(); assertEquals("a-1.jar", issue.file); assertTrue("a-2.jar" in issue.reason)
+        ContentCompatibility.turnOff(listOf(issue), root)
+        assertEquals(setOf("a-1.jar.disabled", "a-2.jar", "user.jar", "bundler.jar"), File(root, "mods").list()!!.toSet()); assertTrue(issues().isEmpty())
+    }
+    @Test fun turningOffAModAlsoTurnsOffTheModsThatNeedIt() {
+        mod("iris.jar", "[[mods]]\nmodId='iris'\ndisplayName='Iris'")
+        mod("addon.jar", "[[mods]]\nmodId='addon'\n[[dependencies.addon]]\nmodId='iris'\ntype='required'")
+        mod("other.jar", "[[mods]]\nmodId='other'")
+        ContentCompatibility.turnOff(listOf(issues().getValue("iris.jar")), root)
+        assertEquals(setOf("iris.jar.disabled", "addon.jar.disabled", "other.jar"), File(root, "mods").list()!!.toSet())
+    }
+    @Test fun versionRangesAndIncompatibleModsAreChecked() {
+        File(root, "cofre.json").writeText("""{"id":"x","name":"X","loaderVersion":"26.2.0.93"}""")
+        fun needs(id: String, mc: String, neo: String) = mod("$id.jar", "[[mods]]\nmodId='$id'\nversion='1.0'\n[[dependencies.$id]]\nmodId='minecraft'\ntype='required'\nversionRange='$mc'\n[[dependencies.$id]]\nmodId='neoforge'\ntype='required'\nversionRange='$neo'")
+        needs("fits", "[26.2,26.3)", "[26.2.0.80,)"); needs("anyrange", "(,)", "*"); needs("unreadable", "{26.2}", "garbage!")
+        needs("newneo", "[26.2,26.3)", "[26.2.0.100,)"); needs("oldmc", "[26.1,26.2)", "(,)")
+        mod("picky.jar", "[[mods]]\nmodId='picky'\n[[dependencies.picky]]\nmodId='fits'\ntype='incompatible'")
+        mod("lenient.jar", "[[mods]]\nmodId='lenient'\n[[dependencies.lenient]]\nmodId='fits'\ntype='incompatible'\nversionRange='[2,)'")
+        val found = issues().mapValues { it.value.reason }
+        assertEquals(mapOf<String?, String>("newneo.jar" to "Needs NeoForge 26.2.0.100 or newer.", "oldmc.jar" to "Needs Minecraft older than 26.2.", "picky.jar" to "Can't run with fits."), found)
+        assertTrue(ContentCompatibility.playIssues(root, scans, neoForge = null).none { it.file == "newneo.jar" }, "an unknown build never blocks")
+    }
+    @Test fun mavenRangesReadLikeFml() {
+        val yes = listOf("[26.2,26.3)" to "26.2", "[26.2.0.80,)" to "26.2.0.93", "(,)" to "1", "*" to "26.2", "" to "26.2", "1.0" to "26.2", "[1.0]" to "1.0.0",
+            "(,1.0],[1.2,)" to "1.3", "[26.2.0.93-beta,)" to "26.2.0.93", "[0.9,)" to "0.9.2+mc26.2")
+        for ((range, version) in yes) assertEquals(true, MavenRange.contains(range, version), "$range ∋ $version")
+        val no = listOf("[26.2.0.100,)" to "26.2.0.93", "[26.1,26.2)" to "26.2", "(26.2,)" to "26.2", "[1.0]" to "1.0.1", "(,1.0],[1.2,)" to "1.1", "[26.2.0.93,)" to "26.2.0.93-beta")
+        for ((range, version) in no) assertEquals(false, MavenRange.contains(range, version), "$range ∌ $version")
+        for (range in listOf("[a,b)", "[1.0", "[1,2,3]", "(1.0)", "{1}")) assertNull(MavenRange.contains(range, "1.0"), range)
+        assertNull(MavenRange.contains("[1,)", "unknown"))
+        assertEquals("Needs NeoForge 26.2.0.95.", MavenRange.needs("NeoForge", "[26.2.0.95]", "26.2.0.93"))
+        assertEquals("Needs Minecraft 26.1.2 or older.", MavenRange.needs("Minecraft", "[26.1,26.1.2]", "26.2"))
+        assertEquals("Needs NeoForge newer than 26.2.0.93.", MavenRange.needs("NeoForge", "(26.2.0.93,)", "26.2.0.93"))
+        assertTrue(MavenRange.compare("26.2.0.93", "26.2.0.93-beta") > 0); assertEquals(0, MavenRange.compare("26.2", "26.2.0")); assertTrue(MavenRange.compare("1.10", "1.9") > 0)
     }
     @Test fun activeShaderIsReportedOnceWhenItsModIsAlreadyBlocked() {
         jar("mods/iris.jar", emptyMap()); File(root, "shaderpacks").mkdir(); File(root, "shaderpacks/Pack.zip").writeText("")

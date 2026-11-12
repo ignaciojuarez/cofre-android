@@ -10,7 +10,17 @@ class OptionsTest {
     @TempDir lateinit var root: File
     @Test fun newInstancesReceivePlayableDistances() {
         val o = GameOptions(root); assertTrue(o.seedDefaults(12000, 120))
-        assertEquals("maxFps:120\nmenuBackgroundBlurriness:0\nrenderDistance:10\nsimulationDistance:8", o.file.readText()); assertFalse(o.seedDefaults(12000))
+        assertEquals("version:4903\nmaxFps:120\nmenuBackgroundBlurriness:0\nrenderDistance:10\nsimulationDistance:8", o.file.readText()); assertFalse(o.seedDefaults(12000))
+    }
+    @Test fun onlyAFileCofreCreatesGetsTheDataVersion() {
+        // 26.2 runs every options data fix on a file with no version, one of which resets the graphics backend.
+        val o = GameOptions(root); assertTrue(o.useVulkan()); assertEquals("version:4903\npreferredGraphicsBackend:vulkan", o.file.readText())
+        o.file.writeText("version:4000\nfov:0.5\n"); o.seedDefaults(12000); assertEquals("4000", o.get("version"))
+        o.file.writeText("fov:0.5\n"); o.useVulkan(); assertNull(o.get("version"))
+    }
+    @Test fun jvmArgumentsKeepQuotedSpaces() {
+        assertEquals(listOf("-Xss2m", "-Dname=a b", "-Dx=it's", "", "-XX:+UseZGC"), JvmArguments.split("  -Xss2m\t-Dname=\"a b\" -Dx=\"it's\" '' -XX:+UseZGC\n"))
+        assertEquals(emptyList(), JvmArguments.split(" \n "))
     }
     @Test fun smallerDevicesGetShorterDistances() {
         val o = GameOptions(root); o.file.writeText("lang:en_us\n"); o.seedDefaults(3862)
@@ -45,7 +55,7 @@ class OptionsTest {
     }
     @Test fun bundledPresetPinsEveryModAndTheLibrariesTheyRequire() {
         val p = PresetCatalog.presets.single(); p.validate(); assertEquals("Handheld (NeoForge 26.2, Vulkan)", p.name)
-        assertEquals(listOf("mc26.2-0.9.2-neoforge", "3.5.3+mc26.2", "3.9.7+26.2-neoforge", "1.16.5+26.2-neoforge", "1.11.3", "9.0.0-neoforge", "5.27.21+mc26.2"), p.pinnedMods.map { it.version })
+        assertEquals(listOf("mc26.2-0.9.2-neoforge", "1.16.5+26.2-neoforge", "1.11.3", "9.0.0-neoforge", "5.27.21+mc26.2"), p.pinnedMods.map { it.version })
         assertTrue(p.pinnedMods.all { it.url.startsWith("https://cdn.modrinth.com/") && it.sha512.length == 128 })
         assertEquals("6", p.options(4096)["renderDistance"]); assertEquals("10", p.options(8192)["renderDistance"])
         assertEquals("10", p.options(5_714)["renderDistance"]) // a 6 GB phone reports ~5.7 GB

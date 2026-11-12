@@ -36,11 +36,26 @@ typedef struct {
 } event;
 _Static_assert(sizeof(event) == 40, "GLFW.EVENT_SIZE");
 
-enum { EV_CURSOR_MOVE = 5, QUEUE_CAP = 1024 };
+enum { EV_CURSOR_POS = 4, EV_CURSOR_MOVE = 5, EV_SCROLL = 6, QUEUE_CAP = 1024 };
 
 static event queue[QUEUE_CAP];
 static int queue_head, queue_count;
 static pthread_mutex_t queue_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static int droppable(int type) {
+    return type == EV_CURSOR_POS || type == EV_CURSOR_MOVE || type == EV_SCROLL;
+}
+
+// Full (the game stalled): pointer motion and scrolling go first, so a key or button release is never the one lost.
+static int make_room(void) {
+    for (int i = 0; i < queue_count; i++) {
+        if (!droppable(queue[(queue_head + i) % QUEUE_CAP].type)) continue;
+        for (int j = i; j < queue_count - 1; j++) queue[(queue_head + j) % QUEUE_CAP] = queue[(queue_head + j + 1) % QUEUE_CAP];
+        queue_count--;
+        return 1;
+    }
+    return 0;
+}
 
 JNIEXPORT void JNICALL Java_com_ignacio_cofre_runtime_GameBridge_pushEvent(
     JNIEnv *env, jclass clazz, jint type, jint i0, jint i1, jint i2, jint i3, jdouble d0, jdouble d1) {
@@ -50,10 +65,24 @@ JNIEXPORT void JNICALL Java_com_ignacio_cofre_runtime_GameBridge_pushEvent(
     if (type == EV_CURSOR_MOVE && last && last->type == EV_CURSOR_MOVE) {
         last->d0 += d0; // merge mouse motion so a stalled game can't overflow the queue
         last->d1 += d1;
-    } else if (queue_count < QUEUE_CAP) {
+    } else if (queue_count < QUEUE_CAP || (!droppable(type) && make_room())) {
         queue[(queue_head + queue_count) % QUEUE_CAP] = (event) {type, i0, i1, i2, i3, 0, d0, d1};
         queue_count++;
     }
+    pthread_mutex_unlock(&queue_lock);
+}
+
+// glfwInit: input sent while the JVM booted (10-60 s) would replay on the first screen. Window size, focus and
+// iconify (types above the input ones) stay.
+JNIEXPORT void JNICALL Java_org_lwjgl_glfw_GLFW_nDropInput(JNIEnv *env, jclass clazz) {
+    (void) env, (void) clazz;
+    pthread_mutex_lock(&queue_lock);
+    int kept = 0;
+    for (int i = 0; i < queue_count; i++) {
+        event e = queue[(queue_head + i) % QUEUE_CAP];
+        if (e.type > EV_SCROLL) queue[(queue_head + kept++) % QUEUE_CAP] = e;
+    }
+    queue_count = kept;
     pthread_mutex_unlock(&queue_lock);
 }
 
@@ -70,7 +99,7 @@ JNIEXPORT jint JNICALL Java_org_lwjgl_glfw_GLFW_nPollEvents(JNIEnv *env, jclass 
 }
 
 // ---- Window -------------------------------------------------------------------------------------
-// Never touched with EGL. glfwCreateWindowSurface waits here while there's no surface (asleep).
+// Never touched with EGL. glfwCreateWindowSurface waits here for the activity's first surface.
 
 static ANativeWindow *window;
 static int window_width, window_height;
@@ -120,7 +149,7 @@ JNIEXPORT jlong JNICALL Java_org_lwjgl_glfw_GLFW_nWindowSize(JNIEnv *env, jclass
 // ---- Requests from the game to the activity ------------------------------------------------------
 // HotSpot threads never call into ART: they post a request that GameActivity's request thread takes.
 
-enum { REQ_CAPTURE = 1, REQ_RELEASE = 2, REQ_EXIT = 3 };
+enum { REQ_CAPTURE = 1, REQ_RELEASE = 2, REQ_EXIT = 3, REQ_IME_SHOW = 4, REQ_IME_HIDE = 5 };
 static int requests[16], request_head, request_count, exit_acked;
 static pthread_mutex_t request_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t request_changed = PTHREAD_COND_INITIALIZER;
@@ -135,6 +164,12 @@ static void post_request(int request) {
 JNIEXPORT void JNICALL Java_org_lwjgl_glfw_GLFW_nSetCursorCaptured(JNIEnv *env, jclass clazz, jboolean captured) {
     (void) env, (void) clazz;
     post_request(captured ? REQ_CAPTURE : REQ_RELEASE);
+}
+
+// The soft keyboard: shown while a text field has focus (GLFW.java, keyboardShown).
+JNIEXPORT void JNICALL Java_org_lwjgl_glfw_GLFW_nSetIme(JNIEnv *env, jclass clazz, jboolean on) {
+    (void) env, (void) clazz;
+    post_request(on ? REQ_IME_SHOW : REQ_IME_HIDE);
 }
 
 JNIEXPORT jint JNICALL Java_com_ignacio_cofre_runtime_GameBridge_nextRequest(JNIEnv *env, jclass clazz) {
@@ -206,12 +241,17 @@ static void redirect_stdio(const char *log_path) {
     pthread_detach(reader);
 }
 
-// Closing our only write ends lets the reader drain what's left and stop.
+// Dropping our only write ends lets the reader drain what's left and stop. /dev/null takes their place rather than
+// close(): native threads still run, and a closed 1 or 2 could be reused by a file they then write output into.
 static void drain_stdio(void) {
     fflush(stdout);
     fflush(stderr);
-    close(STDOUT_FILENO);
-    close(STDERR_FILENO);
+    int null_fd = open("/dev/null", O_WRONLY | O_CLOEXEC);
+    if (null_fd >= 0) {
+        dup2(null_fd, STDOUT_FILENO);
+        dup2(null_fd, STDERR_FILENO);
+        close(null_fd);
+    }
     struct timespec until;
     deadline(&until, 1000);
     pthread_mutex_lock(&stdio_lock);
@@ -383,29 +423,33 @@ static void *jvm_main(void *arg) {
     finish(code);
 }
 
-static char *dup_string(JNIEnv *env, jstring s) {
-    const char *utf = (*env)->GetStringUTFChars(env, s, NULL);
-    char *copy = strdup(utf);
-    (*env)->ReleaseStringUTFChars(env, s, utf);
+// Strings arrive as UTF-8 bytes: GetStringUTFChars gives modified UTF-8, which mangles emoji (a Quick Play world
+// name, an instance folder) into surrogate pairs.
+static char *dup_bytes(JNIEnv *env, jbyteArray bytes) {
+    jsize n = (*env)->GetArrayLength(env, bytes);
+    char *copy = malloc(n + 1);
+    (*env)->GetByteArrayRegion(env, bytes, 0, n, (jbyte *) copy);
+    copy[n] = 0;
     return copy;
 }
 
 JNIEXPORT jint JNICALL Java_com_ignacio_cofre_runtime_GameBridge_launch(
-    JNIEnv *env, jclass clazz, jobjectArray args, jstring home, jstring dir, jstring log_file, jstring exit_file, jboolean mirror) {
+    JNIEnv *env, jclass clazz, jobjectArray args, jbyteArray home, jbyteArray dir, jbyteArray log_file, jbyteArray exit_file,
+    jboolean mirror) {
     (void) clazz;
     mirror_logcat = mirror; // game output holds player names, chat and server addresses
-    char *log_path = dup_string(env, log_file);
+    char *log_path = dup_bytes(env, log_file);
     redirect_stdio(log_path);
     free(log_path);
-    exit_path = dup_string(env, exit_file);
+    exit_path = dup_bytes(env, exit_file);
     unlink(exit_path);
-    java_home = dup_string(env, home);
-    game_dir = dup_string(env, dir);
+    java_home = dup_bytes(env, home);
+    game_dir = dup_bytes(env, dir);
     jvm_argc = (*env)->GetArrayLength(env, args);
     jvm_argv = calloc(jvm_argc + 1, sizeof(char *));
     for (int i = 0; i < jvm_argc; i++) {
-        jstring arg = (*env)->GetObjectArrayElement(env, args, i);
-        jvm_argv[i] = dup_string(env, arg);
+        jbyteArray arg = (*env)->GetObjectArrayElement(env, args, i);
+        jvm_argv[i] = dup_bytes(env, arg);
         (*env)->DeleteLocalRef(env, arg);
     }
 

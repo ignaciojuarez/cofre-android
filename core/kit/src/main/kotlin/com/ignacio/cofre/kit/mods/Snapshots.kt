@@ -138,6 +138,24 @@ object Snapshots {
 
     internal fun deleteLocked(dir: File, snapshot: Snapshot) { FileOps.delete(folder(dir, snapshot)); prune(dir) }
 
+    /**
+     * After a kill: unfinished snapshots (`.tmp-*`) go. A restore (`.restore-*`) that still had files to bring in puts
+     * back what it moved out of `mods/` (`old/mods`) by [ModInstaller.putBack]'s rules (a mod the snapshot's copy already
+     * replaced keeps that copy), and the old index when there's none. One with nothing left to bring in had finished.
+     * The caller holds [InstanceStore.lock] for [dir].
+     */
+    fun recover(dir: File) {
+        for (stage in root(dir).listFiles().orEmpty().filter { it.name.startsWith(".tmp-") || it.name.startsWith(".restore-") }) {
+            val incoming = File(stage, "new"); val outgoing = File(stage, "old")
+            if (File(incoming, "mods").listFiles().orEmpty().isNotEmpty() || File(incoming, INDEX).exists()) {
+                ModInstaller.putBack(File(outgoing, "mods").listFiles().orEmpty().map { it to it.name }, File(dir, "mods"))
+                val index = File(dir, INDEX)
+                if (File(outgoing, INDEX).isFile && !Files.exists(index.toPath(), NOFOLLOW_LINKS)) Files.move(File(outgoing, INDEX).toPath(), index.toPath())
+            }
+            FileOps.delete(stage)
+        }
+    }
+
     /** Deletes blobs no snapshot names, and snapshots whose file list can't be read: broken ones and the first layout's. */
     private fun prune(dir: File) {
         val manifests = root(dir).listFiles().orEmpty().filter { !it.name.startsWith('.') && it.name != "blobs" && it.isDirectory }
@@ -200,6 +218,7 @@ object Snapshots {
         safeFilename(snapshot.id); require(!snapshot.id.startsWith('.') && snapshot.id != "blobs") { "Not a snapshot" }
         return File(root(dir), snapshot.id).also { require(File(it, META).isFile && File(it, FILES).isFile) { "Snapshot is gone" } }
     }
-    private fun modFiles(dir: File): List<File> = File(dir, "mods").listFiles().orEmpty().filter { Files.isRegularFile(it.toPath(), NOFOLLOW_LINKS) }
+    /** Top-level files of `mods/`, without downloads still running (`*.part`). */
+    private fun modFiles(dir: File): List<File> = File(dir, "mods").listFiles().orEmpty().filter { Files.isRegularFile(it.toPath(), NOFOLLOW_LINKS) && !it.name.endsWith(".part") }
     private suspend fun <T> locked(dir: File, block: () -> T): T = withContext(Dispatchers.IO) { InstanceStore.lock(dir).withLock { block() } }
 }

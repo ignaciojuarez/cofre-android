@@ -38,7 +38,7 @@ Verified against Mojang's [manifest](https://piston-meta.mojang.com/mc/game/vers
 | lwjgl-opengl | liblwjgl_opengl.so | Build JNI only: mandatory bootstrap call; no GL driver/translation layer |
 | lwjgl-glfw | libglfw.so | Replaced by Cofre's runtime shim; not in this release |
 | lwjgl-jemalloc | libjemalloc.so | Omit; `-Dorg.lwjgl.system.allocator=system` |
-| lwjgl-vulkan | **none** (ARM64 native jar does not exist) | System libvulkan.so |
+| lwjgl-vulkan | **none** (ARM64 native jar does not exist) | System libvulkan.so, through our `libcofrevk.so` (`runtime/src/main/cpp/vk_rotate.c`, built with the app) |
 | JNA 5.17.0 | libjnidispatch.so (AAR jni/arm64-v8a/) | Extract exact pinned AAR bytes |
 
 **Startup integration requirement:** `javap -c -p` on `com.mojang.blaze3d.platform.NativeLibrariesBootstrap` shows `loadLibraries()` unconditionally enqueues OpenGL and tinyfd before the Vulkan conditional. `loadTinyFD()` invokes `tinyfd_getGlobalChar("tinyfd_version")`; `loadOpenGL()` invokes `GL.getFunctionProvider()`. Omitting either JNI binary makes stock bootstrap fail. Android's Vulkan runtime must also bypass the desktop OpenGL provider probe: shipping `liblwjgl_opengl.so` supplies JNI, not a desktop libGL. `OPENGL_EXPLICIT_INIT=true` alone leaves a null provider and does not satisfy `requireNonNull`. No OpenGL/ES driver, EGL context, GLFW or jemalloc is built here. Tinyfd desktop dialogs are not Android UI; fatal errors should be surfaced by the launcher.
@@ -121,7 +121,7 @@ Release [`natives-20261109-7`](https://github.com/ignaciojuarez/cofre-android/re
 | lwjgl-sources.tar.xz | 38,495,032 | 12459042754fd4fad72c0a790de416ef3b9a0a334769bb1ee0bf2c607918f4e8 | corresponding source | | |
 | jna-sources.tar.xz | 75,611,212 | bb3749a1e0fbe464e7cba25e35cfaf4f1f3e0844e9f2d0453eb5ecd008bcd2fb | corresponding source | | |
 
-The JRE tarball has no top-level folder: `bin/ conf/ legal/ lib/ release` sit at its root. `release` reads `JAVA_VERSION="25.0.5"`, `JAVA_RUNTIME_VERSION="25.0.5+8"`, `OS_ARCH="aarch64"`. The library tarballs extract to `lib/arm64-v8a/` and `legal/`.
+The JRE tarball has no top-level folder: `bin/ conf/ legal/ lib/ release` sit at its root. From the release after `natives-20261109-7` it's a jlink'd runtime: every JDK module except the compilers, debuggers and developer tools (Graal and JVMCI, javac and `ct.sym`, the serviceability agent, jshell, jcmd and friends; `DROP` in `jdk/build.sh`). `java.se` stays whole, since mods may use any of it. `release` reads `JAVA_VERSION="25.0.5"`, `JAVA_RUNTIME_VERSION="25.0.5+8"`, `OS_ARCH="aarch64"`. The library tarballs extract to `lib/arm64-v8a/` and `legal/`.
 
 Mac verification (`fetch.sh`, then NDK `llvm-readelf -h` / `-lW`): all 46 ELF files (45 `.so` + `bin/java`) are AArch64 and every LOAD `Align` is 0x4000.
 

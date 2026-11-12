@@ -37,12 +37,22 @@ make -k CONF=android-arm64 JOBS="$JOBS" images || {
     grep -rh -A4 'error:' "$JDK/build/android-arm64/make-support/failure-logs" | head -300
     exit 1
 }
-IMAGE="$JDK/build/android-arm64/images/jdk"
+# A runtime, not a JDK: every module except the compilers, debuggers and developer tools. That drops Graal and JVMCI
+# (a second JIT nothing turns on), javac and its ct.sym of older Java versions, the serviceability agent, and ~30 tools
+# in bin/. java.se stays whole: mods use any of it (ImageIO, java.sql, scripting). The host jlink links the target's
+# jmods, as `make images` itself does when cross-compiling.
+DROP=(jdk.graal.compiler jdk.graal.compiler.management jdk.internal.vm.ci jdk.compiler jdk.javadoc jdk.internal.md
+      jdk.jshell jdk.editpad jdk.internal.le jdk.internal.ed jdk.internal.opt jdk.jdeps jdk.jlink jdk.jpackage jdk.jartool
+      jdk.jdi jdk.jdwp.agent jdk.hotspot.agent jdk.jcmd jdk.jconsole jdk.jstatd jdk.jsobject)
+JMODS="$JDK/build/android-arm64/images/jmods"
+MODULES=$(find "$JMODS" -name '*.jmod' -exec basename {} .jmod \; | grep -vxF -f <(printf '%s\n' "${DROP[@]}") | sort | paste -sd, -)
 JRE="$WORK/jre25"
-mkdir -p "$JRE"
-for item in bin conf legal lib release; do cp -a "$IMAGE/$item" "$JRE/"; done
-# Keep the full modules image; remove only development and debug material.
-rm -f "$JRE/lib/src.zip"
+rm -rf "$JRE"
+"$JAVA_HOME/bin/jlink" --module-path "$JMODS" --add-modules "$MODULES" --output "$JRE" --no-man-pages --no-header-files
+linked=$(sed -n 's/^MODULES="\(.*\)"$/\1/p' "$JRE/release" | tr ' ' '\n')
+for module in "${DROP[@]}"; do
+    if grep -qxF "$module" <<<"$linked"; then echo "jlink kept $module: a module we keep requires it" >&2; exit 1; fi
+done
 cp -L "$WORK/freetype/lib/libfreetype.so" "$JRE/lib/libfreetype.so"
 find "$JRE" -type f \( -name '*.so' -o -path '*/bin/*' -o -name jspawnhelper \) -print0 |
     while IFS= read -r -d '' binary; do

@@ -13,7 +13,7 @@ import kotlin.test.*
 class ModpacksTest {
     @TempDir lateinit var root: File
     private fun zip(files: Map<String, String>, name: String = "pack.mrpack"): File = File(root, name).also { file -> ZipOutputStream(file.outputStream()).use { z -> files.forEach { (path, text) -> z.putNextEntry(ZipEntry(path)); z.write(text.toByteArray()); z.closeEntry() } } }
-    private fun index(version: String = "26.2", loader: String = "neoforge", files: String = "[]"): String = """{"formatVersion":1,"game":"minecraft","name":"Pack","dependencies":{"minecraft":"$version","$loader":"26.2.0.93"},"files":$files}"""
+    private fun index(version: String = "26.2", loader: String = "neoforge", files: String = "[]", build: String = "26.2.0.93"): String = """{"formatVersion":1,"game":"minecraft","name":"Pack","dependencies":{"minecraft":"$version","$loader":"$build"},"files":$files}"""
     @Test fun inspectModrinthWithoutExtracting() {
         val archive = zip(mapOf("modrinth.index.json" to index(files = """[{"path":"mods/a.jar","hashes":{"sha512":"${"a".repeat(128)}"},"downloads":["https://cdn.example/a.jar"],"fileSize":4},{"path":"mods/server.jar","env":{"client":"unsupported"}}]"""), "overrides/config/a" to "one", "client-overrides/config/a" to "two"))
         val p = Modpacks.inspect(archive)
@@ -33,6 +33,13 @@ class ModpacksTest {
         assertEquals(PackRejected.Reason.GameVersion("1.21.1"), assertFailsWith<PackRejected> { Modpacks.plan(old) }.reason)
         val fabric = Modpacks.inspect(zip(mapOf("modrinth.index.json" to index(loader = "fabric-loader"))))
         assertEquals(PackRejected.Reason.LoaderType(Loader.Fabric), assertFailsWith<PackRejected> { Modpacks.plan(fabric) }.reason)
+        val otherBuild = Modpacks.inspect(zip(mapOf("modrinth.index.json" to index(build = "26.2.1.4"))))
+        assertEquals(PackRejected.Reason.LoaderVersion("26.2.1.4"), assertFailsWith<PackRejected> { Modpacks.plan(otherBuild) }.reason)
+    }
+    @Test fun rejectsFilesThatWouldOverwriteCofresOwn() {
+        val sha = "a".repeat(40)
+        assertFails { Modpacks.inspect(zip(mapOf("modrinth.index.json" to index(files = """[{"path":".cofre-mod-folder","hashes":{"sha1":"$sha"},"downloads":["https://a.test/x"]}]""")))) }
+        assertFails { Modpacks.inspect(zip(mapOf("modrinth.index.json" to index(), "overrides/.cofre-mod-folder" to "{}"))) }
     }
     @Test fun blankPackNameBecomesImportedPack() {
         val pack = Modpacks.inspect(zip(mapOf("modrinth.index.json" to index().replace("\"name\":\"Pack\"", "\"name\":\" \""))))

@@ -14,7 +14,7 @@ Minecraft 26.2's Vulkan renderer needs **Vulkan 1.2** with `VK_KHR_dynamic_rende
 
 ## Features
 - **Play:** one button into your last world or a server, with launch progress and a plain explanation when the game stops.
-- **Instances:** NeoForge 26.2 instances with a handheld preset (Sodium, Controlify, ImmediatelyFast and more), worlds, backups, import and export.
+- **Instances:** NeoForge 26.2 instances with a handheld preset (Sodium, ImmediatelyFast, FerriteCore and more), worlds, backups, import and export.
 - **Mods:** Modrinth (and CurseForge with your own key) search, mod pages, dependency-aware installs with rollback, updates, and a check that flags mods that call OpenGL, since those crash on Vulkan.
 - **Controller first:** every screen works with the D-pad, A/B, L1/R1 and the triggers, with button hints for Xbox, PlayStation and Nintendo layouts.
 - **Files:** instances show up in Android's file picker, so you can drop in mods and worlds with any file manager.

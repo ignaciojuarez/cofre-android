@@ -9,8 +9,10 @@ class GameOptions(gameDirectory: File) {
     fun get(key: String): String? = text().lineSequence().lastOrNull { it.startsWith("$key:") }?.substringAfter(':')
     fun set(key: String, value: String): Boolean {
         require(key.matches(Regex("[A-Za-z0-9_]+")) && '\n' !in value && '\r' !in value)
+        // A file Cofre creates starts with the game's data version, or 26.2 runs every options data fix from version 0.
         val before = text(); val pattern = Regex("^${Regex.escape(key)}:[^\\r\\n]*", RegexOption.MULTILINE)
-        val after = if (pattern.containsMatchIn(before)) pattern.replace(before) { "$key:$value" } else append(before, "$key:$value")
+        val base = if (file.exists()) before else "version:$DATA_VERSION"
+        val after = if (pattern.containsMatchIn(base)) pattern.replace(base) { "$key:$value" } else append(base, "$key:$value")
         if (before == after) return false
         FileOps.atomic(file, after.toByteArray()); return true
     }
@@ -24,6 +26,8 @@ class GameOptions(gameDirectory: File) {
     fun seedPreset(preset: CofrePreset, physicalMB: Int): Boolean = seed(preset.options(physicalMB))
     private fun text(): String = if (file.exists()) file.readText() else ""
     companion object {
+        /** Minecraft 26.2's data version (`world_version` in its client jar's version.json), which options.txt records as `version`. */
+        const val DATA_VERSION = 4903
         fun distances(physicalMB: Int): Map<String, String> = if (physicalMB >= 6 * 1024 * 9 / 10) mapOf("renderDistance" to "10", "simulationDistance" to "8") else mapOf("renderDistance" to "6", "simulationDistance" to "5")
         internal fun append(text: String, line: String): String {
             val newline = if (text.contains("\r\n")) "\r\n" else "\n"
@@ -43,6 +47,27 @@ object FMLConfig {
         else "earlyWindowControl = false" + (if (before.contains("\r\n")) "\r\n" else "\n") + before
         if (before == after) return false
         FileOps.atomic(file, after.toByteArray()); return true
+    }
+}
+
+object JvmArguments {
+    /** An instance's JVM arguments as typed: split on whitespace, except inside double or single quotes, which are dropped. */
+    fun split(text: String): List<String> {
+        val args = mutableListOf<String>()
+        val current = StringBuilder()
+        var quote: Char? = null
+        var started = false
+        for (c in text) {
+            when {
+                c == quote -> quote = null
+                quote != null -> current.append(c)
+                c == '"' || c == '\'' -> { quote = c; started = true }
+                c.isWhitespace() -> { if (started) args += current.toString(); current.clear(); started = false }
+                else -> { current.append(c); started = true }
+            }
+        }
+        if (started) args += current.toString()
+        return args
     }
 }
 

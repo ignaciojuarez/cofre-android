@@ -66,6 +66,12 @@
             </intent-filter>
         </activity>
 
+        <!-- Keeps Play's downloads going while Cofre is in the background. -->
+        <service
+            android:name=".launch.LaunchService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
+
         <!-- Instances in the system file picker and file managers. -->
         <provider
             android:name=".files.InstancesProvider"

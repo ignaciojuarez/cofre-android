@@ -5,6 +5,8 @@ import com.ignacio.cofre.kit.common.Kit
 import com.ignacio.cofre.kit.common.Loader
 import com.ignacio.cofre.kit.common.Target
 import com.ignacio.cofre.kit.common.Zip
+import com.ignacio.cofre.kit.instances.InstanceStore
+import com.ignacio.cofre.kit.versions.NeoForgeVersion
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -25,6 +27,7 @@ class PackRejected(val reason: Reason) : IllegalArgumentException(reason.toStrin
         data class GameVersion(val actual: String?) : Reason
         data class LoaderType(val actual: Loader) : Reason
         data object LoaderVersionMissing : Reason
+        data class LoaderVersion(val actual: String) : Reason
         data class Invalid(val detail: String) : Reason
     }
 }
@@ -88,14 +91,14 @@ object Modpacks {
         }
         val destinations = HashSet<String>()
         for (f in files) {
-            FileOps.segments(f.path)
+            FileOps.segments(f.path); require(!InstanceStore.isPrivate(f.path)) { "Unsafe path: ${f.path}" }
             require(destinations.add(f.path) && f.fileSize in 0..Zip.MAX_ENTRY_BYTES)
             require(f.downloads.all { it.toHttpUrlOrNull()?.let { u -> u.isHttps && u.username.isEmpty() && u.password.isEmpty() } == true }) { "Insecure download" }
             require(f.hashes.all { (kind, value) -> value.matches(Regex("[a-fA-F0-9]{${when (kind) { "sha512" -> 128; "sha256" -> 64; "sha1" -> 40; else -> throw IllegalArgumentException("Unknown hash: $kind") }}}")) })
             if (format == Modpack.Format.Modrinth) require(f.downloads.isNotEmpty() && ("sha512" in f.hashes || "sha1" in f.hashes)) { "Modrinth file needs a URL and hash" }
         }
         require(files.sumOf { it.fileSize } <= Zip.MAX_TOTAL_BYTES)
-        copies.forEach { FileOps.segments(it.path); require(it.path != "cofre.json" || format == Modpack.Format.Cofre) }
+        copies.forEach { FileOps.segments(it.path); require(!InstanceStore.isPrivate(it.path)) { "Unsafe path: ${it.path}" }; require(it.path != "cofre.json" || format == Modpack.Format.Cofre) }
         return Modpack(format, name, game, loader, loaderVersion, files, copies, entries.sumOf { it.size })
     }
 
@@ -103,6 +106,8 @@ object Modpacks {
         if (pack.gameVersion != Target.GAME_VERSION) throw PackRejected(PackRejected.Reason.GameVersion(pack.gameVersion))
         if (pack.loader != Target.LOADER) throw PackRejected(PackRejected.Reason.LoaderType(pack.loader))
         if (pack.loaderVersion.isNullOrBlank()) throw PackRejected(PackRejected.Reason.LoaderVersionMissing)
+        // Checked here, not at Play: only NeoForge builds for this game version can install.
+        if (runCatching { NeoForgeVersion(pack.loaderVersion) }.isFailure) throw PackRejected(PackRejected.Reason.LoaderVersion(pack.loaderVersion))
         return ModpackInstallPlan(pack.name?.takeIf { it.isNotBlank() } ?: "Imported pack", pack.gameVersion, pack.loader, pack.loaderVersion, pack.files, pack.overrides)
     }
 

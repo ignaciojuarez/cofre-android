@@ -50,6 +50,10 @@ class ContentTest {
         val s = ContentStore(root); assertEquals("4.2", s.list(ContentKind.Mods).single().version); assertFalse(s.list(ContentKind.Mods).single().enabled)
         assertEquals("Hello pack", s.list(ContentKind.ResourcePacks).single().name)
     }
+    @Test fun downloadsStillRunningAreNotListed() {
+        write("mods/a.jar"); write("mods/b.jar.part"); write("resourcepacks/p.zip.part")
+        val s = ContentStore(root); assertEquals(listOf("a.jar"), s.list(ContentKind.Mods).map { it.id }); assertTrue(s.list(ContentKind.ResourcePacks).isEmpty())
+    }
     @Test fun trashRestoreConflictsNeverOverwrite() {
         write("mods/a.jar", "old"); val s = ContentStore(root); val t = s.trash(s.list(ContentKind.Mods).single()); write("mods/a.jar", "new")
         assertFails { s.restore(t) }; assertEquals("new", File(root, "mods/a.jar").readText())

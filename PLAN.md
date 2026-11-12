@@ -33,8 +33,8 @@ A native Android launcher for **Minecraft Java 26.2 + NeoForge**, rendering with
 | Mod | Version | Works on Vulkan? |
 |---|---|---|
 | Sodium | `mc26.2-0.9.2-neoforge` (release) | ✅ |
-| Controlify | `3.5.3+mc26.2` | ✅ needs an Android SDL3 (see Controller) |
-| Distant Horizons | `3.3.3-26.2` | ✅ |
+| Controlify | `3.5.3+mc26.2` | ❌ for now: finds no controller without an Android SDL3, so it's out of the preset (see Controller) |
+| Distant Horizons | `3.3.3-26.2` | ❌ for now: renders on Vulkan, but its SQLite and zstd natives have no Android build, so worlds don't load |
 | ImmediatelyFast | `1.16.5+26.2-neoforge` | ✅ since 1.16.0 |
 | Entity Culling | `1.11.3` | ✅ |
 | FerriteCore | `9.0.0-neoforge` | ✅ |
@@ -65,7 +65,7 @@ Cofre (Compose)                        main process
         ▼
 :game process      GameActivity + SurfaceView → ANativeWindow
    HotSpot JDK 25 (dlopen libjli → JLI_Launch)
-   MC 26.2 + NeoForge → LWJGL 3.4.1 → our GLFW shim → vkCreateAndroidSurfaceKHR → system libvulkan
+   MC 26.2 + NeoForge → LWJGL 3.4.1 → our GLFW shim → vkCreateAndroidSurfaceKHR → libcofrevk (pre-rotation) → system libvulkan
    SDL3 (controllers for Controlify) · OpenAL Soft (AAudio)
 :installer process NeoForge install processors on the same JDK 25
 ```
@@ -144,9 +144,9 @@ New on Android:
   - A → select, B → back, L1/R1 → tabs, triggers → scroll, Y → search, Start → Play.
   - A bottom hint bar shows button glyphs for the current layout (Odin Xbox/Nintendo mode, Xbox, PlayStation).
   - Every dialog sets its first focus, and focus returns where it was on back.
-- **In game:** auto-install Controlify into new instances, pointing it at our Android SDL3 (`-Ddev.isxander.sdl.library`).
-  - Fallback: our own stick → mouse, button → key mapper inside the GLFW shim, for when Controlify is missing or broken.
-- **Typing:** SDL/GLFW text input brings up the Android IME. Search fields open a dedicated text sheet.
+- **In game:** our own mapper in `GameActivity` (stick → mouse, buttons → keys; the D-pad moves focus in menus).
+  - Controlify later, once there's an Android SDL3 it can load (`-Ddev.isxander.sdl.library`); then the built-in mapper steps aside so presses don't count twice.
+- **Typing:** the soft keyboard shows while a game text field has focus (the GLFW shim reads it from Minecraft's text-input ticks). Search fields open a dedicated text sheet.
 
 ## 📦 Mod folders
 - A folder (`filesDir/mod-folders/<id>/`) holds `mods/`, `resourcepacks/`, `shaderpacks/` and `cofre-mods.json`, with a game version and loader. Instances link to one; several can share it; deleting an instance keeps it.
@@ -162,7 +162,7 @@ New on Android:
   - GL-calling mods abort with no log: scan jars before launch.
   - No shaders (Iris is GL-only).
 - 🔋 **Handheld**
-  - Sleep/resume destroys and recreates the surface, so the swapchain has to be rebuilt.
+  - Sleep/Home: Minecraft makes its Vulkan surface once, so the SurfaceView keeps its surface through a stop (`FOLLOWS_ATTACHMENT`, Android 14+) and the game sees a minimized 0×0 window until it's back.
   - Docking over DisplayPort changes the resolution.
   - A Bluetooth pad can become player 1.
   - Odin firmware swaps A/B in Xbox mode.
@@ -191,7 +191,7 @@ New on Android:
 | 1 | Repo skeleton, design system, every screen | Fully controller-navigable on the emulator; screenshot tests pass | ✅ |
 | 2 | `core/kit` port | Ported tests pass on the Mac JVM | ✅ ~270 kit tests |
 | 3 | Runtime: JRE, natives, GLFW shim, `:game` | Vanilla 26.2 shows a first frame on Vulkan on the Odin 3 | 🟡 Our JRE 25 + LWJGL 3.4.1 natives (`natives-20261109-7`, all 16 KB-aligned) boot the game; it reaches Minecraft's Vulkan device check on the emulator |
-| 4 | NeoForge install + launch, Sodium, Controlify | Modded 26.2 is playable with the built-in controller | 🟡 NeoForge 26.2.0.93 installs in `:installer` and launches to the Vulkan check; the handheld preset installs; controller play needs the Odin 3 |
+| 4 | NeoForge install + launch, Sodium, the handheld preset | Modded 26.2 is playable with the built-in controller | 🟡 NeoForge 26.2.0.93 installs in `:installer` and launches to the Vulkan check; the handheld preset installs; controller play needs the Odin 3 |
 | 5 | Accounts, mod browse/install/update, modpacks, worlds, servers, logs, crash screen | Same features as iOS | ✅ built; Microsoft sign-in needs an approved client ID |
 | 5b | Mod folders (shared by instances, convert to another loader/version, auto-update, snapshots) and the Home dashboard | FML loads a folder's mods through the instance's links | ✅ built; launch through links checked on the emulator (2026-11-09) |
 | 6 | Handheld polish, release pipeline | A signed GitHub release that self-updates | ⏳ |

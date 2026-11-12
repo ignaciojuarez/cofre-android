@@ -3,12 +3,12 @@ package com.ignacio.cofre.kit.logs
 import com.ignacio.cofre.kit.compat.KnownModsCatalog
 import com.ignacio.cofre.kit.mods.ModRequirements
 
-enum class ExitReason { Memory, SystemKilled, VulkanUnsupported, NativeWindowInUse, OpenGLMod, Mods, MissingDependency, MissingLibrary, JavaVersion, Java, Renderer, Unknown, Quit }
+enum class ExitReason { Memory, SystemKilled, VulkanUnsupported, NativeWindowInUse, OpenGLMod, Mods, MissingDependency, MissingLibrary, JavaVersion, Java, Renderer, Unknown, Updated, Quit }
 
 data class GameExitReport(val code: Int, val reason: ExitReason, val clue: String? = null, val instance: String? = null, val logTail: List<String> = emptyList(), val missingVulkanRequirements: List<String> = emptyList(), val mod: String? = null, val missingDependencies: List<MissingDependency> = emptyList()) {
-    val title: String get() = if (reason == ExitReason.Quit) "Minecraft closed" else "Minecraft stopped"
+    val title: String get() = if (reason == ExitReason.Quit || reason == ExitReason.Updated) "Minecraft closed" else "Minecraft stopped"
     val explanation: String get() = when (reason) {
-        ExitReason.Memory -> "Minecraft ran out of memory."
+        ExitReason.Memory -> if (clue == LOW_MEMORY) "Android ran low on memory and closed the game." else "Minecraft ran out of memory."
         ExitReason.SystemKilled -> "Android killed the game process."
         ExitReason.VulkanUnsupported -> "This device is missing Vulkan extensions or features Minecraft requires."
         ExitReason.NativeWindowInUse -> "The game surface is already in use."
@@ -20,6 +20,7 @@ data class GameExitReport(val code: Int, val reason: ExitReason, val clue: Strin
         ExitReason.Java -> if (clue?.contains("CodeCache is full") == true) "Java ran out of room for compiled code." else "Minecraft hit a Java error."
         ExitReason.Renderer -> "The Vulkan renderer failed."
         ExitReason.Unknown -> "Minecraft closed unexpectedly."
+        ExitReason.Updated -> "Cofre was updated, which closed the game."
         ExitReason.Quit -> "You quit the game."
     }
     val nextStep: String get() = when (reason) {
@@ -31,10 +32,15 @@ data class GameExitReport(val code: Int, val reason: ExitReason, val clue: Strin
         ExitReason.MissingLibrary -> "Repair the instance to recheck game files."
         ExitReason.JavaVersion -> "Use Java 25 for Minecraft 26.2 and compatible mod versions."
         ExitReason.Java, ExitReason.Renderer, ExitReason.Unknown -> "Try again; share a redacted report if it keeps happening."
-        ExitReason.Quit -> "Play again whenever you want."
+        ExitReason.Updated, ExitReason.Quit -> "Play again whenever you want."
     }
     companion object {
-        fun diagnose(code: Int, crashReport: String? = null, log: String? = null, instance: String? = null, tail: Int = 60): GameExitReport {
+        /**
+         * [killedAs] is what Android says ended a process that left no exit code (its exit info, mapped by the launcher):
+         * [ExitReason.Quit] (the player closed it from Recents), [ExitReason.Memory] (low-memory killer) or
+         * [ExitReason.Updated]. It replaces "Android killed the game" only where nothing in the reports says more.
+         */
+        fun diagnose(code: Int, crashReport: String? = null, log: String? = null, instance: String? = null, tail: Int = 60, killedAs: ExitReason? = null): GameExitReport {
             require(tail >= 0)
             val lines = log.orEmpty().lines().filter { it.isNotEmpty() }
             val report = crashReport.orEmpty().lines().takeWhile { !it.startsWith("-- System Details --") }.filter { it.isNotEmpty() }
@@ -42,8 +48,10 @@ data class GameExitReport(val code: Int, val reason: ExitReason, val clue: Strin
             // Only absent mods: one there in the wrong version is the user's to update, not "Get missing mods"' to fetch.
             fun result(reason: ExitReason, clue: String? = null, missing: List<String> = emptyList()): GameExitReport =
                 GameExitReport(code, reason, clue?.let(::clean), instance, lines.takeLast(tail), missing, if (reason == ExitReason.OpenGLMod) glMod(report + lines) else null, dependencies.filter { it.actual == MISSING })
+            // FML's error screen (missing mods, a loader failure) ends like a quit, "Stopping!" and code 0 included: what it says wins.
+            val loader = (report + lines).firstOrNull { "Failure message: " in it || "Error during pre-loading phase: " in it }
             val stopped = lines.indexOfLast { "Stopping!" in it }
-            if (crashReport == null && stopped >= 0 && lines.drop(stopped + 1).none(::isError)) return result(ExitReason.Quit)
+            if (crashReport == null && loader == null && dependencies.isEmpty() && stopped >= 0 && lines.drop(stopped + 1).none(::isError)) return result(ExitReason.Quit)
             val errors = lines.filter { isError(it) || listOf("No context is current", "No GLCapabilities", "does not support required", "CodeCache is full", "VK_ERROR_").any { marker -> it.contains(marker, true) } }
             // A Vulkan-unsuitable device makes 26.2 fall back to OpenGL, whose "no context" crash is only the aftermath.
             val all = (report + lines).map { it.lowercase() }
@@ -52,11 +60,14 @@ data class GameExitReport(val code: Int, val reason: ExitReason, val clue: Strin
                 ?: (report + lines).lastOrNull { "failed to create backend vulkan" in it.lowercase() }?.takeIf { all.none { "vk_error_native_window_in_use_khr" in it } }
             if (vulkan != null) return result(ExitReason.VulkanUnsupported, vulkan, vulkanMissing((report + lines).joinToString("\n")))
             if (dependencies.isNotEmpty()) return result(ExitReason.MissingDependency, dependencies.joinToString("; ") { "${modName(it.requestedBy.removeSuffix(".jar"))} needs ${it.modId}" })
-            val loader = (report + lines).firstOrNull { "Failure message: " in it || "Error during pre-loading phase: " in it }
+            // Code 0 is a clean exit whatever the log says after "Stopping!" (a failed chunk save, say).
+            if (code == 0 && crashReport == null && loader == null) return result(ExitReason.Quit)
             // A SIGKILL leaves no crash report; whatever the log said last (a mixin warning, say) isn't why it stopped.
             // FML's own error screen (missing mods, loader failure) still names the real problem if the player swiped it away.
             val killed = (report + lines).lastOrNull { l -> listOf("low memory killer", "lowmemorykiller", "lmkd", "killed by the system", "killed by android", "sigkill").any { it in l.lowercase() } }
-            if (crashReport == null && loader == null && code in setOf(137, -9, 9)) return result(ExitReason.SystemKilled, killed)
+            if (crashReport == null && loader == null && code in setOf(137, -9, 9)) {
+                return result(killedAs ?: ExitReason.SystemKilled, if (killedAs == ExitReason.Memory) LOW_MEMORY else killed)
+            }
             // A native crash in the driver: hs_err's "Internal exceptions" would otherwise read as a mod error.
             val fatal = (report + lines).indexOfFirst { "SIGSEGV" in it || "SIGBUS" in it }
             if (fatal >= 0 && (report + lines).drop(fatal).any { "libvulkan" in it || "vulkan.adreno" in it }) return result(ExitReason.Renderer, "The Vulkan driver crashed.")
@@ -99,6 +110,8 @@ data class GameExitReport(val code: Int, val reason: ExitReason, val clue: Strin
         }
         private fun modName(id: String) = KnownModsCatalog.name(id) ?: id.replace('_', ' ').replace('-', ' ').split(' ').joinToString(" ") { w -> w.replaceFirstChar(Char::uppercase) }
         private const val MISSING = "[MISSING]"
+        /** The clue for a [ExitReason.Memory] stop Android made (its low-memory killer), not the game's heap. */
+        private const val LOW_MEMORY = "Android's low-memory killer"
         private val dependencyLine = Regex("Mod ID: '([^']+)', Requested by: '([^']+)', Expected range: '([^']*)', Actual version: '([^']*)'")
         private val languageProvider = Regex("Mod File (?:mods/)?(\\S+?\\.jar) needs language provider ([A-Za-z0-9_-]+)")
         /**

@@ -98,6 +98,11 @@ class MainActivity : ComponentActivity() {
         graph.launcher.onResume()
     }
 
+    override fun onPause() {
+        graph.launcher.onPause()
+        super.onPause()
+    }
+
     /** Packs arrive only as content:// URIs: a file:// one could point Cofre at its own private files. */
     private fun contentPacksOnly(intent: Intent): Intent {
         val scheme = modpackUri(intent)?.scheme ?: return intent

@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
 
 /**
@@ -86,8 +88,12 @@ class GameFiles(val root: File, private val http: OkHttpClient = Kit.http) {
     fun classpath(version: VersionJson): List<File> =
         (select(version.libraries).map { File(libraries, it.downloads?.artifact?.path ?: mavenPath(it.name)) } + clientJar(version)).distinct()
 
-    /** Runs [items] through kit's queue in one batch. Files already on disk with the right size are skipped. */
-    suspend fun download(step: String, items: List<DownloadItem>) {
+    /**
+     * Runs [items] through kit's queue in one batch. Files already on disk with the right size are skipped. One batch at
+     * a time: a cancelled launch's queue still writes its journal as it winds down, and a new one reading it would
+     * find its own files "already queued".
+     */
+    suspend fun download(step: String, items: List<DownloadItem>): Unit = batches.withLock {
         val missing = items.distinctBy { it.destination }.filter { item ->
             val file = File(item.destination)
             !file.isFile || (item.size != null && file.length() != item.size)
@@ -112,6 +118,7 @@ class GameFiles(val root: File, private val http: OkHttpClient = Kit.http) {
     companion object {
         /** Cofre is a Linux arm64 machine as far as Mojang's rules go. */
         val rules = RuleContext(osName = "linux", arch = "arm64")
+        private val batches = Mutex()
         private const val MOJANG_LIBRARIES = "https://libraries.minecraft.net/"
 
         /** Libraries the rules allow, minus desktop natives (`natives-*`, x86 builds). */
