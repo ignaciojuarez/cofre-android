@@ -42,6 +42,9 @@ android {
     buildFeatures {
         buildConfig = true
     }
+    // The runtime's JRE asset is already .tar.xz: storing it saves a second inflate on first launch. AGP reads this
+    // from the app module only.
+    androidResources { noCompress += "xz" }
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
@@ -105,6 +108,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
+    implementation(libs.minidns.android)
     debugImplementation(libs.compose.ui.tooling)
     lintChecks(libs.compose.lints)
 

@@ -200,15 +200,11 @@
         "distanthorizons"
       ],
       "name": "Distant Horizons",
-      "scope": "vulkan",
-      "gameVersions": [
-        "26.2"
-      ],
-      "minVersion": "3.1.0",
-      "severity": "works",
-      "reason": "Distant Horizons supports Vulkan.",
+      "scope": "anyRenderer",
+      "severity": "broken",
+      "reason": "Distant Horizons can't load worlds: its database library has no Android build yet.",
       "evidence": "expected",
-      "evidenceRef": "Vulkan rendering since 3.1.0; 3.3.3 keeps an openGl renderer package beside GpuDevice code. Supports Mojang's Vulkan backend; its OpenGL classes only run on the GL backend. Checked 2026-11-09 against the 26.2 NeoForge jar from Modrinth"
+      "evidenceRef": "3.3.3 bundles a relocated sqlite-jdbc (dh_sqlite) and zstd-jni with glibc/musl/BSD/macOS/Windows natives only, so it fails at world load on Android. Its Vulkan rendering is fine (since 3.1.0). Checked 2026-11-11 against the 26.2 NeoForge jar from Modrinth"
     },
     {
       "ids": [
@@ -252,14 +248,11 @@
         "controlify"
       ],
       "name": "Controlify",
-      "scope": "vulkan",
-      "gameVersions": [
-        "26.2"
-      ],
-      "severity": "works",
-      "reason": "Controlify supports Vulkan.",
+      "scope": "anyRenderer",
+      "severity": "broken",
+      "reason": "Controlify can't see controllers on Android yet. Cofre's built-in controller support works without it.",
       "evidence": "expected",
-      "evidenceRef": "3.5.3 has no OpenGL references. Supports Mojang's Vulkan backend; its OpenGL classes only run on the GL backend. Checked 2026-11-09 against the 26.2 NeoForge jar from Modrinth"
+      "evidenceRef": "3.5.3 has no OpenGL references, but it only loads its bundled glibc linux-aarch64 libSDL3.so and there is no Android SDL3, so it finds no controller. Checked 2026-11-11 against the 26.2 NeoForge jar from Modrinth"
     },
     {
       "ids": [

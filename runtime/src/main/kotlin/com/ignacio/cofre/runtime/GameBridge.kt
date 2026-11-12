@@ -64,7 +64,8 @@ internal object GameBridge {
         Log.i(TAG, "[Cofre] launching ${spec.mainClass} java.home=${spec.javaHome}")
         // The game prints player names, chat and server addresses: logcat gets them only in debuggable builds.
         val debuggable = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
-        val result = launch(args.toTypedArray(), spec.javaHome, spec.gameDir, spec.logFile, spec.exitFile, debuggable)
+        val result = launch(args.map { it.toByteArray() }.toTypedArray(), spec.javaHome.toByteArray(), spec.gameDir.toByteArray(),
+            spec.logFile.toByteArray(), spec.exitFile.toByteArray(), debuggable)
         check(result == 0) { "JVM thread didn't start ($result)" }
     }
 
@@ -78,6 +79,8 @@ internal object GameBridge {
             // exit record (noBackupFilesDir/launch), never in the instance, which is shared and exported.
             add("-XX:ErrorFile=${File(spec.exitFile).parent}/hs_err_pid%p.log")
             add("-XX:HeapDumpPath=${File(spec.exitFile).parent}") // a heap dump (if a player turns them on) holds the token too
+            // HotSpot's perf data file: our JDK aims its temp folder at /data/tmp, which doesn't exist, and nothing reads it here.
+            add("-XX:-UsePerfData")
             add("-Djava.home=${spec.javaHome}")
             add("-Djava.io.tmpdir=${tmpDir.path}")
             add("-Duser.home=${spec.gameDir}")
@@ -85,7 +88,8 @@ internal object GameBridge {
             add("-Djna.boot.library.path=$nativeDir")
             add("-Djdk.lang.Process.launchMechanism=FORK") // posix_spawn needs jspawnhelper, which can't run here
             add("-Dorg.lwjgl.librarypath=$nativeDir")
-            add("-Dorg.lwjgl.vulkan.libname=libvulkan.so")
+            // Our layer over the system libvulkan.so (vk_rotate.c): lets Android rotate the picture Minecraft can't.
+            add("-Dorg.lwjgl.vulkan.libname=libcofrevk.so")
             add("-Dorg.lwjgl.system.allocator=system")
             // LWJGL compares each loaded .so's SHA-1 with Mojang's glibc Linux build (META-INF/linux/arm64/…sha1).
             // Our natives are built from the same 3.4.1 source for Android, so their bytes can never match.
@@ -114,6 +118,8 @@ internal object GameBridge {
     const val REQ_CAPTURE = 1
     const val REQ_RELEASE = 2
     const val REQ_EXIT = 3
+    const val REQ_IME_SHOW = 4 // a text field has focus: the soft keyboard (GLFW.java, keyboardShown)
+    const val REQ_IME_HIDE = 5
 
     // GLFW values used on this side.
     const val RELEASE = 0
@@ -135,8 +141,11 @@ internal object GameBridge {
     /** The SurfaceView's surface, or null once it's destroyed. Never used with EGL. */
     @JvmStatic external fun setSurface(surface: Surface?, width: Int, height: Int)
 
-    /** Starts the JVM on its own thread: `args` is a full java command line starting with "java". Output goes to [logFile], and to logcat when [mirrorToLogcat]. */
-    @JvmStatic external fun launch(args: Array<String>, javaHome: String, gameDir: String, logFile: String, exitFile: String, mirrorToLogcat: Boolean): Int
+    /**
+     * Starts the JVM on its own thread: `args` is a full java command line starting with "java". Output goes to [logFile], and to logcat when [mirrorToLogcat].
+     * Every string goes as UTF-8 bytes: JNI's own strings are modified UTF-8, which breaks an emoji (a Quick Play world name) into two invalid halves.
+     */
+    @JvmStatic external fun launch(args: Array<ByteArray>, javaHome: ByteArray, gameDir: ByteArray, logFile: ByteArray, exitFile: ByteArray, mirrorToLogcat: Boolean): Int
 
     /** Blocks until the game asks the activity for something (REQ_*). */
     @JvmStatic external fun nextRequest(): Int

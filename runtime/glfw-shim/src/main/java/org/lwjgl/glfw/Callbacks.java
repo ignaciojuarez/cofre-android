@@ -6,6 +6,7 @@ public final class Callbacks {
 
     /** Clears every window callback. Ours are plain Java objects, so there's nothing native to free. */
     public static void glfwFreeCallbacks(long window) {
+        if (window != GLFW.currentWindow) return; // they're the game's window's: another window has none
         GLFW.glfwSetWindowPosCallback(window, null);
         GLFW.glfwSetWindowSizeCallback(window, null);
         GLFW.glfwSetWindowCloseCallback(window, null);

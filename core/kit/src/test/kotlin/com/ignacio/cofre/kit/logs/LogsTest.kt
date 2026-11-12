@@ -158,6 +158,34 @@ class LogsTest {
         assertEquals(ExitReason.SystemKilled, GameExitReport.diagnose(137).reason); assertEquals(ExitReason.Quit, GameExitReport.diagnose(1, log = "earlier Exception\n[INFO]: Stopping!").reason)
         assertNotEquals(ExitReason.Quit, GameExitReport.diagnose(1, log = "[INFO]: Stopping!\njava.lang.IllegalStateException").reason)
     }
+    @Test fun aCleanExitIsAQuitWhateverFollowsStopping() {
+        val log = "[12:00] [Render thread/INFO]: Stopping!\n[12:00] [Server thread/ERROR]: Failed to save chunk\njava.io.IOException: closed"
+        assertEquals(ExitReason.Quit, GameExitReport.diagnose(0, log = log).reason)
+        assertNotEquals(ExitReason.Quit, GameExitReport.diagnose(1, log = log).reason)
+        assertNotEquals(ExitReason.Quit, GameExitReport.diagnose(0, crashReport = "Description: Ticking entity\njava.lang.IllegalStateException: boom", log = log).reason)
+    }
+    @Test fun fmlsErrorScreenStillWinsOverACleanExit() {
+        // Quitting from FML's error screen can exit 0: the missing mod or the loader failure is still why it stopped.
+        val missing = "[main/ERROR] [ModSorter/LOADING]: Missing or unsupported mandatory dependencies:\n\tMod ID: 'yet_another_config_lib_v3', Requested by: 'controlify', Expected range: '[3.9,)', Actual version: '[MISSING]'\n[Render thread/INFO]: Stopping!"
+        val r = GameExitReport.diagnose(0, log = missing)
+        assertEquals(ExitReason.MissingDependency, r.reason); assertEquals(listOf("yet_another_config_lib_v3"), r.missingDependencies.map { it.modId })
+        val loader = "[main/ERROR] [FML/]: Failure message: Mod sodium requires a newer NeoForge\n[Render thread/INFO]: Stopping!"
+        assertEquals(ExitReason.Mods, GameExitReport.diagnose(0, log = loader).reason)
+        assertEquals(ExitReason.VulkanUnsupported, GameExitReport.diagnose(0, log = "Device [x] does not have required feature [timelineSemaphore]").reason)
+    }
+    @Test fun androidsExitReasonExplainsAKillWithNoClue() {
+        val log = "[12:01] [Render thread/INFO]: Loaded 4 shaders"
+        assertEquals(ExitReason.Quit, GameExitReport.diagnose(-9, log = log, killedAs = ExitReason.Quit).reason)
+        val lmk = GameExitReport.diagnose(-9, log = log, killedAs = ExitReason.Memory)
+        assertEquals(ExitReason.Memory, lmk.reason); assertEquals("Android ran low on memory and closed the game.", lmk.explanation)
+        val updated = GameExitReport.diagnose(-9, log = log, killedAs = ExitReason.Updated)
+        assertEquals(ExitReason.Updated, updated.reason); assertEquals("Minecraft closed", updated.title)
+        assertEquals(ExitReason.SystemKilled, GameExitReport.diagnose(-9, log = log).reason)
+        // What the reports say still wins: swiping FML's missing-mods screen away doesn't make it a quit.
+        val missing = "\tMod ID: 'yet_another_config_lib_v3', Requested by: 'controlify', Expected range: '[3.9,)', Actual version: '[MISSING]'"
+        assertEquals(ExitReason.MissingDependency, GameExitReport.diagnose(-9, log = missing, killedAs = ExitReason.Quit).reason)
+        assertEquals(ExitReason.Memory, GameExitReport.diagnose(-9, crashReport = "java.lang.OutOfMemoryError: Java heap space", killedAs = ExitReason.Quit).reason)
+    }
     @Test fun cluesAreCleanAndLimitedAndTheTailIsKept() {
         val r = GameExitReport.diagnose(1, log = "[12:00] [main/ERROR]: java.lang.UnsatisfiedLinkError: " + "x".repeat(400)); assertEquals(200, r.clue?.length); assertTrue(r.clue!!.startsWith("java.lang.")); assertTrue(r.clue.endsWith('…'))
         val d = GameExitReport.diagnose(1, log = (1..100).joinToString("\n") { "line $it" }, instance = "Main")

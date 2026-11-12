@@ -128,6 +128,8 @@
     <string name="log_files_ready">Game files ready</string>
     <string name="log_account_ready">Account ready</string>
     <string name="log_heap">Memory limit %1$d MB</string>
+    <string name="log_device_memory">Device memory %1$d MB</string>
+    <string name="log_start_on_return">Ready. Minecraft starts when you come back to Cofre.</string>
 
     <!-- Game stopped -->
     <string name="stopped_next_step">Next step</string>
@@ -142,7 +144,7 @@
     <string name="preflight_title">Before you play</string>
     <string name="preflight_body">These mods need other mods that aren\'t installed. Without them the game stops while loading.</string>
     <string name="preflight_play_anyway">Play anyway</string>
-    <string name="preflight_issues_body">These mods are known or likely to crash on Vulkan.</string>
+    <string name="preflight_issues_body">These mods are known or likely to stop the game on this device.</string>
     <string name="preflight_issue">%1$s · %2$s</string>
     <string name="preflight_turn_off">Turn off these mods</string>
     <string name="stopped_play_again_to">Play again · %1$s</string>
@@ -323,4 +325,7 @@
     <!-- Files provider -->
     <string name="files_root_summary">Instances: mods, worlds, packs</string>
     <string name="files_root_title">Instances</string>
+    <!-- LaunchService: the notification while Play downloads and prepares the game. -->
+    <string name="launch_channel">Game downloads</string>
+    <string name="launch_notification">Getting Minecraft ready</string>
 </resources>

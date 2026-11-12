@@ -87,6 +87,20 @@ class InstallerTest {
             assertEquals(3, server.requestCount); assertEquals(3, ModIndex(root).installed().size)
         }
     }
+    @Test fun aGapTheFolderAlreadyHadDoesNotBlockAnUnrelatedInstall() = runBlocking {
+        MockWebServer().use { server ->
+            server.start(); val bBytes = modJar("b")
+            File(mods(), "a-1.jar").writeBytes(modJar("a", "[[dependencies.a]]\nmodId='nope'\nrequired=true"))
+            server.dispatcher = object : Dispatcher() { override fun dispatch(request: RecordedRequest): MockResponse = if (request.url.encodedPath == "/b.jar") response(bBytes) else MockResponse(code = 404) }
+            val installed = ModInstaller(root, modrinth = Modrinth(baseUrl = server.url("/v2/"))).install(ModInstallPlan(candidate(server, "b", bBytes)))
+            assertTrue(installed.any { it.projectId == "b" }); assertTrue(File(root, "mods/b-1.jar").isFile)
+            // A new mod's own unmet requirement still blocks it.
+            val cBytes = modJar("c", "[[dependencies.c]]\nmodId='alsonope'\nrequired=true")
+            server.dispatcher = object : Dispatcher() { override fun dispatch(request: RecordedRequest): MockResponse = if (request.url.encodedPath == "/c.jar") response(cBytes) else MockResponse(code = 404) }
+            assertFailsWith<ModInstallFailure.MissingRequirement> { ModInstaller(root, modrinth = Modrinth(baseUrl = server.url("/v2/"))).install(ModInstallPlan(candidate(server, "c", cBytes))) }
+            assertFalse(File(root, "mods/c-1.jar").exists())
+        }
+    }
     @Test fun jarDeclaredDependencyMissingFromCatalogIsStagedToo() = runBlocking {
         MockWebServer().use { server ->
             server.start(); val aBytes = modJar("a", "[[dependencies.a]]\nmodId='architectury'\nrequired=true"); val libBytes = modJar("architectury")
@@ -132,6 +146,43 @@ class InstallerTest {
             // The crash names the requester by mod id, not file: nothing left to get.
             assertEquals(installed.toSet(), ModInstaller(root, modrinth = Modrinth(baseUrl = server.url("/v2/"))).installMissing(listOf(ModRequirements.requirement("yet_another_config_lib_v3", "dependency", "controlify"))).toSet())
         }
+    }
+    @Test fun aJarWithTheNewJarsModIdIsTheOldCopy() = runBlocking {
+        MockWebServer().use { server ->
+            server.start(); val bytes = modJar("alpha", "# v2")
+            // Dropped in by hand under another name and title; a jar that only bundles alpha stays.
+            File(mods(), "manual-download.jar.disabled").writeBytes(modJar("alpha"))
+            File(mods(), "bundler.jar").writeBytes(jarBytes(mapOf("META-INF/neoforge.mods.toml" to "[[mods]]\nmodId='bundler'".toByteArray(), "META-INF/jarjar/alpha.jar" to modJar("alpha"))))
+            server.enqueue(response(bytes))
+            ModInstaller(root).install(ModInstallPlan(candidate(server, "P123", bytes).copy(title = "Alpha Mod")))
+            assertEquals(setOf("P123-1.jar", "bundler.jar"), mods().list()!!.toSet())
+        }
+    }
+    @Test fun getMissingModsNeverBringsBackAModARuleCallsBroken() = runBlocking {
+        MockWebServer().use { server ->
+            server.start(); server.dispatcher = object : Dispatcher() { override fun dispatch(request: RecordedRequest): MockResponse = MockResponse(body = "{}") }
+            val addon = modJar("addon", "[[dependencies.addon]]\nmodId='iris'\ntype='required'")
+            File(mods(), "iris.jar.disabled").writeBytes(modJar("iris")); File(mods(), "addon.jar").writeBytes(addon)
+            val modrinth = Modrinth(baseUrl = server.url("/v2/"))
+            ModInstaller(root, modrinth = modrinth).installMissing(ModRequirements.missing(root))
+            assertTrue(File(mods(), "iris.jar.disabled").isFile); assertEquals(listOf("iris"), ModRequirements.missing(root).map { it.modId }, "the gap stays reported")
+            // Installing another mod that needs it doesn't turn it on either.
+            File(mods(), "addon.jar").delete(); server.dispatcher = object : Dispatcher() { override fun dispatch(request: RecordedRequest): MockResponse = response(addon) }
+            ModInstaller(root, modrinth = modrinth).install(ModInstallPlan(candidate(server, "addon", addon)))
+            assertTrue(File(mods(), "addon-1.jar").isFile); assertTrue(File(mods(), "iris.jar.disabled").isFile)
+            assertEquals(2, server.requestCount, "the hash lookup and the addon: Iris is never looked up")
+        }
+    }
+    @Test fun recoverPutsBackWhatAKilledInstallMovedAside() {
+        File(mods(), "b-2.jar").writeBytes(modJar("b", "# v2")); File(mods(), "c.jar.disabled").writeBytes(modJar("c"))
+        val backup = File(root, ".cofre-mods-staging/one/backup").also { it.mkdirs() }
+        File(backup, "0-a-1.jar").writeBytes(modJar("a")) // free: goes back
+        File(backup, "1-b-1.jar").writeBytes(modJar("b")) // b-2 replaced it: dropped
+        File(backup, "2-c.jar").writeBytes(modJar("c", "# other")) // its name is taken (off): dropped
+        File(root, ".cofre-mods-staging/two/downloads").mkdirs(); File(root, ".cofre-mods-staging/two/downloads/x.jar").writeBytes(modJar("x"))
+        ModInstaller.recover(root)
+        assertEquals(setOf("a-1.jar", "b-2.jar", "c.jar.disabled"), mods().list()!!.toSet()); assertTrue(File(root, ".cofre-mods-staging").list()!!.isEmpty())
+        assertContentEquals(modJar("a"), File(mods(), "a-1.jar").readBytes())
     }
     @Test fun unknownEnabledAndDisabledJarsIdentifyBySha1BulkLookup() = runBlocking {
         MockWebServer().use { server ->

@@ -3,20 +3,30 @@ package com.ignacio.cofre.runtime
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.graphics.Rect
+import android.net.ConnectivityManager
 import android.os.Build
 import android.os.Bundle
+import android.text.InputType
 import android.util.Log
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
+import android.view.inputmethod.InputMethodManager
 import android.window.OnBackInvokedDispatcher
+import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import java.io.File
+import java.net.Inet6Address
+import java.util.TimeZone
 import kotlin.concurrent.thread
 import kotlin.math.roundToInt
 
@@ -45,19 +55,56 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
 
     private lateinit var view: SurfaceView
     private lateinit var nativeDir: File
-    private val gamepad = GamepadMapper()
+    private val gamepad = GamepadMapper(inMenu = { !wantCapture })
     private var hasSurface = false
+    private var surfaceWidth = 0
+    private var surfaceHeight = 0
+
+    /** A newer instance owns the game's window (this one is stopped behind it, or finishing): leave the window alone. */
+    private val replaced get() = activity != null && activity !== this
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Restored in a new process: Android killed the game while it was away. Starting it again would reuse an old
+        // launch and token; the launcher underneath explains the stop instead.
+        if (savedInstanceState != null && !started) {
+            finish()
+            return
+        }
         activity = this
         nativeDir = GameBridge.load(this)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Notched phones: the game goes under the cutout instead of being letterboxed beside it.
+        window.attributes = window.attributes.apply { layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES }
+        // The soft keyboard shows only when the game asks (REQ_IME_SHOW), over the game rather than resizing its surface.
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        view = SurfaceView(this).apply {
+        view = object : SurfaceView(this) {
+            override fun onCheckIsTextEditor() = true
+
+            override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection {
+                // Plain text with no suggestions (there's no text field here to show them against), and not the
+                // full-screen editor keyboards use in landscape.
+                outAttrs.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_EXTRACT_UI or EditorInfo.IME_FLAG_NO_FULLSCREEN
+                return SoftKeyboard(this)
+            }
+        }.apply {
             isFocusable = true
             isFocusableInTouchMode = true
             holder.addCallback(this@GameActivity)
+            if (Build.VERSION.SDK_INT >= 34) {
+                // Minecraft makes its Vulkan surface once. The default lifecycle destroys the surface on every stop
+                // (Home, sleep), which the game can't recover from; this keeps it until the activity goes.
+                setSurfaceLifecycle(SurfaceView.SURFACE_LIFECYCLE_FOLLOWS_ATTACHMENT)
+            }
+            // Look-drags start at the screen's edges too: keep the back gesture off the middle 200 dp of each side
+            // (Android's limit per edge).
+            addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+                val band = (200 * resources.displayMetrics.density).roundToInt()
+                val top = (v.height - band) / 2
+                ViewCompat.setSystemGestureExclusionRects(v, listOf(Rect(0, top, v.width, top + band)))
+            }
             setOnTouchListener { _, e -> onTouch(e) }
             setOnGenericMotionListener { _, e -> onGenericMotion(e) }
             setOnCapturedPointerListener { _, e -> onCapturedPointer(e) }
@@ -87,13 +134,28 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
         val shim = File(filesDir, "runtimes/cofre-glfw.jar")
         shim.parentFile?.mkdirs()
         assets.open("runtime/cofre-glfw.jar").use { input -> shim.outputStream().use { input.copyTo(it) } }
-        val refreshRate = if (Build.VERSION.SDK_INT >= 30) {
-            display.refreshRate
-        } else {
-            @Suppress("DEPRECATION")
-            windowManager.defaultDisplay.refreshRate
-        }
-        GameBridge.start(this, spec, nativeDir, classpathFirst = listOf(shim.path), extraJvmArgs = listOf("-Dcofre.refreshRate=${refreshRate.roundToInt()}"))
+        val extra = listOf("-Dcofre.refreshRate=${refreshRate().roundToInt()}", "-Duser.timezone=${TimeZone.getDefault().id}") + resolvConf()
+        GameBridge.start(this, spec, nativeDir, classpathFirst = listOf(shim.path), extraJvmArgs = extra)
+    }
+
+    private fun refreshRate(): Float = if (Build.VERSION.SDK_INT >= 30) {
+        display.refreshRate
+    } else {
+        @Suppress("DEPRECATION")
+        windowManager.defaultDisplay.refreshRate
+    }
+
+    /**
+     * The JDK's DNS client, which Minecraft's server (SRV) lookups use, reads resolv.conf, and Android has none: write
+     * this network's servers for it (our JDK's `ext.net.resolvPath`). Without them, "play.example.net" falls back to port 25565.
+     */
+    private fun resolvConf(): List<String> {
+        val connectivity = getSystemService(ConnectivityManager::class.java)
+        val servers = connectivity.getLinkProperties(connectivity.activeNetwork)?.dnsServers.orEmpty().sortedBy { it is Inet6Address }
+        if (servers.isEmpty()) return emptyList()
+        val file = File(cacheDir, "resolv.conf")
+        file.writeText(servers.joinToString("") { "nameserver ${it.hostAddress}\n" })
+        return listOf("-Dext.net.resolvPath=${file.path}")
     }
 
     /** Requests from the game's threads, which must not call into ART themselves. */
@@ -102,6 +164,8 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
             when (GameBridge.nextRequest()) {
                 GameBridge.REQ_CAPTURE -> runOnUi { it.setCapture(true) }
                 GameBridge.REQ_RELEASE -> runOnUi { it.setCapture(false) }
+                GameBridge.REQ_IME_SHOW -> runOnUi { it.showKeyboard(true) }
+                GameBridge.REQ_IME_HIDE -> runOnUi { it.showKeyboard(false) }
                 GameBridge.REQ_EXIT -> {
                     runOnUi { it.finish() }
                     Thread.sleep(150) // let the finish reach the system before the process goes
@@ -122,34 +186,62 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
         if (capture && hasWindowFocus()) view.requestPointerCapture() else if (!capture) view.releasePointerCapture()
     }
 
+    private fun showKeyboard(show: Boolean) {
+        val input = getSystemService(InputMethodManager::class.java)
+        if (show) input.showSoftInput(view, 0) else input.hideSoftInputFromWindow(view.windowToken, 0)
+    }
+
     // ---- Surface and lifecycle -----------------------------------------------------------------
+
+    // Home or sleep. The surface, and the game's swapchain on it, stay (FOLLOWS_ATTACHMENT). Iconified alone, Minecraft
+    // still draws at 10 fps; a 0×0 window (minimized) makes it stop acquiring images until the activity is back.
+    override fun onStop() {
+        super.onStop()
+        if (replaced) return
+        gamepad.releaseAll()
+        GameBridge.iconify(true)
+        GameBridge.focus(false)
+        GameBridge.windowSize(0, 0)
+    }
+
+    // Also the first start: the window isn't iconified while it waits for its first surface. Focus follows the
+    // window's (onWindowFocusChanged).
+    override fun onStart() {
+        super.onStart()
+        if (replaced) return
+        GameBridge.iconify(false)
+        if (hasSurface) GameBridge.windowSize(surfaceWidth, surfaceHeight)
+    }
 
     override fun surfaceCreated(holder: SurfaceHolder) {}
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+        if (replaced) return
+        surfaceWidth = width
+        surfaceHeight = height
         GameBridge.setSurface(holder.surface, width, height)
         GameBridge.windowSize(width, height)
         if (!hasSurface) {
             hasSurface = true
-            GameBridge.iconify(false)
-            GameBridge.focus(true)
+            GameBridge.focus(hasWindowFocus())
+            // Vote for the display's own rate, not whatever the launcher left it at.
+            if (Build.VERSION.SDK_INT >= 30) holder.surface.setFrameRate(refreshRate(), Surface.FRAME_RATE_COMPATIBILITY_DEFAULT)
         }
         Log.i(TAG, "[Cofre] surface ${width}x$height")
     }
 
-    // Sleep, or the app going to the background. The game sees an iconified, unfocused window and
-    // its next glfwCreateWindowSurface waits for the new surface; it has to rebuild its swapchain.
+    // The surface is gone for good: the activity went (or, before Android 14, it stopped). Minecraft can't make a new
+    // Vulkan surface, so its picture doesn't come back; Home and sleep are onStop.
     override fun surfaceDestroyed(holder: SurfaceHolder) {
+        if (replaced) return
         hasSurface = false
-        gamepad.releaseAll()
-        GameBridge.iconify(true)
-        GameBridge.focus(false)
         GameBridge.setSurface(null, 0, 0)
         Log.i(TAG, "[Cofre] surface destroyed")
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
+        if (replaced) return
         if (hasFocus) {
             hideSystemBars()
             if (wantCapture) view.requestPointerCapture()
@@ -207,10 +299,12 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
         return true
     }
 
+    private var touchPointer = -1
     private var lastTouchX = 0f
     private var lastTouchY = 0f
 
-    // Touch: a pointer in menus (tap = left click); a look-around drag while the cursor is captured.
+    // Touch: a pointer in menus (tap = left click); a look-around drag while the cursor is captured. One finger drives
+    // it, followed by its id: a second finger landing or lifting would otherwise make the view jump.
     private fun onTouch(event: MotionEvent): Boolean {
         if (event.isFromSource(InputDevice.SOURCE_MOUSE)) {
             when (event.actionMasked) {
@@ -221,25 +315,35 @@ class GameActivity : Activity(), SurfaceHolder.Callback {
         }
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                lastTouchX = event.x
-                lastTouchY = event.y
+                follow(event, 0)
                 if (!wantCapture) {
                     GameBridge.cursorTo(event.x.toDouble(), event.y.toDouble())
                     GameBridge.mouseButton(0, GameBridge.PRESS)
                 }
             }
+            MotionEvent.ACTION_POINTER_UP -> if (event.getPointerId(event.actionIndex) == touchPointer) follow(event, if (event.actionIndex == 0) 1 else 0)
             MotionEvent.ACTION_MOVE -> {
+                val i = event.findPointerIndex(touchPointer)
+                if (i < 0) return true
+                val x = event.getX(i)
+                val y = event.getY(i)
                 if (wantCapture) {
-                    GameBridge.cursorBy((event.x - lastTouchX).toDouble(), (event.y - lastTouchY).toDouble())
+                    GameBridge.cursorBy((x - lastTouchX).toDouble(), (y - lastTouchY).toDouble())
                 } else {
-                    GameBridge.cursorTo(event.x.toDouble(), event.y.toDouble())
+                    GameBridge.cursorTo(x.toDouble(), y.toDouble())
                 }
-                lastTouchX = event.x
-                lastTouchY = event.y
+                lastTouchX = x
+                lastTouchY = y
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> if (!wantCapture) GameBridge.mouseButton(0, GameBridge.RELEASE)
         }
         return true
+    }
+
+    private fun follow(event: MotionEvent, index: Int) {
+        touchPointer = event.getPointerId(index)
+        lastTouchX = event.getX(index)
+        lastTouchY = event.getY(index)
     }
 
     // Mouse while captured (mouse-look): relative motion.

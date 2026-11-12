@@ -28,11 +28,11 @@ import okhttp3.Request
  */
 class NeoForgeInstaller(private val context: Context, private val files: GameFiles) {
 
-    /** Installs [version] unless its version JSON is already there; returns the version id. */
+    /** Installs [version] unless it's already [installed]; returns the version id. */
     suspend fun install(version: String = VERSION): String {
         val neoforge = NeoForgeVersion(version)
         val profileId = "neoforge-$version"
-        if (files.versionJson(profileId).isFile) return profileId
+        if (installed(files, version)) return profileId
 
         val vanilla = files.install(Target.GAME_VERSION, withAssets = false)
         files.step("Downloading the NeoForge installer")
@@ -111,6 +111,14 @@ class NeoForgeInstaller(private val context: Context, private val files: GameFil
     }
 
     companion object {
+        /**
+         * The version JSON (written last) and the two jars FML loads from the libraries folder by its version alone: the
+         * patched client the processor writes (the profile's `PATCHED`) and NeoForge's universal jar (a profile library).
+         */
+        fun installed(files: GameFiles, version: String): Boolean =
+            files.versionJson("neoforge-$version").isFile &&
+                listOf("net.neoforged:minecraft-client-patched:$version", "net.neoforged:neoforge:$version:universal").all { files.library(it).isFile }
+
         const val VERSION = "26.2.0.93"
         /** [VERSION]'s installer jar (maven.neoforged.net's .sha1 and the downloaded jar agreed, 2026-11-09). */
         private const val VERSION_SHA1 = "97205829a020fc9389f504a77f590b54157c8dde"

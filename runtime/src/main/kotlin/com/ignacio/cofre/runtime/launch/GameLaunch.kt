@@ -1,7 +1,9 @@
 package com.ignacio.cofre.runtime.launch
 
 import android.app.ActivityManager
+import android.app.ApplicationExitInfo
 import android.content.Context
+import android.os.Build
 import android.util.Log
 import com.ignacio.cofre.kit.logs.ExitReason
 import com.ignacio.cofre.kit.logs.GameExitReport
@@ -48,8 +50,8 @@ class GameLaunch(private val context: Context, val files: GameFiles = GameFiles(
         val spec = LaunchArgs.spec(version, files, gameDir, account, javaHome.path, heapMB, exitFile, extraJvmArgs, extraGameArgs)
         prepareGameDir(gameDir, LaunchArgs.isNeoForge(version))
         FileOps.delete(File(gameDir, ".cofre")) // where older builds kept the spec, token included
-        // Native crash reports hold the command line, token included: older builds left them in the instance.
-        listOf(gameDir, runs).flatMap { it.listFiles { f -> f.name.startsWith("hs_err_pid") }.orEmpty().toList() }.forEach { it.delete() }
+        // Native crash reports and heap dumps hold the command line or memory, token included: older builds left them in the instance.
+        listOf(gameDir, runs).flatMap { it.listFiles { f -> f.name.startsWith("hs_err_pid") || f.name.endsWith(".hprof") }.orEmpty().toList() }.forEach { it.delete() }
         val file = File(runs, "${gameDir.name}.json")
         exitFile.delete()
         spec.write(file)
@@ -68,18 +70,39 @@ class GameLaunch(private val context: Context, val files: GameFiles = GameFiles(
         val record = ExitRecord.read(File(spec.exitFile))
         val since = specFile.lastModified()
         val gameDir = File(spec.gameDir)
-        val log = listOf(File(spec.logFile), File(gameDir, "logs/latest.log")).firstOrNull { it.isFile }?.let(::tail)
+        val log = runLog(File(spec.logFile), gameDir, since)
         // hs_err files sit next to the exit record (GameBridge's -XX:ErrorFile).
         val crash = (File(gameDir, "crash-reports").listFiles().orEmpty().toList() + File(spec.exitFile).parentFile?.listFiles { f -> f.name.startsWith("hs_err_pid") }.orEmpty())
             .filter { it.isFile && it.lastModified() >= since }.maxByOrNull { it.lastModified() }
-        val report = GameExitReport.diagnose(record?.code ?: KILLED, crash?.readText(), log, gameDir.name)
+        val killedAs = if (record == null) exitInfo(since)?.let(::killedAs) else null
+        val report = GameExitReport.diagnose(record?.code ?: KILLED, crash?.readText(), log, gameDir.name, killedAs = killedAs)
         return GameExit(record, report).also {
-            Log.i(TAG, "[Cofre] diagnosis code=${record?.code} reason=${it.report.reason} ${it.summary}")
+            Log.i(TAG, "[Cofre] diagnosis code=${record?.code} killedAs=$killedAs reason=${it.report.reason} ${it.summary}")
         }
+    }
+
+    /** Why Android ended this run's `:game` process ([ApplicationExitInfo]'s reason, Android 11+), when it ended after [since]. */
+    private fun exitInfo(since: Long): Int? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
+        return runCatching {
+            context.getSystemService(ActivityManager::class.java).getHistoricalProcessExitReasons(context.packageName, 0, 10)
+                .firstOrNull { it.processName.endsWith(":game") && it.timestamp >= since }?.reason
+        }.getOrNull()
     }
 
     companion object {
         private const val KILLED = -9
+
+        /**
+         * What a kill with no exit record means, from Android's exit reason: closed from Recents, the low-memory
+         * killer, or Cofre's own update. Anything else (a native crash, say) is left to the log.
+         */
+        internal fun killedAs(reason: Int): ExitReason? = when (reason) {
+            ApplicationExitInfo.REASON_USER_REQUESTED -> ExitReason.Quit
+            ApplicationExitInfo.REASON_LOW_MEMORY -> ExitReason.Memory
+            ApplicationExitInfo.REASON_PACKAGE_UPDATED -> ExitReason.Updated
+            else -> null
+        }
 
         /**
          * The end of [file], at most [max] bytes, from a line start: a long session's output can be far bigger than the
@@ -91,6 +114,10 @@ class GameLaunch(private val context: Context, val files: GameFiles = GameFiles(
             val text = ByteArray((input.length() - start).toInt()).also(input::readFully).decodeToString()
             if (start > 0) text.substringAfter('\n', "") else text
         }
+
+        /** This run's output. A log older than the spec ([since]) is an earlier run's: this one never started, so it says nothing. */
+        internal fun runLog(logFile: File, gameDir: File, since: Long): String? =
+            listOf(logFile, File(gameDir, "logs/latest.log")).firstOrNull { it.isFile && it.lastModified() >= since }?.let(::tail)
 
         /** Before every launch: Vulkan in options.txt; for NeoForge, its GL early window off in config/fml.toml. */
         fun prepareGameDir(gameDir: File, neoForge: Boolean) {
@@ -155,7 +182,8 @@ internal object LaunchArgs {
         return LaunchSpec(
             javaHome = javaHome,
             classpath = classpath,
-            jvmArgs = listOf("-Xms256m", "-Xmx${heapMB}m") + jvm(version, values) + extraJvmArgs,
+            // G1 gives idle heap back to Android once a minute; an instance's own arguments come later and win.
+            jvmArgs = listOf("-Xms256m", "-Xmx${heapMB}m", "-XX:G1PeriodicGCInterval=60000") + jvm(version, values) + extraJvmArgs,
             mainClass = requireNotNull(version.mainClass) { "${version.id} has no main class" },
             gameArgs = game(version, values) + extraGameArgs,
             gameDir = gameDir.path,
@@ -187,11 +215,10 @@ internal object LaunchArgs {
         }
     }
 
-    /** `arguments.game` (no demo, no quick play, no custom size), `--userType msa` and `--graphicsBackend vulkan`. */
+    /** `arguments.game` (no demo, no quick play, no custom size) and `--graphicsBackend vulkan`. 26.2 has no `--userType`. */
     fun game(version: VersionJson, values: Map<String, String>): List<String> {
         val template = version.arguments?.game(GameFiles.rules) ?: version.minecraftArguments.orEmpty().split(' ').filter { it.isNotEmpty() }
         val args = template.map { substitute(it, values) }.toMutableList()
-        if ("--userType" !in args) args += listOf("--userType", "msa")
         if ("--graphicsBackend" !in args) args += listOf("--graphicsBackend", "vulkan")
         return args
     }

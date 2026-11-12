@@ -9,6 +9,7 @@ import com.ignacio.cofre.kit.downloads.DownloadQueue
 import com.ignacio.cofre.kit.instances.InstanceStore
 import com.ignacio.cofre.kit.common.FileOps
 import com.ignacio.cofre.kit.common.HttpFailure
+import com.ignacio.cofre.kit.compat.ContentCompatibility
 import com.ignacio.cofre.kit.modrinth.Modrinth
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.withLock
@@ -84,6 +85,13 @@ class ModInstaller(
             }
             plan.downloads.forEach(::add)
             val attemptedRequirements = mutableSetOf<String>()
+            // Gaps the folder already had (a jar dropped in by hand, say) are fetched when Modrinth has them, but never
+            // block this install: "Before you play" names them.
+            val alreadyMissing = before.filter { it.enabled }.map { File(mods, it.file) }.let { jars ->
+                val metadata = jars.mapNotNull { jar -> ModJarMetadata.read(jar)?.let { jar.name to it } }.toMap()
+                ModRequirements.missing(metadata, jars.filter { it.name !in metadata }.map { it.name }).map { it.modId }.toSet()
+            }
+            val skipped = mutableSetOf<String>()
             var downloaded = emptyList<DownloadItem>()
             while (true) {
                 val queue = DownloadQueue(File(stage, "queue-${all.size}.json"), http)
@@ -105,20 +113,31 @@ class ModInstaller(
                 val active = before.filter { (it.enabled || it.file in turnOn) && it.projectId !in staged }
                 val jarFiles = active.map { File(mods, it.file) } + staged.values
                 val metadata = jarFiles.mapNotNull { jar -> ModJarMetadata.read(jar)?.let { jar.name to it } }.toMap()
-                val missing = ModRequirements.missing(metadata, jarFiles.filter { it.name !in metadata }.map { it.name })
+                val missing = ModRequirements.missing(metadata, jarFiles.filter { it.name !in metadata }.map { it.name }).filter { it.modId !in skipped }
                 if (missing.isEmpty()) break
                 val knownInstalled = active + all.values.map { candidate ->
                     InstalledMod(candidate.filename.orEmpty(), candidate.title, candidate.projectId, candidate.versionId, aliases = staged[candidate.projectId]?.let { ModJarMetadata.read(it)?.modIds }.orEmpty())
                 } + before.filter { !it.enabled && it.file !in turnOn }
                 var added = false
                 for (requirement in missing) {
-                    if (!attemptedRequirements.add(requirement.modId)) throw ModInstallFailure.MissingRequirement(requirement)
-                    val extra = ModResolver.modrinth(modrinth, knownInstalled).plan(project(requirement).id)
-                    if (extra.blocked != null || extra.target == null) throw ModInstallFailure.Blocked(extra.blocked)
-                    extra.downloads.forEach { candidate -> if (candidate.projectId !in all) { add(candidate); added = true } }
-                    extra.turnsOn.forEach { if (turnOn.put(it.file, it) == null) added = true }
+                    if (broken(requirement.modId, requirement.name)) { skipped += requirement.modId; continue }
+                    val old = requirement.modId in alreadyMissing
+                    if (!attemptedRequirements.add(requirement.modId)) {
+                        if (old) { skipped += requirement.modId; continue }
+                        throw ModInstallFailure.MissingRequirement(requirement)
+                    }
+                    val extra = try { ModResolver.modrinth(modrinth, knownInstalled).plan(project(requirement).id) }
+                    catch (cancelled: CancellationException) { throw cancelled }
+                    catch (failure: Exception) { if (old) { skipped += requirement.modId; continue }; throw failure }
+                    if (extra.blocked != null || extra.target == null) {
+                        if (old) { skipped += requirement.modId; continue }
+                        throw ModInstallFailure.Blocked(extra.blocked)
+                    }
+                    if (broken(extra.target)) { skipped += requirement.modId; continue }
+                    extra.downloads.filterNot(::broken).forEach { candidate -> if (candidate.projectId !in all) { add(candidate); added = true } }
+                    extra.turnsOn.filterNot(::broken).forEach { if (turnOn.put(it.file, it) == null) added = true }
                 }
-                if (!added) throw ModInstallFailure.MissingRequirement(missing.first())
+                if (!added) missing.firstOrNull { it.modId !in skipped }?.let { throw ModInstallFailure.MissingRequirement(it) } ?: break
             }
             currentCoroutineContext().ensureActive()
             try { commit(plan.target.projectId, all, staged, turnOn.values.toList(), index, stage) }
@@ -131,6 +150,7 @@ class ModInstaller(
     /**
      * "Get missing mods": each requirement comes from the requesting mod's own Modrinth version (its dependency list
      * names the project), else from Modrinth by the mod id's slugs. Requesters Cofre didn't install are identified by hash.
+     * A mod a known-mods rule calls broken is never installed or turned back on: its gap stays reported.
      */
     suspend fun installMissing(requirements: List<ModRequirement>, metered: Boolean = false, onProgress: (DownloadProgress) -> Unit = {}): List<InstalledMod> {
         val index = ModIndex(instance)
@@ -139,13 +159,19 @@ class ModInstaller(
         if (requirements.any { requester(it)?.versionId == null }) { index.identifyUnknown(modrinth); mods = withContext(Dispatchers.IO) { index.installed() } }
         for (requirement in requirements) {
             if (withContext(Dispatchers.IO) { ModRequirements.missing(instance) }.none { it.modId == requirement.modId }) continue
+            if (broken(requirement.modId, requirement.name)) continue
             val by = requester(requirement)
             val resolver = ModResolver.modrinth(modrinth, mods)
             val viaRequester = if (by?.projectId != null && by.versionId != null) resolver.plan(by.projectId, by.versionId).takeIf { it.blocked == null && it.target?.versionId == by.versionId && it.required.isNotEmpty() } else null
-            mods = install(viaRequester ?: resolver.plan(project(requirement).id), metered, onProgress = onProgress)
+            val plan = viaRequester ?: resolver.plan(project(requirement).id)
+            if (viaRequester == null && plan.target?.let(::broken) == true) continue
+            mods = install(plan.copy(required = plan.required.filterNot(::broken), turnsOn = plan.turnsOn.filterNot(::broken)), metered, onProgress = onProgress)
         }
         return mods
     }
+    private fun broken(id: String, name: String, version: String? = null): Boolean = ContentCompatibility.issue(id, name, ContentKind.Mods, version)?.severity == "broken"
+    private fun broken(mod: InstalledMod): Boolean = (mod.aliases + ModIndex.key(mod.file)).any { broken(it, mod.name, mod.version) }
+    private fun broken(candidate: ModCandidate): Boolean = broken(candidate.filename ?: candidate.projectId, candidate.title, candidate.version)
     private suspend fun project(requirement: ModRequirement): Modrinth.Project {
         if (requirement.projectId != null) return modrinth.project(requirement.projectId)
         for (slug in requirement.slugs) {
@@ -166,6 +192,31 @@ class ModInstaller(
             is DownloadQueue.Result.NeedsMeteredApproval -> throw ModInstallFailure.MeteredApproval(result.ids)
         }
     }
+    companion object {
+        /**
+         * After a kill: drops [dir]'s (a mod folder's or an instance's) unfinished installs. A jar a commit had moved to
+         * backup goes back to `mods/` ([putBack]). The caller holds [InstanceStore.lock] for [dir].
+         */
+        fun recover(dir: File) {
+            for (stage in File(dir, ".cofre-mods-staging").listFiles().orEmpty()) {
+                putBack(File(stage, "backup").listFiles().orEmpty().map { it to it.name.substringAfter('-') }, File(dir, "mods"))
+                FileOps.delete(stage)
+            }
+        }
+        /**
+         * Moves each (file, name) to `mods/name` when that name is free, on or off, and no jar there has one of its own
+         * mod ids (then the copy that replaced it made it in, and putting it back would make two). Others stay put.
+         */
+        internal fun putBack(files: List<Pair<File, String>>, mods: File) {
+            val present = ModIndex(mods.parentFile).jars().flatMap { ModJarMetadata.read(it)?.own.orEmpty() }.toMutableSet()
+            for ((file, name) in files) {
+                if (!file.isFile || runCatching { safeFilename(name) }.isFailure) continue
+                val key = ModIndex.key(name); val ids = ModJarMetadata.read(file)?.own.orEmpty()
+                if (File(mods, key).exists() || File(mods, "$key.disabled").exists() || ids.any(present::contains)) continue
+                Files.createDirectories(mods.toPath()); Files.move(file.toPath(), File(mods, name).toPath()); present += ids
+            }
+        }
+    }
     private fun commit(rootId: String, all: Map<String, ModCandidate>, staged: Map<String, File>, turningOn: List<InstalledMod>, index: ModIndex, stage: File) {
         val folder = File(instance, "mods"); val backup = File(stage, "backup"); backup.mkdirs()
         val before = index.installed(); val entries = index.read().toMutableMap()
@@ -177,7 +228,11 @@ class ModInstaller(
         try {
             for ((project, file) in staged) {
                 val candidate = all.getValue(project)
-                val old = before.filter { it.projectId == project || it.file.removeSuffix(".disabled") == file.name || it.projectId == null && it.matches(project, candidate.title) }
+                // The old copy: same project, file name or title, or a jar (on or off) with one of the new jar's own mod ids,
+                // since two jars with one mod id stop the game.
+                val ids = ModJarMetadata.read(file)?.own.orEmpty().toSet()
+                val old = before.filter { File(folder, it.file).isFile }.filter { it.projectId == project || it.file.removeSuffix(".disabled") == file.name || it.projectId == null && it.matches(project, candidate.title) ||
+                    ModJarMetadata.read(File(folder, it.file))?.own.orEmpty().any(ids::contains) }
                 for (item in old) {
                     move(File(folder, item.file), File(backup, "${undo.size}-${item.file}")); entries.remove(ModIndex.key(item.file))
                 }

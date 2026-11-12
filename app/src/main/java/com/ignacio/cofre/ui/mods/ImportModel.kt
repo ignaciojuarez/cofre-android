@@ -233,6 +233,7 @@ class ImportModel(
             is PackRejected.Reason.GameVersion -> "It's for Minecraft ${reason.actual ?: "an unknown version"}. Cofre runs ${Target.GAME_VERSION} only."
             is PackRejected.Reason.LoaderType -> "It's a ${reason.actual.displayName} pack. Cofre runs NeoForge only."
             PackRejected.Reason.LoaderVersionMissing -> "It doesn't say which NeoForge version it needs."
+            is PackRejected.Reason.LoaderVersion -> "It needs NeoForge ${reason.actual}, which isn't a NeoForge ${Target.GAME_VERSION} build."
             is PackRejected.Reason.Invalid -> reason.detail
         }
     }

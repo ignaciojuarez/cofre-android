@@ -29,12 +29,17 @@ object VulkanSupport {
         "VK_EXT_vertex_attribute_divisor",
         "VK_KHR_swapchain",
     )
+    /** VulkanBackend.REQUIRED_DEVICE_FEATURES, in its order. */
     val requiredFeatures: List<String> = listOf(
         "multiDrawIndirect",
         "fillModeNonSolid",
         "samplerAnisotropy",
         "shaderDrawParameters",
         "timelineSemaphore",
+        "hostQueryReset",
+        "synchronization2",
+        "dynamicRendering",
+        "vertexAttributeInstanceRateDivisor",
     )
     private const val REQUIRED_API = (1 shl 22) or (2 shl 12) // VK_API_VERSION_1_2
 

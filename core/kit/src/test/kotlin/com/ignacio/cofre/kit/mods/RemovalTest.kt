@@ -25,6 +25,12 @@ class RemovalTest {
         val nodes = listOf(node("a", "b").copy(enabled = false), node("b", "c"), node("c"))
         assertEquals(listOf("a.jar", "b.jar"), ModRemoval.dependents("c", nodes).map { it.file })
     }
+    @Test fun strandedFollowsChainsSkipsDisabledAndKeepsWhatAnotherJarProvides() {
+        val nodes = listOf(node("iris"), node("addon", "iris"), node("addon2", "addon"), node("off", "iris").copy(enabled = false), node("other"))
+        assertEquals(listOf("addon.jar", "addon2.jar"), ModRemoval.stranded(setOf("iris.jar"), nodes).map { it.file })
+        // A second copy still provides the mod: nothing is stranded.
+        assertTrue(ModRemoval.stranded(setOf("iris.jar"), nodes + InstalledMod("iris-2.jar", "Iris 2", aliases = listOf("iris"))).isEmpty())
+    }
     @Test fun cyclesAndSharedDeepDependenciesReachFixedPoint() {
         val nodes = listOf(node("a", "b", "c"), node("b", "d"), node("c", "d"), node("d"))
         assertEquals(setOf("b.jar", "c.jar", "d.jar"), ModRemoval.options("a", nodes).map { it.file }.toSet())

@@ -39,6 +39,7 @@ import com.ignacio.cofre.kit.mods.Snapshots
 import com.ignacio.cofre.kit.mods.apply
 import com.ignacio.cofre.kit.mods.check
 import com.ignacio.cofre.kit.options.JavaHeap
+import com.ignacio.cofre.kit.options.JvmArguments
 import com.ignacio.cofre.onIo
 import com.ignacio.cofre.runtime.GameActivity
 import com.ignacio.cofre.runtime.JreManager
@@ -181,11 +182,14 @@ class Launcher(private val graph: AppGraph) {
         val lastServer: QuickPlay? = null,
     ) {
         val exit: ExitReason get() = ExitReason.entries.firstOrNull { it.name == reason } ?: ExitReason.Unknown
-        val crashed: Boolean get() = exit != ExitReason.Quit
+        val crashed: Boolean get() = exit != ExitReason.Quit && exit != ExitReason.Updated
     }
 
     @Serializable
     private data class Pending(val instance: String, val spec: String, val quickPlay: QuickPlay? = null, val startedAt: Long = 0)
+
+    /** A launch that got everything ready while Cofre was in the background, where Android won't let it start the game. */
+    private class Ready(val instance: Instance, val spec: File, val token: String, val quickPlay: QuickPlay?)
 
     var run by mutableStateOf<Run?>(null)
         private set
@@ -202,6 +206,9 @@ class Launcher(private val graph: AppGraph) {
         private set
     private var job: Job? = null
     private var watching: Job? = null
+    private var ready: Ready? = null
+    /** Between MainActivity's onResume and onPause: only then may Cofre start the game's activity. */
+    private var resumed = false
     private val pendingFile get() = File(graph.home, "launch/pending.json")
 
     /** True while a game started by Cofre is still running: worlds and servers are read-only then. */
@@ -217,7 +224,7 @@ class Launcher(private val graph: AppGraph) {
         if (job?.isActive == true || preflight != null || refusedWhileRunning(instance, quickPlay)) return
         graph.library.select(instance.id)
         run = Run(instance, quickPlay, stage = Stage.Updates)
-        job = graph.work({ start(instance, quickPlay) }) {
+        job = track(graph.work({ start(instance, quickPlay) }) {
             autoUpdate(instance)
             stage(Stage.Mods)
             if (!checked) return@work start(instance, quickPlay)
@@ -225,7 +232,7 @@ class Launcher(private val graph: AppGraph) {
             if (!ready.modProblems) return@work start(instance, quickPlay)
             run = null
             preflight = Preflight(ready, quickPlay)
-        }
+        })
     }
 
     /** The whole ready check for [instance], off the main thread. Jars not graded yet are scanned (cached per jar). */
@@ -254,7 +261,7 @@ class Launcher(private val graph: AppGraph) {
             val files = GameLaunch(graph.context).files
             ReadyCheck(
                 current, account, entry?.account?.name, graph.vulkan, vulkanSkipped = skipVulkanCheck,
-                loaderVersion = loader, loaderInstalled = files.versionJson("neoforge-$loader").isFile,
+                loaderVersion = loader, loaderInstalled = NeoForgeInstaller.installed(files, loader),
                 gameInstalled = files.versionJson(Target.GAME_VERSION).isFile && File(files.assets, "indexes").list().orEmpty().isNotEmpty(),
                 folderProblem = folderProblem, missing = missing, lines = lines, issues = issues,
             )
@@ -272,7 +279,14 @@ class Launcher(private val graph: AppGraph) {
     private fun start(instance: Instance, quickPlay: QuickPlay?) {
         if (refusedWhileRunning(instance, quickPlay)) return
         run = Run(instance, quickPlay)
-        job = graph.work(::fail) { launch(instance, quickPlay) }
+        job = track(graph.work(::fail) { launch(instance, quickPlay) })
+    }
+
+    /** [LaunchService] runs while a run's jobs do (one hands over to the next), so leaving Cofre doesn't freeze the download. */
+    private fun track(work: Job): Job {
+        LaunchService.start(graph.context)
+        work.invokeOnCompletion { if (job?.isActive != true) LaunchService.stop(graph.context) }
+        return work
     }
 
     /**
@@ -346,6 +360,7 @@ class Launcher(private val graph: AppGraph) {
     fun cancel() {
         job?.cancel()
         job = null
+        ready = null
         run = null
     }
 
@@ -356,6 +371,8 @@ class Launcher(private val graph: AppGraph) {
         val vulkan = graph.onIo { graph.vulkan }
         if (!vulkan.suitable && !skipVulkanCheck) error(graph.context.getString(R.string.launch_vulkan_unsuitable, vulkan.missing.joinToString { plainVulkan(graph.context.resources, it) }))
         log("Vulkan ${vulkan.apiVersion} · ${vulkan.deviceName}", LogLevel.Success)
+        // What Android reports, for sizing the heap tiers against real devices.
+        log(graph.context.getString(R.string.log_device_memory, graph.physicalMB))
         stage(Stage.Account)
         val session = graph.accounts.session()
         log(graph.context.getString(R.string.log_account_ready))
@@ -365,12 +382,21 @@ class Launcher(private val graph: AppGraph) {
         log("Java ${Target.JAVA_MAJOR}", LogLevel.Success)
         val spec = prepareGame(instance, session, quickPlay)
         stage(Stage.Start)
+        ready = Ready(instance, spec, session.accessToken, quickPlay)
+        // Android 10+ silently drops an activity start from the background: that one waits for onResume.
+        if (resumed) startGame() else log(graph.context.getString(R.string.log_start_on_return))
+    }
+
+    /** Starts the [ready] launch's game. Pending is written only now, so a launch that never started isn't diagnosed. */
+    private suspend fun startGame() {
+        val current = ready ?: return
+        ready = null
         graph.onIo {
             pendingFile.parentFile?.mkdirs()
-            pendingFile.writeText(Kit.json.encodeToString(Pending(instance.id, spec.path, quickPlay, System.currentTimeMillis())))
-            graph.instances.markPlayed(instance.id)
+            pendingFile.writeText(Kit.json.encodeToString(Pending(current.instance.id, current.spec.path, current.quickPlay, System.currentTimeMillis())))
+            graph.instances.markPlayed(current.instance.id)
         }
-        graph.context.startActivity(GameActivity.intent(graph.context, spec, session.accessToken).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        graph.context.startActivity(GameActivity.intent(graph.context, current.spec, current.token).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         stage(Stage.InGame)
         run = run?.copy(done = true)
         graph.library.refresh()
@@ -429,7 +455,7 @@ class Launcher(private val graph: AppGraph) {
             val dir = graph.instances.directory(instance)
             val account = GameAccount(session.name, session.uuid)
             val heap = heapMB(instance)
-            val jvm = instance.jvmArguments.split(Regex("\\s+")).filter { it.isNotBlank() }
+            val jvm = JvmArguments.split(instance.jvmArguments)
             val file = InstanceStore.lock(dir).withLock {
                 withContext(graph.io) {
                     // Right before every launch: the game reads mods through these links.
@@ -458,6 +484,11 @@ class Launcher(private val graph: AppGraph) {
      * unless the player quit. Cofre often resumes a moment before that process dies, so this waits for it.
      */
     fun onResume() {
+        resumed = true
+        if (ready != null) {
+            graph.work(::fail) { startGame() }
+            return
+        }
         if (!pendingFile.isFile || watching?.isActive == true) return
         watching = graph.work({}) {
             while (gameProcessAlive()) delay(500)
@@ -467,6 +498,10 @@ class Launcher(private val graph: AppGraph) {
             stopped = diagnose(pending)
             graph.library.refresh()
         }
+    }
+
+    fun onPause() {
+        resumed = false
     }
 
     /**

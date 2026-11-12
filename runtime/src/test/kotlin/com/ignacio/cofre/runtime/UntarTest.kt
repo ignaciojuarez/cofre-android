@@ -7,6 +7,7 @@ import java.nio.file.Files
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.tukaani.xz.LZMA2Options
 import org.tukaani.xz.XZOutputStream
@@ -74,5 +75,22 @@ class UntarTest {
         untar({ entry("here", '2', link = ".") }, { entry("here/up", '2', link = "..") })
         untar({ entry("here", '2', link = ".") }, { entry("dot", '2', link = "here/..") }, { entry("dot/evil", '0', "x".toByteArray()) })
         assertEquals(listOf("jre"), parent.list()!!.toList())
+    }
+
+    @Test
+    fun aStampWithoutTheJvmOrItsModulesIsNotAnInstall() {
+        val home = Files.createTempDirectory("jre").toFile()
+        try {
+            home.resolve(".cofre-version").writeText("abc\n")
+            assertNull(installedStamp(home))
+            home.resolve("lib/server").mkdirs()
+            home.resolve("lib/server/libjvm.so").writeText("elf")
+            home.resolve("lib/modules").writeText("")
+            assertNull(installedStamp(home), "an empty class image, as a lost write leaves it")
+            home.resolve("lib/modules").writeText("jimage")
+            assertEquals("abc", installedStamp(home))
+        } finally {
+            home.deleteRecursively()
+        }
     }
 }

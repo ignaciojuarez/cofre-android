@@ -259,7 +259,12 @@ object HomeSamples {
         val root = File(context.filesDir, "minecraft")
         root.deleteRecursively()
         if (!installed) return
-        listOf("versions/26.2/26.2.json", "versions/neoforge-26.2.0.93/neoforge-26.2.0.93.json", "assets/indexes/30.json").forEach {
+        listOf(
+            "versions/26.2/26.2.json", "versions/neoforge-26.2.0.93/neoforge-26.2.0.93.json", "assets/indexes/30.json",
+            // NeoForge counts as installed only with the jars FML loads.
+            "libraries/net/neoforged/minecraft-client-patched/26.2.0.93/minecraft-client-patched-26.2.0.93.jar",
+            "libraries/net/neoforged/neoforge/26.2.0.93/neoforge-26.2.0.93-universal.jar",
+        ).forEach {
             File(root, it).apply { parentFile?.mkdirs(); writeText("{}") }
         }
     }

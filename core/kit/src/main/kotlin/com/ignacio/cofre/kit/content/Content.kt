@@ -34,7 +34,8 @@ class ContentStore(val gameDirectory: File, val contentDirectory: File = gameDir
         val active = when (kind) { ContentKind.ResourcePacks -> resourcePacks(); ContentKind.Shaders -> setOfNotNull(activeShaderPack()); else -> emptySet() }
         return worlds.flatMap { world ->
             val dir = folder(kind, world)
-            dir.listFiles().orEmpty().filter { !it.name.startsWith('.') && !Files.isSymbolicLink(it.toPath()) }.map { file ->
+            // `*.part`: a download still running.
+            dir.listFiles().orEmpty().filter { !it.name.startsWith('.') && !it.name.endsWith(".part") && !Files.isSymbolicLink(it.toPath()) }.map { file ->
                 val enabled = !file.name.endsWith(".disabled"); val logical = file.name.removeSuffix(".disabled")
                 val fallback = logical.substringBeforeLast('.', logical)
                 val meta = metadata(file)

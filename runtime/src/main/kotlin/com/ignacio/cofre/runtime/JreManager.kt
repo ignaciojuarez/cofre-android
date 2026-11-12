@@ -29,12 +29,15 @@ class JreManager(private val context: Context) {
         null
     }
 
-    fun installedVersion(): String? = File(home, STAMP).takeIf { it.isFile }?.readText()?.trim()
+    fun installedVersion(): String? = installedStamp(home)
 
     fun isInstalled(): Boolean = bundledVersion()?.let { it == installedVersion() } ?: false
 
-    /** Installs the bundled JRE unless it's already there; returns [home]. Blocking: takes seconds. */
-    fun install(): File {
+    /**
+     * Installs the bundled JRE unless it's already there; returns [home]. Blocking: takes seconds. One at a time: a
+     * cancelled launch's unpack keeps running, and a second one would share its staging folder.
+     */
+    fun install(): File { synchronized(JreManager::class.java) {
         val version = checkNotNull(bundledVersion()) { "This build has no bundled JRE" }
         if (installedVersion() == version) return home
         val parent = checkNotNull(home.parentFile).apply { mkdirs() }
@@ -47,13 +50,21 @@ class JreManager(private val context: Context) {
         if (!staging.renameTo(home)) throw IOException("can't move $staging into place")
         FileOps.delete(old)
         return home
-    }
+    } }
 
     private companion object {
         const val NAME = "jre-25"
-        const val STAMP = ".cofre-version"
     }
 }
+
+private const val STAMP = ".cofre-version"
+
+/**
+ * [home]'s stamp, trusted only while the JVM itself and its class image are there and non-empty: a cleaner app, or
+ * a write the kernel never flushed before power loss, can leave the stamp next to an empty or missing one.
+ */
+internal fun installedStamp(home: File): String? =
+    File(home, STAMP).takeIf { it.isFile && listOf("lib/server/libjvm.so", "lib/modules").all { f -> File(home, f).length() > 0 } }?.readText()?.trim()
 
 /** Unpacks a .tar.xz (ustar, GNU long names, pax paths; files, folders, symlinks) into [dest]. */
 internal fun untarXz(input: InputStream, dest: File) {

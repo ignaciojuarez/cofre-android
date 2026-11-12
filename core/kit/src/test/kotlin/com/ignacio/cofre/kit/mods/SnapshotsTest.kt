@@ -6,6 +6,7 @@ import java.io.File
 import java.nio.file.Files
 import kotlin.test.*
 import com.ignacio.cofre.kit.common.Hashes
+import com.ignacio.cofre.kit.common.Kit
 
 class SnapshotsTest {
     @TempDir lateinit var root: File
@@ -117,5 +118,26 @@ class SnapshotsTest {
         assertTrue(Snapshots.list(root).isEmpty())
         val snapshot = Snapshots.takeLocked(root, Snapshots.Reason.Manual)
         assertFalse(legacy.exists()); assertEquals(listOf(snapshot), Snapshots.list(root))
+    }
+
+    @Test fun recoverUndoesAnUnfinishedRestoreAndDropsUnfinishedSnapshots() {
+        val snapshots = File(root, ".cofre/snapshots"); File(mods, "kept.jar").writeBytes(modJar("kept"))
+        File(snapshots, ".tmp-1").mkdirs(); File(snapshots, ".tmp-1/files.json").writeText("[]")
+        // Killed while bringing files in: what it moved out goes back, with the index.
+        val cut = File(snapshots, ".restore-2").also { File(it, "new/mods").mkdirs(); File(it, "old/mods").mkdirs() }
+        File(cut, "new/mods/z.jar").writeBytes(modJar("z")); File(cut, "old/mods/a.jar.disabled").writeBytes(modJar("a")); File(cut, "old/cofre-mods.json").writeText("{}")
+        // Killed after the last file came in: it had finished, so what left stays gone.
+        val done = File(snapshots, ".restore-3").also { File(it, "new/mods").mkdirs(); File(it, "old/mods").mkdirs() }
+        File(done, "old/mods/d.jar").writeBytes(modJar("d"))
+        Snapshots.recover(root)
+        assertEquals(setOf("kept.jar", "a.jar.disabled"), mods.list()!!.toSet()); assertEquals("{}", File(root, "cofre-mods.json").readText())
+        assertTrue(snapshots.list()!!.isEmpty())
+    }
+
+    @Test fun downloadsStillRunningAreNotPartOfASnapshot() = runBlocking {
+        File(mods, "a.jar").writeBytes(modJar("a")); File(mods, "b.jar.part").writeText("half")
+        val snapshot = Snapshots.take(root)
+        assertEquals(listOf("a.jar"), Kit.json.decodeFromString<List<Snapshots.Entry>>(File(root, ".cofre/snapshots/${snapshot.id}/files.json").readText()).map { it.name })
+        Snapshots.restore(root, snapshot); assertTrue(File(mods, "b.jar.part").isFile, "a restore leaves a running download alone")
     }
 }

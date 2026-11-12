@@ -1,8 +1,10 @@
 package com.ignacio.cofre.runtime.launch
 
+import android.app.ApplicationExitInfo
 import com.ignacio.cofre.kit.common.Kit
 import com.ignacio.cofre.kit.logs.ExitReason
 import com.ignacio.cofre.kit.logs.GameExitReport
+import com.ignacio.cofre.kit.options.PresetCatalog
 import com.ignacio.cofre.kit.versions.InstallProfile
 import com.ignacio.cofre.kit.versions.VersionJson
 import com.ignacio.cofre.runtime.GameBridge
@@ -56,7 +58,7 @@ class LaunchTest {
         assertEquals(account.uuid, value("--uuid"))
         assertEquals(LaunchSpec.TOKEN, value("--accessToken")) // the spec on disk never holds the token
         assertEquals("tok", LaunchArgs.spec(vanilla, files, File("/g"), account, "/jre", 2048, exit).withToken("tok").gameArgs.let { it[it.indexOf("--accessToken") + 1] })
-        assertEquals("msa", value("--userType"))
+        assertFalse("--userType" in args) // 26.2's Main has no such option and logs it as ignored
         assertEquals("release", value("--versionType"))
         assertEquals("vulkan", value("--graphicsBackend"))
         listOf("--demo", "--width", "--quickPlayPath").forEach { assertFalse(it in args, it) }
@@ -74,6 +76,7 @@ class LaunchTest {
         val spec = LaunchArgs.spec(vanilla, files, File("/g"), account, "/jre", 3072, exit, listOf("-XX:+UseZGC"), listOf("--quickPlaySingleplayer", "World"))
         assertEquals(listOf("-Xmx3072m"), spec.jvmArgs.filter { it.startsWith("-Xmx") })
         assertEquals("-XX:+UseZGC", spec.jvmArgs.last())
+        assertTrue(spec.jvmArgs.indexOf("-XX:G1PeriodicGCInterval=60000") in 0 until spec.jvmArgs.lastIndex, "a default an instance can override")
         assertEquals(listOf("--quickPlaySingleplayer", "World"), spec.gameArgs.takeLast(2))
         assertEquals("vulkan", spec.gameArgs[spec.gameArgs.indexOf("--graphicsBackend") + 1])
     }
@@ -163,7 +166,7 @@ class LaunchTest {
 
             val fresh = File(dir, "vanilla")
             GameLaunch.prepareGameDir(fresh, neoForge = false)
-            assertEquals("preferredGraphicsBackend:vulkan", File(fresh, "options.txt").readText())
+            assertEquals("version:4903\npreferredGraphicsBackend:vulkan", File(fresh, "options.txt").readText())
             assertFalse(File(fresh, "config/fml.toml").exists())
         } finally {
             dir.deleteRecursively()
@@ -179,6 +182,50 @@ class LaunchTest {
         } finally {
             file.delete()
         }
+    }
+
+    @Test fun aLogOlderThanTheSpecBelongsToAnEarlierRun() {
+        val dir = Files.createTempDirectory("cofre-run").toFile()
+        try {
+            val log = File(dir, "logs/cofre-output.log").apply { parentFile?.mkdirs(); writeText("[Render thread/INFO]: Stopping!\n") }
+            log.setLastModified(1_000_000)
+            // The game never started this time (say, Android blocked it): the last session's clean quit says nothing about it.
+            assertEquals(null, GameLaunch.runLog(log, dir, since = 2_000_000))
+            log.setLastModified(3_000_000)
+            assertEquals("[Render thread/INFO]: Stopping!\n", GameLaunch.runLog(log, dir, since = 2_000_000))
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test fun neoForgeIsInstalledOnlyWithTheJarsFmlLoads() {
+        val root = Files.createTempDirectory("cofre-files").toFile()
+        try {
+            val files = GameFiles(root)
+            fun write(file: File) = file.apply { parentFile?.mkdirs(); writeText("x") }
+            write(files.versionJson("neoforge-26.2.0.93"))
+            assertFalse(NeoForgeInstaller.installed(files, "26.2.0.93"))
+            write(File(root, "libraries/net/neoforged/minecraft-client-patched/26.2.0.93/minecraft-client-patched-26.2.0.93.jar"))
+            assertFalse(NeoForgeInstaller.installed(files, "26.2.0.93"))
+            write(File(root, "libraries/net/neoforged/neoforge/26.2.0.93/neoforge-26.2.0.93-universal.jar"))
+            assertTrue(NeoForgeInstaller.installed(files, "26.2.0.93"))
+            assertTrue(profile.libraries.any { it.name == "net.neoforged:neoforge:26.2.0.93:universal" })
+        } finally {
+            root.deleteRecursively()
+        }
+    }
+
+    @Test fun androidsExitReasonExplainsAKillWithNoExitRecord() {
+        assertEquals(ExitReason.Quit, GameLaunch.killedAs(ApplicationExitInfo.REASON_USER_REQUESTED))
+        assertEquals(ExitReason.Memory, GameLaunch.killedAs(ApplicationExitInfo.REASON_LOW_MEMORY))
+        assertEquals(ExitReason.Updated, GameLaunch.killedAs(ApplicationExitInfo.REASON_PACKAGE_UPDATED))
+        // A native crash leaves an hs_err file: the log-based diagnosis knows more.
+        assertEquals(null, GameLaunch.killedAs(ApplicationExitInfo.REASON_CRASH_NATIVE))
+        assertEquals(ExitReason.Quit, GameExitReport.diagnose(-9, log = "[Render thread/INFO]: Loaded 4 shaders", killedAs = ExitReason.Quit).reason)
+    }
+
+    @Test fun newInstancesGetTheNeoForgeBuildTheInstallerPins() {
+        assertEquals(NeoForgeInstaller.VERSION, PresetCatalog.presets.first().loaderVersion)
     }
 
     @Test fun vulkanDiagnosisNamesWhatIsMissing() {

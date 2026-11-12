@@ -33,8 +33,8 @@ jobs:
           sudo apt-get install -y autoconf automake libtool ninja-build cmake clang lld libx11-dev libxext-dev libxrender-dev libxtst-dev libxt-dev libfontconfig1-dev libcups2-dev libasound2-dev
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'ndk;28.2.13676358'
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
-      - name: Test alignment gate
-        run: python3 scripts/natives/test_verify.py
+      - name: Test the natives gate (alignment, needed libraries, libc versions)
+        run: python3 -I scripts/natives/test_verify.py
       - name: Build from pinned source
         env:
           PIECE: ${{ matrix.piece }}
@@ -76,7 +76,7 @@ jobs:
         run: |
           for f in reused/*; do [[ ! -e "$f" || -e "dist/${f##*/}" ]] || cp "$f" dist/; done
           for asset in jre25-android-arm64.tar.xz lwjgl-3.4.1-android-arm64.tar.xz jna-5.17.0-android-arm64.tar.xz \
-              jre25-alignment.tsv; do
+              jre25-alignment.tsv lwjgl-alignment.tsv jna-alignment.tsv; do
             test -s "dist/$asset" || { echo "::error::missing $asset"; exit 1; }
           done
           ls -l dist

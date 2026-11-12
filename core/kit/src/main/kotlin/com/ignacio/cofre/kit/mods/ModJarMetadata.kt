@@ -10,7 +10,6 @@ import java.io.File
 import java.io.InputStream
 import java.util.jar.Manifest
 import java.util.zip.ZipFile
-import java.util.zip.ZipInputStream
 
 @Serializable enum class ModSide { Both, Client, Server;
     companion object { fun from(value: String?): ModSide = when (value?.lowercase()) { "client" -> Client; "server" -> Server; else -> Both } }
@@ -131,12 +130,21 @@ class ModsToml(text: String) {
     }
 }
 
-/** Metadata is bounded before inflation; bundled jars are inspected one level deep. */
+/**
+ * Metadata is bounded before inflation; bundled jars are inspected one level deep. [modIds] lists the jar's own ids,
+ * then the ids only its bundled (jar-in-jar) libraries declare ([nested]). [loaders]: whose metadata the jar carries
+ * (`neoforge.mods.toml` NeoForge, `mods.toml` Forge, `fabric.mod.json` Fabric, `quilt.mod.json` Quilt).
+ */
 data class ModJarMetadata(
     val modIds: List<String>, val name: String? = null, val version: String? = null,
     val dependencies: List<JarDependency> = emptyList(), val side: ModSide = ModSide.Both,
     val modLoader: String? = null, val bundled: List<String> = emptyList(), val icon: ByteArray? = null,
+    val loaders: Set<Loader> = setOf(Loader.NeoForge), val nested: List<String> = emptyList(),
 ) {
+    /** NeoForge loads it: since 20.5 only `META-INF/neoforge.mods.toml` makes a mod; FML ignores a lone `mods.toml`. */
+    val neoForge: Boolean get() = Loader.NeoForge in loaders
+    /** The jar's own mod ids, without its bundled libraries'. */
+    val own: List<String> get() = modIds.filter { it !in nested }
     companion object {
         // ponytail: 128 jars; a bigger instance re-reads jars on each listing. Drop the unused icon, then raise it, if that shows.
         private val cache = linkedMapOf<String, ModJarMetadata>()
@@ -145,29 +153,18 @@ data class ModJarMetadata(
             synchronized(cache) { cache[key] }?.let { return it }
             val found = runCatching {
                 ZipFile(jar).use { zip ->
-                    fun bytes(path: String, limit: Int): ByteArray? {
-                        val entry = zip.getEntry(path) ?: return null
-                        if (entry.size > limit) return null
-                        return zip.getInputStream(entry).use { bounded(it, limit) }
-                    }
-                    val metadata = parse(loader, ::bytes) ?: return null
+                    val metadata = parse(loader) { path, limit -> entryBytes(zip, path, limit) } ?: return null
                     val extra = mutableListOf<String>()
                     zip.entries().asSequence().filter { it.name.startsWith("META-INF/jarjar/") && it.name.endsWith(".jar") && it.size in 0..64_000_000 }.take(128).forEach { entry ->
-                        val nested = bytes(entry.name, 64_000_000) ?: return@forEach
-                        ZipInputStream(ByteArrayInputStream(nested)).use nestedZip@ { input ->
-                            val files = mutableMapOf<String, ByteArray>()
-                            var total = 0
-                            repeat(128) {
-                                val inner = input.nextEntry ?: return@repeat
-                                val body = bounded(input, 1_000_000) ?: return@nestedZip
-                                total += body.size
-                                if (total > 64_000_000) return@nestedZip
-                                if (inner.name in setOf("META-INF/neoforge.mods.toml", "META-INF/mods.toml", "fabric.mod.json", "quilt.mod.json")) files[inner.name] = body
-                            }
-                            parse(loader) { path, _ -> files[path] }?.let { extra += it.modIds }
-                        }
+                        val nested = entryBytes(zip, entry.name, 64_000_000) ?: return@forEach
+                        // By name through the central directory: a bundled library's metadata often comes after its classes.
+                        val temp = File.createTempFile("cofre-jarjar", ".jar")
+                        try {
+                            temp.writeBytes(nested)
+                            runCatching { ZipFile(temp).use { inner -> parse(loader) { path, limit -> entryBytes(inner, path, limit) } } }.getOrNull()?.let { extra += it.modIds }
+                        } finally { temp.delete() }
                     }
-                    metadata.copy(modIds = (metadata.modIds + extra).distinct())
+                    metadata.copy(modIds = (metadata.modIds + extra).distinct(), nested = extra.distinct().filter { it !in metadata.modIds })
                 }
             }.getOrNull() ?: return null
             synchronized(cache) { cache[key] = found; if (cache.size > 128) cache.remove(cache.keys.first()) }
@@ -177,6 +174,7 @@ data class ModJarMetadata(
             fun obj(path: String): JsonObject? = bytes(path, 1_000_000)?.let { Kit.json.parseToJsonElement(it.decodeToString()).jsonObject }
             var ids = emptyList<String>(); var name: String? = null; var version: String? = null; var side = ModSide.Both
             val dependencies = mutableListOf<JarDependency>(); var icon: ByteArray? = null; var modLoader: String? = null
+            val loaders = mutableSetOf<Loader>()
             fun iconData(element: JsonElement?): ByteArray? {
                 val path = when (element) { is JsonPrimitive -> element.content; is JsonObject -> element["64"]?.jsonPrimitive?.content ?: element.values.firstOrNull()?.jsonPrimitive?.content; else -> null } ?: return null
                 return bytes(path.removePrefix("/"), 2_000_000)
@@ -184,6 +182,7 @@ data class ModJarMetadata(
             val fabric = obj("fabric.mod.json")
             val quiltRoot = if (fabric == null) obj("quilt.mod.json") else null
             val quilt = quiltRoot?.get("quilt_loader")?.jsonObject
+            if (fabric != null) loaders += Loader.Fabric else if (quilt != null) loaders += Loader.Quilt
             if (fabric != null) {
                 ids = listOfNotNull(fabric.text("id")); name = fabric.text("name"); version = fabric.text("version"); side = ModSide.from(fabric.text("environment"))
                 for ((key, relation) in listOf("depends" to Relation.Required, "recommends" to Relation.Optional, "suggests" to Relation.Optional, "breaks" to Relation.Incompatible)) {
@@ -200,8 +199,9 @@ data class ModJarMetadata(
                     }
                 }
             }
-            val names = if (loader == Loader.NeoForge) listOf("META-INF/neoforge.mods.toml", "META-INF/mods.toml") else listOf("META-INF/mods.toml", "META-INF/neoforge.mods.toml")
-            val toml = names.firstNotNullOfOrNull { bytes(it, 1_000_000)?.let { text -> ModsToml(text.decodeToString()) } }
+            val neo = bytes("META-INF/neoforge.mods.toml", 1_000_000)?.also { loaders += Loader.NeoForge }
+            val forge = bytes("META-INF/mods.toml", 1_000_000)?.also { loaders += Loader.Forge }
+            val toml = (if (loader == Loader.NeoForge) neo ?: forge else forge ?: neo)?.let { ModsToml(it.decodeToString()) }
             if (toml != null) {
                 ids = (ids + toml.modIds).distinct(); modLoader = toml.modLoader
                 val first = toml.mods.firstOrNull()
@@ -217,9 +217,14 @@ data class ModJarMetadata(
             }
             if (ids.isEmpty()) return null
             val bundled = (obj("META-INF/jarjar/metadata.json")?.get("jars") as? JsonArray)?.mapNotNull { ((it.jsonObject["identifier"] as? JsonObject)?.text("artifact")) }.orEmpty()
-            return ModJarMetadata(ids, name, version, dependencies.distinctBy { listOf(it.id, it.relation, it.side, it.owner) }, side, modLoader, bundled, icon)
+            return ModJarMetadata(ids, name, version, dependencies.distinctBy { listOf(it.id, it.relation, it.side, it.owner) }, side, modLoader, bundled, icon, loaders)
         }
         private fun JsonObject.text(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
+        private fun entryBytes(zip: ZipFile, path: String, limit: Int): ByteArray? {
+            val entry = zip.getEntry(path) ?: return null
+            if (entry.size > limit) return null
+            return zip.getInputStream(entry).use { bounded(it, limit) }
+        }
         private fun bounded(input: InputStream, limit: Int): ByteArray? {
             val out = ByteArrayOutputStream(); val buffer = ByteArray(8192)
             while (true) { val read = input.read(buffer); if (read < 0) break; if (out.size() + read > limit) return null; out.write(buffer, 0, read) }

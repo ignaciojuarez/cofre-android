@@ -20,6 +20,7 @@ object ModRequirements {
         fun present(id: String): Boolean = id.lowercase() in builtIn || modKey(id) in ids || files.any { it.startsWith(modKey(id)) }
         return buildList {
             for ((file, jar) in jars) {
+                if (!jar.neoForge) continue // NeoForge won't load it ("Before you play" says so), so its needs don't count.
                 if (jar.modLoader?.lowercase() == "kotlinforforge" && !present("kotlinforforge")) add(requirement("kotlinforforge", "modLoader:kotlinforforge", file))
                 jar.dependencies.filter { it.required && !present(it.id) }.forEach { add(requirement(it.id, "dependency:${it.id}", file)) }
             }
@@ -45,6 +46,16 @@ object ModRemoval {
             }
         } while (changed)
         return nodes.filter { it.file != root.file && it.file in affected }
+    }
+    /** Enabled mods left without a required mod once [off] (files) are turned off, through chains; a mod another enabled jar still provides isn't missed. */
+    fun stranded(off: Set<String>, nodes: List<InstalledMod>): List<InstalledMod> {
+        val enabled = nodes.filter { it.enabled }; val gone = off.toMutableSet()
+        fun lost(id: String) = enabled.any { it.file in gone && modKey(id) in it.keys } && enabled.none { it.file !in gone && modKey(id) in it.keys }
+        do {
+            val more = enabled.filter { node -> node.file !in gone && node.dependencies.any { it.required && lost(it.id) } }
+            more.forEach { gone += it.file }
+        } while (more.isNotEmpty())
+        return enabled.filter { it.file in gone && it.file !in off }
     }
     fun options(removing: String, nodes: List<InstalledMod>): List<InstalledMod> {
         val root = nodes.firstOrNull { it.file == removing || it.projectId == removing } ?: return emptyList()

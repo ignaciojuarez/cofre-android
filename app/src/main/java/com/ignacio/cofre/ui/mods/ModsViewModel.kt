@@ -22,6 +22,7 @@ import com.ignacio.cofre.onIo
 import com.ignacio.cofre.ui.folders.FoldersModel
 import com.ignacio.cofre.ui.folders.SnapshotRow
 import com.ignacio.cofre.ui.folders.snapshotRows
+import com.ignacio.cofre.ui.instances.Library
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -289,7 +290,7 @@ class ModsViewModel(private val graph: AppGraph) : ViewModel() {
     /** No instance yet: make the default NeoForge 26.2 one (Library's own create) so Get has somewhere to go. */
     fun createInstance() {
         val library = graph.library
-        library.create(graph.instances.uniqueName("${Target.LOADER.displayName} ${Target.GAME_VERSION}"), library.neoForgeVersions.first(), preset = null) { made ->
+        library.create(graph.instances.uniqueName("${Target.LOADER.displayName} ${Target.GAME_VERSION}"), Library.handheld.loaderVersion, preset = null) { made ->
             library.select(made.id)
         }
     }
