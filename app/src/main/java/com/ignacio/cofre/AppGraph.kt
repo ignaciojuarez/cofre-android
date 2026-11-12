@@ -18,6 +18,7 @@ import com.ignacio.cofre.runtime.VulkanReport
 import com.ignacio.cofre.runtime.VulkanSupport
 import com.ignacio.cofre.ui.downloads.Downloads
 import com.ignacio.cofre.ui.instances.Library
+import com.ignacio.cofre.updates.AppUpdates
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -97,6 +98,7 @@ class AppGraph(
     val accounts = Accounts(this)
     val downloadsModel by lazy { Downloads(this) }
     val launcher = Launcher(this)
+    val updates = AppUpdates(this)
 
     private companion object {
         const val CURSEFORGE_KEY = "curseforge.key"

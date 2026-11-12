@@ -15,6 +15,11 @@ val secrets = Properties().apply {
 val microsoftClientId: String = providers.gradleProperty("cofre.microsoftClientId").orNull
     ?: secrets.getProperty("microsoftClientId").orEmpty()
 
+// Releases (scripts/release.py, docs/updates.md) pass -Pcofre.versionCode/-Pcofre.versionName, and the signing key
+// as COFRE_KEYSTORE (path) and COFRE_KEYSTORE_PASSWORD (store and key). Without them the release APK is unsigned.
+val releaseKeystore = providers.environmentVariable("COFRE_KEYSTORE")
+val releaseKeystorePassword = providers.environmentVariable("COFRE_KEYSTORE_PASSWORD")
+
 android {
     namespace = "com.ignacio.cofre"
     compileSdk = libs.versions.compileSdk.get().toInt()
@@ -22,14 +27,25 @@ android {
         applicationId = "com.ignacio.cofre"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = providers.gradleProperty("cofre.versionCode").map(String::toInt).getOrElse(1)
+        versionName = providers.gradleProperty("cofre.versionName").getOrElse("0.1.0")
         ndk { abiFilters += "arm64-v8a" }
         buildConfigField("String", "MICROSOFT_CLIENT_ID", "\"${microsoftClientId.replace("\"", "")}\"")
         buildConfigField("String", "MICROSOFT_REDIRECT_URI", "\"cofre://auth\"")
     }
+    signingConfigs {
+        if (releaseKeystore.isPresent) {
+            create("release") {
+                storeFile = file(releaseKeystore.get())
+                storePassword = releaseKeystorePassword.get()
+                keyAlias = "cofre"
+                keyPassword = releaseKeystorePassword.get()
+            }
+        }
+    }
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -48,6 +64,8 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+            // Screenshots show dates (a snapshot's day): the same zone on every Mac and CI runner keeps them identical.
+            all { it.systemProperty("user.timezone", "UTC") }
         }
     }
 }

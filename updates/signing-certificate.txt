@@ -1,0 +1,2 @@
+# SHA-256 of the certificate that signs Cofre releases. Installed apps only accept updates signed by it.
+9d2e3235260e657a1c35414805abf640f8edb0d601b76a9730e03f80187be7ee

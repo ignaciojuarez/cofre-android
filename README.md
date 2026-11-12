@@ -19,6 +19,13 @@ Minecraft 26.2's Vulkan renderer needs **Vulkan 1.2** with `VK_KHR_dynamic_rende
 - **Controller first:** every screen works with the D-pad, A/B, L1/R1 and the triggers, with button hints for Xbox, PlayStation and Nintendo layouts.
 - **Files:** instances show up in Android's file picker, so you can drop in mods and worlds with any file manager.
 
+## Download
+No release yet. When there is one:
+- Get `Cofre-v<version>.apk` from the [latest release](https://github.com/ignaciojuarez/cofre-android/releases) and open it on the device. Alphas are marked as pre-releases.
+- After that, Cofre offers new versions itself ([how updates work](docs/updates.md)). [Obtainium](https://github.com/ImranR98/Obtainium) works too: add this repo's URL and turn on pre-releases.
+- Every release is signed with one key. Its certificate's SHA-256 goes in `updates/signing-certificate.txt` when the key is created; check an APK against it with `apksigner verify --print-certs`.
+- A copy you built yourself is signed differently: uninstall it before installing a release. That deletes its data.
+
 ## Build
 Requirements: macOS or Linux, Android Studio Rabbit 2 (2026.2.2) or newer, and an Android SDK with platform 37 and NDK 30.
 
