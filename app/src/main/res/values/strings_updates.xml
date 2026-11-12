@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Cofre updating itself: Settings › About › Software update and the sidebar's "Update available". -->
+    <string name="updates_title">Software update</string>
+    <string name="updates_check">Check for updates</string>
+    <string name="updates_release_only">Updates come with release builds.</string>
+    <string name="updates_checking">Checking…</string>
+    <string name="updates_up_to_date">Up to date</string>
+    <string name="updates_available">Cofre %1$s is available</string>
+    <string name="updates_downloading">Downloading %1$d%%</string>
+    <string name="updates_ready">Ready to install</string>
+    <string name="updates_download">Download Cofre %1$s · %2$s</string>
+    <string name="updates_install">Install Cofre %1$s</string>
+    <string name="updates_allow_note">Android asks you once to let Cofre install apps. Turn it on, then come back to finish.</string>
+    <string name="updates_not_allowed">Cofre can\'t install the update until you let it install apps.</string>
+    <string name="updates_close_game">Close Minecraft first: installing restarts Cofre and stops the game.</string>
+    <string name="updates_mismatch">The download didn\'t match this release, so it was deleted.</string>
+    <string name="updates_wrong_signer">This update isn\'t signed with Cofre\'s release key, so it won\'t be installed.</string>
+    <string name="updates_no_installer">This device has no app installer Cofre can open.</string>
+    <string name="updates_daily">Check daily</string>
+    <string name="updates_daily_note">Once a day while Cofre is open. Nothing installs until you choose.</string>
+    <string name="updates_sidebar">Update available</string>
+</resources>

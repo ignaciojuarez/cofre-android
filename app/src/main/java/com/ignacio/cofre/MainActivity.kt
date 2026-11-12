@@ -23,6 +23,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -30,10 +31,13 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import coil3.compose.AsyncImage
 import com.ignacio.cofre.design.AdaptiveShell
+import com.ignacio.cofre.design.BlockButton
+import com.ignacio.cofre.design.ButtonSize
 import com.ignacio.cofre.design.CofreTheme
 import com.ignacio.cofre.design.ControllerHost
 import com.ignacio.cofre.design.IconButton
 import com.ignacio.cofre.design.LocalRemoteImage
+import com.ignacio.cofre.design.NavStyle
 import com.ignacio.cofre.design.PixelGlyph
 import com.ignacio.cofre.design.RemoteImageLoader
 import com.ignacio.cofre.design.ShellSection
@@ -96,6 +100,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         graph.accounts.refresh()
         graph.launcher.onResume()
+        graph.updates.onResume()
     }
 
     override fun onPause() {
@@ -189,7 +194,17 @@ private fun Shell(graph: AppGraph) {
     AdaptiveShell(
         nav.section,
         onSectionChange = { nav.section = it },
-        navFooter = {
+        navFooter = { style ->
+            // Quiet, like Cobble's: an update found by the daily check waits here until the user opens it.
+            if (graph.updates.offered) {
+                val label = stringResource(R.string.updates_sidebar)
+                val open = { nav.openSettings(SettingsPane.About) }
+                if (style == NavStyle.Sidebar) {
+                    BlockButton(label, open, Modifier.testTag("updates.sidebar"), size = ButtonSize.Small, icon = PixelGlyph.Ore, fullWidth = true)
+                } else {
+                    IconButton(PixelGlyph.Ore, label, open, Modifier.testTag("updates.sidebar"))
+                }
+            }
             if (graph.downloadsModel.summary.visible.isNotEmpty()) {
                 IconButton(PixelGlyph.Chest, stringResource(R.string.downloads_title), { nav.downloads = true })
             }

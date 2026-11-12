@@ -182,6 +182,8 @@ New on Android:
 - 🛒 **Distribution**
   - No Google Play: its policy bans downloading and running code.
   - GitHub Releases plus Obtainium.
+  - In-app updates read `updates/latest.json` on main. `scripts/release.py` publishes the release first, checks the public APK, then pushes the feed ([`docs/updates.md`](docs/updates.md)).
+  - The release signing key is the trust anchor (the feed isn't signed). It lives outside git: keystore plus macOS Keychain. Losing it ends updates for installed copies.
   - Google's developer verification for sideloaded apps arrives in 2027.
 
 ## 🗺️ Phases
@@ -194,7 +196,7 @@ New on Android:
 | 4 | NeoForge install + launch, Sodium, the handheld preset | Modded 26.2 is playable with the built-in controller | 🟡 NeoForge 26.2.0.93 installs in `:installer` and launches to the Vulkan check; the handheld preset installs; controller play needs the Odin 3 |
 | 5 | Accounts, mod browse/install/update, modpacks, worlds, servers, logs, crash screen | Same features as iOS | ✅ built; Microsoft sign-in needs an approved client ID |
 | 5b | Mod folders (shared by instances, convert to another loader/version, auto-update, snapshots) and the Home dashboard | FML loads a folder's mods through the instance's links | ✅ built; launch through links checked on the emulator (2026-11-09) |
-| 6 | Handheld polish, release pipeline | A signed GitHub release that self-updates | ⏳ |
+| 6 | Handheld polish, release pipeline | A signed GitHub release that self-updates | 🟡 `scripts/release.py` builds, verifies and publishes signed releases with the `updates/latest.json` feed; local dry run passed (2026-11-11). Next: the real key (`setup`), the first release, an N → N+1 update on the Odin 3. Handheld polish ⏳ |
 
 What to run first on the Odin 3: `runtime/README.md` → "Needs the real device".
 

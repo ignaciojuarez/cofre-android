@@ -4,6 +4,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Big downloads ask before using mobile data. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Settings › About › Install: hands a verified Cofre update to Android's package installer. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Landscape only (sensorLandscape); appCategory="game" keeps Android 16+ honoring that on large screens. -->
     <application
@@ -84,7 +86,7 @@
             </intent-filter>
         </provider>
 
-        <!-- Reports and exports shared from the cache. -->
+        <!-- Reports and exports shared from the cache, and downloaded updates (scratch/updates) for the installer. -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.files"

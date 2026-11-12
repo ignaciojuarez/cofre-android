@@ -22,6 +22,10 @@ data class Settings(
     val activeInstance: String? = null,
     /** Big downloads on mobile data start without asking. */
     val allowMetered: Boolean = false,
+    /** Look for a new Cofre once a day while it runs (release builds). */
+    val checkUpdates: Boolean = true,
+    /** When the last check found Cofre up to date, in epoch millis; 0 before the first. */
+    val updatesCheckedAt: Long = 0,
 )
 
 /** [Settings] as observable state, saved to a small JSON file on every change (the `@AppStorage` equivalent). */

@@ -33,6 +33,7 @@ Cofre for Android is a native Kotlin + Jetpack Compose launcher for Minecraft: J
 | `app/` | The app: screens in `com.ignacio.cofre.ui.<area>`, navigation, wiring |
 | `runtime/` | Java runtime, natives, GLFW shim, launch, NeoForge install, `:game` and `:installer` processes |
 | `scripts/natives/` | Builds for every native library (see `runtime/NATIVES.md`) |
+| `scripts/release.py`, `updates/` | Releases and the in-app update feed (see `docs/updates.md`) |
 
 The iOS source this ports from: `/Volumes/microwave/Developer/cofre` (or `github.com/ignaciojuarez/cofre`). Read only; never edit it from here.
 
@@ -41,6 +42,15 @@ The iOS source this ports from: `/Volumes/microwave/Developer/cofre` (or `github
     scripts/test.sh             # everything device-free: kit tests, unit + screenshot tests, lint, debug APK
     scripts/gradle.sh :core:kit:test
     scripts/gradle.sh recordRoborazziDebug   # update screenshot baselines after an intended UI change
+
+## Releasing updates
+When the user says **release** or **publish an update**: publish a GitHub Release **and** its update feed. A PR or a push alone isn't a release.
+- Read `docs/updates.md`. Use `scripts/release.py build`, check the APK on a device, then `publish`, from a clean checkout of `origin/main`.
+- `--code` always increases. Tags and assets are never replaced. `publish` pushes `updates/latest.json` last, after the public APK checks out.
+- The signing key lives outside the repo (keystore plus macOS Keychain). Never commit keystores, passwords or APKs, and never print the password.
+- Report the release link and whether the feed is live. Don't claim device checks you didn't run.
+
+    python3 -I scripts/test_release.py   # the release script's tests
 
 ## Working in parallel (several agents share this checkout)
 - Stay inside the paths your task owns. Never edit, reformat or delete another area's files.

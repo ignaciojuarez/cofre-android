@@ -22,8 +22,10 @@ class CofreApp : Application() {
         graph = AppGraph(this)
         // Disk housekeeping, once per start: mod installs and restores a kill cut short are put back, instances still
         // holding their own mods move to mod folders, pack imports a kill left half-done go, and trash older than 30 days.
+        // A Cofre update downloaded by an earlier run goes too (installed, it's this run).
         graph.work({}) {
             val dirs = graph.onIo {
+                graph.updates.clean()
                 PackStage.cleanupAbandoned(graph.instances.root)
                 graph.instances.list().map(graph.instances::directory) + graph.modFolders.list().map(graph.modFolders::directory)
             }

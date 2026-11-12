@@ -55,6 +55,7 @@ import com.ignacio.cofre.design.Pad
 import com.ignacio.cofre.design.PaneScroll
 import com.ignacio.cofre.design.PixelGlyph
 import com.ignacio.cofre.design.PixelIcon
+import com.ignacio.cofre.design.ProgressBar
 import com.ignacio.cofre.design.Segmented
 import com.ignacio.cofre.design.ToggleRow
 import com.ignacio.cofre.design.Tone
@@ -66,6 +67,7 @@ import com.ignacio.cofre.kit.logs.LogFile
 import com.ignacio.cofre.kit.options.JavaHeap
 import com.ignacio.cofre.ui.common.Fmt
 import com.ignacio.cofre.ui.common.Note
+import com.ignacio.cofre.updates.AppUpdates
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -146,7 +148,7 @@ private fun SettingsPaneContent(graph: AppGraph, pane: SettingsPane) {
                     SettingsPane.Accounts -> AccountsPanel(graph.accounts)
                     SettingsPane.CurseForge -> CurseForgePane(graph)
                     SettingsPane.Storage -> StoragePane(graph)
-                    SettingsPane.About -> AboutPane()
+                    SettingsPane.About -> AboutPane(graph)
                     SettingsPane.Licenses -> LicensesPane()
                 }
             }
@@ -300,7 +302,7 @@ private fun LogsPane(graph: AppGraph) {
 }
 
 @Composable
-private fun AboutPane() {
+private fun AboutPane(graph: AppGraph) {
     val uri = LocalUriHandler.current
     ListSection {
         ValueRow(stringResource(R.string.about_version), "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})", {}, chevron = false)
@@ -308,8 +310,60 @@ private fun AboutPane() {
         ValueRow(stringResource(R.string.about_source), "GitHub", { uri.openUri("https://github.com/ignaciojuarez/cofre-android") }, accent = true)
         ValueRow(stringResource(R.string.about_author), "Ignacio Juarez", { uri.openUri("https://github.com/ignaciojuarez") })
     }
+    SoftwareUpdate(graph)
     Note(stringResource(R.string.about_note))
 }
+
+/** About › Software update: the check and its status, Download then Install when there's a release, its notes, and the daily check. */
+@Composable
+private fun SoftwareUpdate(graph: AppGraph) {
+    val updates = graph.updates
+    val state = updates.state
+    val release = updates.release
+    val context = LocalContext.current
+    ListSection(label = stringResource(R.string.updates_title)) {
+        BlockRow(
+            stringResource(R.string.updates_check),
+            Modifier.testTag("updates.check"),
+            subtitle = when (state) {
+                AppUpdates.State.Idle -> if (updates.enabled) null else stringResource(R.string.updates_release_only)
+                AppUpdates.State.Checking -> stringResource(R.string.updates_checking)
+                AppUpdates.State.UpToDate -> stringResource(R.string.updates_up_to_date)
+                is AppUpdates.State.Available -> stringResource(R.string.updates_available, state.release.versionName)
+                is AppUpdates.State.Downloading -> stringResource(R.string.updates_downloading, (state.fraction * 100).toInt())
+                is AppUpdates.State.Ready -> stringResource(R.string.updates_ready)
+                is AppUpdates.State.Failed -> state.message
+            },
+            onClick = if (updates.enabled) updates::check else null,
+        )
+        when (state) {
+            is AppUpdates.State.Downloading -> ProgressBar(state.fraction)
+            is AppUpdates.State.Ready -> {
+                BlockButton(stringResource(R.string.updates_install, state.release.versionName), updates::install, Modifier.testTag("updates.install"), role = ButtonRole.Primary)
+                (state.note ?: stringResource(R.string.updates_allow_note).takeIf { !updates.canInstall })?.let { Note(it) }
+            }
+            else -> if (release != null) {
+                BlockButton(
+                    stringResource(R.string.updates_download, release.versionName, Fmt.bytes(context, release.size)),
+                    updates::download, Modifier.testTag("updates.download"), role = ButtonRole.Primary,
+                )
+            }
+        }
+        release?.notes?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            CofreText(it.take(NOTES_MAX), CofreTheme.type.caption, Modifier.fillMaxWidth().block(BlockKind.Well).padding(12.dp))
+        }
+        ToggleRow(
+            stringResource(R.string.updates_daily),
+            graph.settings.value.checkUpdates,
+            { on -> graph.settings.update { it.copy(checkUpdates = on) } },
+            Modifier.testTag("updates.daily"),
+            subtitle = stringResource(R.string.updates_daily_note),
+        )
+    }
+}
+
+/** Release notes are a few lines; a long one is cut rather than pushing the pane on. */
+private const val NOTES_MAX = 600
 
 @Composable
 private fun LicensesPane() {
