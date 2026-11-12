@@ -30,7 +30,7 @@ No release yet. When there is one:
 Requirements: macOS or Linux, Android Studio Rabbit 2 (2026.2.2) or newer, and an Android SDK with platform 37 and NDK 30.
 
 ```sh
-scripts/natives/fetch.sh natives-20261109-7   # Java 25 + game natives (pinned in gradle.properties)
+scripts/natives/fetch.sh natives-20261112-8   # Java 25 + game natives (pinned in gradle.properties)
 scripts/test.sh                               # tests, screenshots, lint, debug APK
 ```
 

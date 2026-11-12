@@ -1,6 +1,6 @@
 # Android natives
 
-**Pinned release: [`natives-20261109-7`](https://github.com/ignaciojuarez/cofre-android/releases/tag/natives-20261109-7)** (verified on the Mac 2026-11-09, see [Released artifacts](#released-artifacts)). Fetch it with `scripts/natives/fetch.sh natives-20261109-7`.
+**Pinned release: [`natives-20261112-8`](https://github.com/ignaciojuarez/cofre-android/releases/tag/natives-20261112-8)** (verified on the Mac 2026-11-11, see [Released artifacts](#released-artifacts)). Fetch it with `scripts/natives/fetch.sh natives-20261112-8`.
 Only `scripts/natives/**`, this document, and `.github/workflows/natives.yml` are owned by the native builder.
 
 ## Build and fetch
@@ -14,7 +14,7 @@ scripts/natives/jdk/build.sh
 scripts/natives/lwjgl/build.sh
 scripts/natives/jna.sh
 # After publication:
-scripts/natives/fetch.sh natives-20261109-7
+scripts/natives/fetch.sh natives-20261112-8
 ```
 
 To rerun only a failed piece, dispatch the workflow with `pieces` set to e.g. `["jdk"]` and `reuse_run` set to an earlier run whose other pieces are green; the release job takes the missing pieces (and their alignment reports) from that run and refuses to publish without all three tarballs.
@@ -110,25 +110,25 @@ The libffi 3.5.2 release source tarball (SHA-256 `f3a3082a23b37c293a4fcd1053147b
 
 ## Released artifacts
 
-Release [`natives-20261109-7`](https://github.com/ignaciojuarez/cofre-android/releases/tag/natives-20261109-7), workflow run [42586160735](https://github.com/ignaciojuarez/cofre-android/actions/runs/42586160735). `jdk` and `lwjgl` were built in run [42583890396](https://github.com/ignaciojuarez/cofre-android/actions/runs/42583890396) at `4f037c2` and reused; `jna` was rebuilt at `7eb0620`. The native build scripts and patches are identical at both commits. Toolchain for all: Ubuntu 24.04, NDK r28c (28.2.13676358), API 28, Temurin 25 host JDK.
+Release [`natives-20261112-8`](https://github.com/ignaciojuarez/cofre-android/releases/tag/natives-20261112-8), workflow run [43141641032](https://github.com/ignaciojuarez/cofre-android/actions/runs/43141641032) at `afd786b`: `jdk` (now jlink'd) and `jna` were built there; `lwjgl` was reused from run [42583890396](https://github.com/ignaciojuarez/cofre-android/actions/runs/42583890396) (`4f037c2`), byte-identical to the previous release. Toolchain for all: Ubuntu 24.04, NDK r28c (28.2.13676358), API 28, Temurin 25 host JDK.
 
 | Asset | Size | SHA-256 | Source / tag | Patches | License |
 |---|---|---|---|---|---|
-| jre25-android-arm64.tar.xz | 45,951,484 | 0269f3ac87dde79501b07483466fc454eb474ea124794807825f5ef5d77933eb | openjdk/jdk25u jdk-25.0.5-ga + FreeType VER-2-14-1 | jdk/patches/0001–0003 | GPL-2.0 + Classpath Exception; FreeType License |
+| jre25-android-arm64.tar.xz | 28,979,068 | 239843bc5bde44c06db6cbc6c3cee9a6fd197e7e9af4055f1dc2ba746dbcd9dc | openjdk/jdk25u jdk-25.0.5-ga + FreeType VER-2-14-1 | jdk/patches/0001–0003 | GPL-2.0 + Classpath Exception; FreeType License |
 | lwjgl-3.4.1-android-arm64.tar.xz | 3,929,412 | accb3d1385a9b10fee5927ec6fdbde50605f3d651feb45bf053d1bd439b8c50d | LWJGL 3.4.1 + deps in the pin table | lwjgl/patch.py | see pin table |
-| jna-5.17.0-android-arm64.tar.xz | 40,720 | e59306494a446f256402ebc3f66939e0216b968f654bf25fc55109953fba51c9 | JNA 5.17.0 AAR (unmodified) | none | Apache-2.0; libffi MIT |
-| jdk25-sources.tar.xz | 78,734,152 | 6ea4332ea9abd45422d7cc99296464934096ec4b52099d3ea489dd497fcc3bbc | corresponding source | | |
+| jna-5.17.0-android-arm64.tar.xz | 40,688 | 7263f01b4f06d916a0141157a58ca8b96002d550fd127be08fa218bdf8febcb6 | JNA 5.17.0 AAR (unmodified) | none | Apache-2.0; libffi MIT |
+| jdk25-sources.tar.xz | 78,730,388 | 101690bce70cfd0cfbdf30c48d13e4b00f1bdeda4d40e9f0ac0c6406b7a61be4 | corresponding source | | |
 | lwjgl-sources.tar.xz | 38,495,032 | 12459042754fd4fad72c0a790de416ef3b9a0a334769bb1ee0bf2c607918f4e8 | corresponding source | | |
-| jna-sources.tar.xz | 75,611,212 | bb3749a1e0fbe464e7cba25e35cfaf4f1f3e0844e9f2d0453eb5ecd008bcd2fb | corresponding source | | |
+| jna-sources.tar.xz | 75,610,624 | a52ba338d88cf9629e18f0a353f08029b48e5c173ce75bccfcc48a10fe30bae6 | corresponding source | | |
 
-The JRE tarball has no top-level folder: `bin/ conf/ legal/ lib/ release` sit at its root. From the release after `natives-20261109-7` it's a jlink'd runtime: every JDK module except the compilers, debuggers and developer tools (Graal and JVMCI, javac and `ct.sym`, the serviceability agent, jshell, jcmd and friends; `DROP` in `jdk/build.sh`). `java.se` stays whole, since mods may use any of it. `release` reads `JAVA_VERSION="25.0.5"`, `JAVA_RUNTIME_VERSION="25.0.5+8"`, `OS_ARCH="aarch64"`. The library tarballs extract to `lib/arm64-v8a/` and `legal/`.
+The JRE tarball has no top-level folder: `bin/ conf/ legal/ lib/ release` sit at its root. Since `natives-20261112-8` it's a jlink'd runtime (47 of 69 modules; 139 MB unpacked, was 186 MB): every JDK module except the compilers, debuggers and developer tools (Graal and JVMCI, javac and `ct.sym`, the serviceability agent, jshell, jcmd and friends; `DROP` in `jdk/build.sh`). `java.se` stays whole, since mods may use any of it. `release` reads `JAVA_VERSION="25.0.5"`, `JAVA_RUNTIME_VERSION="25.0.5+8"`, `OS_ARCH="aarch64"`. The library tarballs extract to `lib/arm64-v8a/` and `legal/`.
 
-Mac verification (`fetch.sh`, then NDK `llvm-readelf -h` / `-lW`): all 46 ELF files (45 `.so` + `bin/java`) are AArch64 and every LOAD `Align` is 0x4000.
+Mac verification (`fetch.sh`, then NDK `llvm-readelf -h` / `-lW`): all 44 ELF files (43 `.so` + `bin/java`) are AArch64 and every LOAD `Align` is 0x4000.
 
 | File | Size | SHA-256 | LOAD Align |
 |---|---|---|---|
 | jre25/bin/java | 7,424 | 8b6f013485e3c24d513146c29299663a30712d0aa583af9aaa30bd31115a84bd | 0x4000 |
-| jre25/lib/server/libjvm.so | 26,692,528 | 6ed057c1cf2b7f820719c2eaee59616929bb0284cb73d8961ed711ee3fced96b | 0x4000 |
+| jre25/lib/server/libjvm.so | 26,692,528 | 73b636cfde378edb7ee0ae98d1bd891278e1160a3bc801c69bf5d07faf68ebdf | 0x4000 |
 | liblwjgl.so | 561,864 | 5e0e765789d1ea2e867a2e17ffff09cec0b2cdc72ce4b6a070ad5973da79d936 | 0x4000 |
 | liblwjgl_stb.so | 424,456 | 5e2f32cf12ade943e23535b399d0a240ea130c1a9514c3568cab8ee4cddd14b0 | 0x4000 |
 | liblwjgl_vma.so | 373,056 | d393ffa2d74717938a4e0222acb400b37f64d1e1f1979a70fcdb12cd41c3be7c | 0x4000 |
