@@ -1,0 +1,10 @@
+{
+  "versionCode": 2,
+  "versionName": "0.1.0-alpha.1",
+  "tag": "v0.1.0-alpha.1",
+  "apk": "https://github.com/ignaciojuarez/cofre-android/releases/download/v0.1.0-alpha.1/Cofre-v0.1.0-alpha.1.apk",
+  "size": 51282379,
+  "sha256": "38106292edd165505e8b7f65863dc7ccc153e3815beba58c31c5d9965a41c090",
+  "minSdk": 28,
+  "notes": "First alpha of Cofre for Android: a controller-first launcher for Minecraft: Java Edition 26.2 with NeoForge, on Vulkan.\nNot yet tested on real hardware: the game may not start. Built for the AYN Odin 3.\nCofre checks for updates once a day; nothing installs until you choose."
+}
